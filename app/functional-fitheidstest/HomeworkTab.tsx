@@ -635,7 +635,7 @@ function rubricsThird(f: ThirdGradeForm): { items: RubricItem[]; totals: { metMi
 
   if (!pre || !post) lvl4 = "-";
   else if (prepostLen < 80 || !protein) lvl4 = "+/-";
-  else if (protein && protein !== "" && example) {
+  else if (protein === "ja" && example) {
     const hasWhy = (pre + " " + post).toLowerCase().includes("omdat") || (pre + " " + post).toLowerCase().includes("zodat") || (pre + " " + post).toLowerCase().includes("daarom");
     lvl4 = hasWhy ? "++" : "+";
   } else {
