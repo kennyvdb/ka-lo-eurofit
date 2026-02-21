@@ -1,9 +1,6 @@
 "use client";
 
-import AppShell from "@/components/AppShell";
-import { useEffect, useState } from "react";
-import { checkProfileCompletion } from "@/lib/profileCompletion";
-import ProfileRequiredGate from "@/components/ProfileRequiredGate";
+import AppShell from "../../components/AppShell";
 
 export default function Page() {
   return (
