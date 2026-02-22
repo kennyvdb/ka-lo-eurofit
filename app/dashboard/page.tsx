@@ -21,6 +21,13 @@ type Profiel = {
   last_login_date: string | null;
 };
 
+/** ✅ School brand colors (uit je logo) */
+const brand = {
+  blue: "#255971",
+  teal: "#4B8E8D",
+  mint: "#89C2AA",
+};
+
 const ui = {
   text: "rgba(234,240,255,0.92)",
   muted: "rgba(234,240,255,0.72)",
@@ -140,6 +147,36 @@ function quoteOfMonth(d = new Date()) {
     { q: "Hard work is the talent you choose.", a: "Beast mode" },
   ];
   return quotes[d.getMonth() % quotes.length];
+}
+
+/* ---------------------------
+   Wolf Icon (inline SVG)
+   - Geen extra asset nodig
+--------------------------- */
+function WolfIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+      style={{ display: "block" }}
+    >
+      <path
+        d="M4 9.2 7.2 4.6 10 7.2 12 5 14 7.2 16.8 4.6 20 9.2 18.6 18.3 12 21 5.4 18.3 4 9.2Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.2 12.3c.9.9 1.8 1.3 2.8 1.3s1.9-.4 2.8-1.3"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 /* ---------------------------
@@ -326,9 +363,8 @@ export default function DashboardPage() {
           <SquareTile href="/challenges" icon="🎯" title="Challenges" desc="Opdrachten & doelen" />
           <SquareTile href="/sportfolio" icon="📸" title="Sportfolio" desc="Bewijzen & reflecties" />
 
-          {/* ✅ NIEUW */}
           <SquareTile href="/hall-of-fame" icon="🏆" title="Hall of Fame" desc="Topprestaties & records" />
-
+          <SquareTile href="/les-lo" icon="🏃‍♂️" title="Les LO" desc="Lesinhoud & planning" />
           <SquareTile href="/links" icon="🔗" title="Links" desc="Handige bronnen" />
           <SquareTile href="/dashboard/profiel" icon="👤" title="Profiel" desc="Gegevens beheren" />
         </div>
@@ -352,9 +388,6 @@ export default function DashboardPage() {
 
 /* ---------------------------
    HERO (iPhone-proof)
-   - Vierkant groeit mee tot onderkant quote
-   - Afbeelding altijd passend (contain)
-   - Mini-override: mobiel max-hoogte
 --------------------------- */
 function Hero({
   greetingName,
@@ -369,6 +402,7 @@ function Hero({
 
   return (
     <section className="hero" style={hero.wrap}>
+      {/* glows in schoolkleuren */}
       <div style={hero.bgGlow1} />
       <div style={hero.bgGlow2} />
 
@@ -404,8 +438,8 @@ function Hero({
           </div>
 
           <div style={hero.actions}>
-            <Link href="/challenges" style={hero.primary}>
-              Start challenge →
+            <Link href="/ideeenbus" style={hero.primary}>
+              Ideeënbus →
             </Link>
             <Link href="/eurofittest" style={hero.secondary}>
               Resultaten
@@ -446,17 +480,16 @@ function Hero({
           display: grid;
           grid-template-columns: 1.1fr 0.9fr;
           gap: 14px;
-          align-items: stretch; /* ✅ kolommen even hoog */
+          align-items: stretch;
           position: relative;
           z-index: 1;
         }
 
         .heroArt {
           display: flex;
-          justify-content: flex-end; /* ✅ box onderaan */
+          justify-content: flex-end;
         }
 
-        /* ✅ Mini-override: mobiel max-hoogte (desktop unchanged) */
         @media (max-width: 700px) {
           .heroInner {
             grid-template-columns: 1fr;
@@ -466,8 +499,8 @@ function Hero({
             justify-content: flex-start;
           }
           .illuBox {
-            max-height: 320px; /* ✅ limiet op mobiel */
-            height: auto !important; /* ✅ laat max-height winnen */
+            max-height: 320px;
+            height: auto !important;
             width: 100%;
             aspect-ratio: 1 / 1;
           }
@@ -478,7 +511,7 @@ function Hero({
             font-size: 26px !important;
           }
           .illuBox {
-            max-height: 280px; /* extra klein scherm */
+            max-height: 280px;
           }
         }
       `}</style>
@@ -494,7 +527,7 @@ const hero: Record<string, React.CSSProperties> = {
     borderRadius: 26,
     border: `1px solid ${ui.border}`,
     background:
-      "radial-gradient(900px 520px at 0% 0%, rgba(104,180,255,0.22) 0%, rgba(0,0,0,0) 60%), radial-gradient(900px 520px at 100% 0%, rgba(255,104,180,0.18) 0%, rgba(0,0,0,0) 60%), rgba(255,255,255,0.06)",
+      "radial-gradient(900px 520px at 0% 0%, rgba(75,142,141,0.22) 0%, rgba(0,0,0,0) 60%), radial-gradient(900px 520px at 100% 0%, rgba(137,194,170,0.18) 0%, rgba(0,0,0,0) 60%), rgba(255,255,255,0.06)",
   },
   inner: {
     position: "relative",
@@ -506,7 +539,7 @@ const hero: Record<string, React.CSSProperties> = {
     borderRadius: 999,
     left: -120,
     top: -140,
-    background: "rgba(104,180,255,0.22)",
+    background: "rgba(75,142,141,0.20)", // teal
     filter: "blur(24px)",
   },
   bgGlow2: {
@@ -516,7 +549,7 @@ const hero: Record<string, React.CSSProperties> = {
     borderRadius: 999,
     right: -160,
     top: -170,
-    background: "rgba(255,104,180,0.18)",
+    background: "rgba(137,194,170,0.16)", // mint
     filter: "blur(26px)",
   },
 
@@ -524,7 +557,7 @@ const hero: Record<string, React.CSSProperties> = {
   kicker: { fontSize: 12, fontWeight: 950, letterSpacing: 1.2, color: ui.muted },
   title: { margin: "8px 0 0 0", fontSize: 30, lineHeight: 1.05, fontWeight: 980, color: ui.text },
   accent: {
-    background: "linear-gradient(90deg, rgba(104,180,255,1), rgba(255,104,180,1))",
+    background: `linear-gradient(90deg, ${brand.blue}, ${brand.teal}, ${brand.mint})`,
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
   },
@@ -570,7 +603,6 @@ const hero: Record<string, React.CSSProperties> = {
 
   artCol: { position: "relative", zIndex: 1 },
 
-  /* ✅ Vierkant groeit mee tot onderkant linker kolom (desktop) */
   illuBox: {
     position: "relative",
     height: "100%",
@@ -589,6 +621,8 @@ const hero: Record<string, React.CSSProperties> = {
 
 /* ---------------------------
    Beast card
+   - Rookie Bar: sterkere identiteit (glow-edge)
+   - Icoon vervangen door wolf icoon (SVG)
 --------------------------- */
 function BeastStatusCard({
   xp = 0,
@@ -608,19 +642,76 @@ function BeastStatusCard({
     <div style={beast.card}>
       <div style={beast.row}>
         <div>
-          <div style={beast.label}>🐺 Beast status</div>
+          <div style={beast.label}>
+            <span style={beast.wolfBadge}>
+              <span style={{ color: "rgba(234,240,255,0.92)" }}>
+                <WolfIcon size={16} />
+              </span>
+            </span>
+            <span>Beast status</span>
+          </div>
+
           <div style={beast.title}>{current.name}</div>
+
           <div style={beast.meta}>
             <b style={{ color: ui.text }}>{xp} XP</b> • 🔥 Streak: <b style={{ color: ui.text }}>{streak}</b>{" "}
             <span style={{ color: ui.muted }}>• Best: {bestStreak}</span>
           </div>
         </div>
+
         <div style={beast.pill}>LEVEL</div>
       </div>
 
       <div style={beast.barWrap}>
-        <div style={{ ...beast.barFill, width: `${pct}%` }} />
-      </div>
+  <div style={beast.barHalo} />
+
+  {/* ✅ sweep over volledige bar */}
+  <div className="xpEnergyFull" />
+
+  {/* fill blijft gewoon je progress */}
+  <div style={{ ...beast.barFill, width: `${pct}%` }}>
+    <div style={beast.barEdgeGlow} />
+  </div>
+
+  <div style={beast.barShine} />
+
+  <style jsx>{`
+    .xpEnergyFull {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      pointer-events: none;
+      overflow: hidden;
+    }
+
+    .xpEnergyFull:before {
+      content: "";
+      position: absolute;
+      top: -60%;
+      left: -60%;
+      width: 220%;
+      height: 220%;
+      background: linear-gradient(
+        100deg,
+        rgba(255,255,255,0) 35%,
+        rgba(255,255,255,0.16) 48%,
+        rgba(255,255,255,0.28) 50%,
+        rgba(255,255,255,0.16) 52%,
+        rgba(255,255,255,0) 65%
+      );
+      transform: translateX(-35%);
+      animation: energyFlowFull 2.2s linear infinite;
+      mix-blend-mode: screen;
+      filter: blur(1px);
+      opacity: 0.9;
+    }
+
+    @keyframes energyFlowFull {
+      0% { transform: translateX(-45%); }
+      100% { transform: translateX(45%); }
+    }
+  `}</style>
+</div>
 
       <div style={beast.bottom}>
         <span style={{ color: ui.muted }}>
@@ -635,7 +726,25 @@ function BeastStatusCard({
 const beast: Record<string, React.CSSProperties> = {
   card: { marginTop: 14, padding: 16, borderRadius: 22, background: ui.panel, border: `1px solid ${ui.border}` },
   row: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" },
-  label: { fontSize: 12, fontWeight: 950, color: ui.muted, letterSpacing: 0.6 },
+  label: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 10,
+    fontSize: 12,
+    fontWeight: 950,
+    color: ui.muted,
+    letterSpacing: 0.6,
+  },
+  wolfBadge: {
+    width: 30,
+    height: 30,
+    borderRadius: 12,
+    display: "grid",
+    placeItems: "center",
+    background: "rgba(0,0,0,0.40)",
+    border: `1px solid ${ui.border}`,
+    boxShadow: `0 10px 26px rgba(0,0,0,0.20), 0 0 0 1px rgba(75,142,141,0.22)`,
+  },
   title: { marginTop: 6, fontSize: 18, fontWeight: 980, color: ui.text },
   meta: { marginTop: 6, fontSize: 13, color: ui.muted },
   pill: {
@@ -650,24 +759,67 @@ const beast: Record<string, React.CSSProperties> = {
     background: "rgba(0,0,0,0.45)",
     border: `1px solid ${ui.border}`,
   },
+
   barWrap: {
     marginTop: 12,
-    height: 12,
+    height: 14,
     borderRadius: 999,
-    background: "rgba(0,0,0,0.35)",
+    background: "rgba(0,0,0,0.40)",
     border: `1px solid ${ui.border}`,
     overflow: "hidden",
+    position: "relative",
   },
+
+  // zacht halo onder de fill (geeft identiteit)
+  barHalo: {
+    position: "absolute",
+    inset: 0,
+    borderRadius: 999,
+    background:
+      "radial-gradient(120px 24px at 0% 50%, rgba(37,89,113,0.00) 0%, rgba(37,89,113,0.22) 40%, rgba(0,0,0,0) 72%)",
+    opacity: 0.9,
+    pointerEvents: "none",
+  },
+
+  // de echte fill (met subtiele glow)
   barFill: {
     height: "100%",
     borderRadius: 999,
-    background: "linear-gradient(90deg, rgba(104,180,255,1), rgba(255,104,180,1))",
+    position: "relative",
+    background: `linear-gradient(90deg, ${brand.blue}, ${brand.teal}, ${brand.mint})`,
+    boxShadow: `0 0 18px rgba(75,142,141,0.35), 0 0 40px rgba(137,194,170,0.12)`,
   },
+
+  // glow-edge aan het einde (sterke identiteit)
+  barEdgeGlow: {
+    position: "absolute",
+    top: -10,
+    right: -10,
+    width: 26,
+    height: 34,
+    borderRadius: 999,
+    background: "rgba(234,240,255,0.22)",
+    filter: "blur(10px)",
+    pointerEvents: "none",
+  },
+
+  // glans overlay (heel licht)
+  barShine: {
+    position: "absolute",
+    inset: 0,
+    borderRadius: 999,
+    background:
+      "linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.00) 60%)",
+    mixBlendMode: "soft-light",
+    pointerEvents: "none",
+  },
+
   bottom: { marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 12.5 },
 };
 
 /* ---------------------------
    Square Tile
+   - Hover animatie verbeterd (lift + glow + shine sweep)
 --------------------------- */
 function SquareTile({ href, icon, title, desc }: { href: string; icon: string; title: string; desc: string }) {
   return (
@@ -691,37 +843,104 @@ function SquareTile({ href, icon, title, desc }: { href: string; icon: string; t
           border: 1px solid ${ui.border};
           text-decoration: none;
           aspect-ratio: 1 / 1;
-          transform: translateY(0);
-          transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease,
-            background 140ms ease;
           overflow: hidden;
           position: relative;
+
+          transform: translateY(0) scale(1);
+          transition: transform 180ms cubic-bezier(0.2, 0.9, 0.2, 1), box-shadow 180ms ease,
+            border-color 180ms ease, background 180ms ease;
+          will-change: transform;
         }
+
+        /* zachte brand glow blob */
         .sq:before {
           content: "";
           position: absolute;
-          inset: -40px -40px auto auto;
-          width: 140px;
-          height: 140px;
+          inset: -50px -50px auto auto;
+          width: 160px;
+          height: 160px;
           border-radius: 999px;
-          background: rgba(104, 180, 255, 0.12);
-          filter: blur(10px);
+          background: rgba(75, 142, 141, 0.16);
+          filter: blur(14px);
+          pointer-events: none;
+          opacity: 0.9;
+          transition: opacity 180ms ease, transform 180ms ease;
+          transform: translate3d(0, 0, 0);
+        }
+
+        /* gradient edge (wordt zichtbaar op hover) */
+        .sq:after {
+          content: "";
+          position: absolute;
+          inset: 0;
+          border-radius: 20px;
+          padding: 1px;
+          background: linear-gradient(135deg, rgba(37, 89, 113, 0.55), rgba(75, 142, 141, 0.55), rgba(137, 194, 170, 0.45));
+          -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+          -webkit-mask-composite: xor;
+          mask-composite: exclude;
+          opacity: 0;
+          transition: opacity 180ms ease;
           pointer-events: none;
         }
+
+        /* shine sweep */
+        .shine {
+          position: absolute;
+          inset: -40% -30%;
+          background: linear-gradient(
+            120deg,
+            rgba(255, 255, 255, 0) 35%,
+            rgba(255, 255, 255, 0.10) 50%,
+            rgba(255, 255, 255, 0) 65%
+          );
+          transform: translateX(-40%) rotate(10deg);
+          opacity: 0;
+          pointer-events: none;
+        }
+
         .sq:hover {
-          transform: translateY(-3px);
+          transform: translateY(-5px) scale(1.01);
           border-color: ${ui.border2};
           background: ${ui.panel2};
-          box-shadow: 0 14px 38px rgba(0, 0, 0, 0.35);
+          box-shadow: 0 18px 44px rgba(0, 0, 0, 0.42), 0 0 0 1px rgba(75, 142, 141, 0.10);
         }
+
+        .sq:hover:before {
+          opacity: 1;
+          transform: translate3d(10px, -6px, 0);
+        }
+
+        .sq:hover:after {
+          opacity: 1;
+        }
+
+        .sq:hover .shine {
+          opacity: 1;
+          animation: sweep 900ms ease forwards;
+        }
+
         .sq:active {
-          transform: translateY(-1px);
-          box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+          transform: translateY(-2px) scale(1.005);
+          box-shadow: 0 12px 28px rgba(0, 0, 0, 0.32);
         }
+
+        @keyframes sweep {
+          0% {
+            transform: translateX(-55%) rotate(10deg);
+          }
+          100% {
+            transform: translateX(55%) rotate(10deg);
+          }
+        }
+
         .top {
           display: grid;
           gap: 8px;
+          position: relative;
+          z-index: 1;
         }
+
         .icon {
           width: 44px;
           height: 44px;
@@ -733,26 +952,37 @@ function SquareTile({ href, icon, title, desc }: { href: string; icon: string; t
           border: 1px solid ${ui.border};
           color: ${ui.text};
         }
+
         .title {
           font-size: 15px;
           font-weight: 980;
           color: ${ui.text};
           letter-spacing: 0.2px;
+          position: relative;
+          z-index: 1;
         }
+
         .desc {
           margin-top: 4px;
           font-size: 12.5px;
           color: ${ui.muted};
           line-height: 1.25;
+          position: relative;
+          z-index: 1;
         }
+
         .cta {
           margin-top: 10px;
           font-size: 12.5px;
           font-weight: 950;
           color: ${ui.text};
           opacity: 0.92;
+          position: relative;
+          z-index: 1;
         }
       `}</style>
+
+      <div className="shine" />
     </Link>
   );
 }
