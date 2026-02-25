@@ -358,11 +358,12 @@ export default function DashboardPage() {
         <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 950, color: ui.text }}>Trainingshub</div>
 
         <div className="hub-grid">
-          <SquareTile href="/eurofittest" icon="🧪" title="Eurofit" desc="Test & resultaten" />
+          <SquareTile href="/eurofittest" icon="🧪" title="Eurofit " desc="Test & resultaten" />
           <SquareTile href="/functional-fitheidstest" icon="🏋️" title="Functional" desc="Fitheid & progressie" />
           <SquareTile href="/challenges" icon="🎯" title="Challenges" desc="Opdrachten & doelen" />
           <SquareTile href="/sportfolio" icon="📸" title="Sportfolio" desc="Bewijzen & reflecties" />
 
+          <SquareTile href="/workouts" icon="💪" title="Workouts" desc="Ab • Home • Fitness • Running" />
           <SquareTile href="/hall-of-fame" icon="🏆" title="Hall of Fame" desc="Topprestaties & records" />
           <SquareTile href="/les-lo" icon="🏃‍♂️" title="Les LO" desc="Lesinhoud & planning" />
           <SquareTile href="/links" icon="🔗" title="Links" desc="Handige bronnen" />

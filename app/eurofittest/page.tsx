@@ -84,7 +84,7 @@ function getTestMeta(testType: string): TestMeta {
 }
 
 /* ---------------------------
-   Lower is better
+   Lower is better (volgens normdocument: P95 = best, P5 = slechtst)
 --------------------------- */
 const LOWER_IS_BETTER = new Set<string>(["flamingo", "plate_tapping", "shuttle_10x5"]);
 
@@ -114,9 +114,9 @@ function berekenLeeftijd(geboortedatumISO: string, testDatumISO: string) {
 }
 
 /**
- * ✅ Correcte interpretatie:
- * - Hoger = beter: p5 is zwak (laag), p95 is sterk (hoog)
- * - Lager = beter: p5 is sterk (laag), p95 is zwak (hoog)
+ * ✅ Correct volgens bijgevoegde normschalen:
+ * - Hoger = beter: P5 = zwak, P95 = sterk
+ * - Lager = beter (tijd/fouten): P5 = zwak (hoog), P95 = sterk (laag)
  */
 function beoordeelWaarde(waarde: number, norm: NormRow): Beoordeling {
   const lowerBetter = LOWER_IS_BETTER.has(norm.test_type);
@@ -130,6 +130,7 @@ function beoordeelWaarde(waarde: number, norm: NormRow): Beoordeling {
     zeerGoed: "#0f5a2f",
   };
 
+  // hoger = beter (klassiek)
   if (!lowerBetter) {
     if (waarde <= norm.p5) return { label: "Zeer zwak", kleur: COLORS.zeerZwak };
     if (waarde < norm.p20) return { label: "Zwak", kleur: COLORS.zwak };
@@ -139,12 +140,13 @@ function beoordeelWaarde(waarde: number, norm: NormRow): Beoordeling {
     return { label: "Zeer goed", kleur: COLORS.zeerGoed };
   }
 
-  // lager = beter (omgekeerd)
-  if (waarde <= norm.p5) return { label: "Zeer goed", kleur: COLORS.zeerGoed };
-  if (waarde <= norm.p20) return { label: "Goed", kleur: COLORS.goed };
+  // ✅ lager = beter (volgens tabellen: P95 is best/laagste)
+  // best → slechtst: <=P95, <=P80, <=P50, <=P20, <=P5, daarboven = zeer zwak
+  if (waarde <= norm.p95) return { label: "Zeer goed", kleur: COLORS.zeerGoed };
+  if (waarde <= norm.p80) return { label: "Goed", kleur: COLORS.goed };
   if (waarde <= norm.p50) return { label: "Gemiddeld goed", kleur: COLORS.gemGoed };
-  if (waarde <= norm.p80) return { label: "Gemiddeld zwak", kleur: COLORS.gemZwak };
-  if (waarde <= norm.p95) return { label: "Zwak", kleur: COLORS.zwak };
+  if (waarde <= norm.p20) return { label: "Gemiddeld zwak", kleur: COLORS.gemZwak };
+  if (waarde <= norm.p5) return { label: "Zwak", kleur: COLORS.zwak };
   return { label: "Zeer zwak", kleur: COLORS.zeerZwak };
 }
 
@@ -869,6 +871,7 @@ export default function EurofittestPage() {
               const norm = norms[t.value];
               const beoordeling = getLiveBeoordeling(t.value);
               const richting = LOWER_IS_BETTER.has(t.value) ? "lager = beter" : "hoger = beter";
+              const lowerBetter = LOWER_IS_BETTER.has(t.value);
 
               return (
                 <div key={t.value} style={styles.testCard}>
@@ -917,13 +920,23 @@ export default function EurofittestPage() {
 
                       <div style={styles.hint}>
                         {norm ? (
-                          <>
-                            Normen: P5 <b style={{ color: ui.text }}>{norm.p5}</b> • P20{" "}
-                            <b style={{ color: ui.text }}>{norm.p20}</b> • P50{" "}
-                            <b style={{ color: ui.text }}>{norm.p50}</b> • P80{" "}
-                            <b style={{ color: ui.text }}>{norm.p80}</b> • P95{" "}
-                            <b style={{ color: ui.text }}>{norm.p95}</b>
-                          </>
+                          lowerBetter ? (
+                            <>
+                              Normen (lager = beter): P95 <b style={{ color: ui.text }}>{norm.p95}</b> • P80{" "}
+                              <b style={{ color: ui.text }}>{norm.p80}</b> • P50{" "}
+                              <b style={{ color: ui.text }}>{norm.p50}</b> • P20{" "}
+                              <b style={{ color: ui.text }}>{norm.p20}</b> • P5{" "}
+                              <b style={{ color: ui.text }}>{norm.p5}</b>
+                            </>
+                          ) : (
+                            <>
+                              Normen (hoger = beter): P5 <b style={{ color: ui.text }}>{norm.p5}</b> • P20{" "}
+                              <b style={{ color: ui.text }}>{norm.p20}</b> • P50{" "}
+                              <b style={{ color: ui.text }}>{norm.p50}</b> • P80{" "}
+                              <b style={{ color: ui.text }}>{norm.p80}</b> • P95{" "}
+                              <b style={{ color: ui.text }}>{norm.p95}</b>
+                            </>
+                          )
                         ) : (
                           <>Norm: —</>
                         )}
@@ -1006,8 +1019,8 @@ export default function EurofittestPage() {
               <br />
               <br />
               <b style={{ color: ui.text }}>Belangrijk:</b> Voor testen waarbij <b style={{ color: ui.text }}>lager beter is</b> (tijd/fouten),
-              is de interpretatie omgekeerd: <b style={{ color: ui.text }}>P5 = best</b> (laagste tijd/fouten) en{" "}
-              <b style={{ color: ui.text }}>P95 = zwakker</b> (hogere tijd/fouten).
+              is de interpretatie volgens de normtabellen: <b style={{ color: ui.text }}>P95 = best</b> (laagste tijd/fouten) en{" "}
+              <b style={{ color: ui.text }}>P5 = zwakker</b> (hogere tijd/fouten).
             </div>
           </div>
 

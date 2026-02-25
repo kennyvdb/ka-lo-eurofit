@@ -6,9 +6,7 @@
    BASE RESET
 ========================================================= */
 
-*,
-*::before,
-*::after {
+*, *::before, *::after {
   box-sizing: border-box;
 }
 
@@ -121,4 +119,11 @@ select {
 .btn-secondary {
   @apply h-12 px-4 rounded-xl border border-gray-200 bg-gray-100
          text-gray-900 font-semibold active:scale-[0.98] transition;
+}
+
+/* Spin animation */
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

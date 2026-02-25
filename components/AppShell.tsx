@@ -32,6 +32,7 @@ const navItems = [
   { href: "/challenges", label: "Challenges", icon: "🎯" },
   { href: "/sportfolio", label: "Sportfolio", icon: "📸" },
   { href: "/hall-of-fame", label: "Hall of Fame", icon: "🏆" },
+  { href: "/workouts", label: "Workouts", icon: "💪" },
   { href: "/les-lo", label: "Les LO", icon: "🏃‍♂️" },
   { href: "/links", label: "Links", icon: "🔗" },
 ];
