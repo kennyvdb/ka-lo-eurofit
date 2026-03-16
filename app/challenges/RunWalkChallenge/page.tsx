@@ -467,6 +467,13 @@ export default function RunWalkChallengePage() {
                 >
                   Word lid van club →
                 </a>
+
+                <Link
+                  href="/challenges/RunWalkChallenge/instructies"
+                  style={hero.secondary}
+                >
+                  Instructies →
+                </Link>
               </div>
 
               <div style={hero.note}>
@@ -795,6 +802,13 @@ export default function RunWalkChallengePage() {
                 >
                   Naar GO!Avelgem club
                 </a>
+
+                <Link
+                  href="/challenges/RunWalkChallenge/instructies"
+                  style={styles.secondaryBtn}
+                >
+                  Lees instructies
+                </Link>
               </div>
             </GlassCard>
 
@@ -969,11 +983,7 @@ function RankingCard({
 }
 
 function EmptyState({ text }: { text: string }) {
-  return (
-    <div style={styles.emptyState}>
-      {text}
-    </div>
-  );
+  return <div style={styles.emptyState}>{text}</div>;
 }
 
 function InfoLine({
@@ -1073,6 +1083,7 @@ const hero: Record<string, React.CSSProperties> = {
   secondary: {
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     height: 46,
     padding: "0 14px",
     borderRadius: 16,

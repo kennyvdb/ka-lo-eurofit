@@ -2,7 +2,7 @@
 
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
-import { DashboardTile } from "@/components/tiles/BaseTile";
+import { BaseTile } from "@/components/tiles/BaseTile";
 import React, { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -76,31 +76,31 @@ export default function LesLOHubPage() {
         <div className="mb-3 text-[13px] font-black text-white/85">Les LO</div>
 
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
-          <DashboardTile
+          <BaseTile
             href="/les-lo/kijkwijzers"
             icon="👀"
             title="Kijkwijzers"
             desc="Waarop letten tijdens de les"
           />
-          <DashboardTile
+          <BaseTile
             href="/les-lo/rollen"
             icon="🎭"
             title="Rollenkaarten"
             desc="Scheidsrechter, coach, timekeeper…"
           />
-          <DashboardTile
+          <BaseTile
             href="/les-lo/jaarplanning"
             icon="🗓️"
             title="Jaarplanning"
             desc="Kies je leerkracht & planning"
           />
-          <DashboardTile
+          <BaseTile
             href="/les-lo/evaluaties"
             icon="✅"
             title="Evaluaties"
             desc="Rubrics (SAM) & feedback"
           />
-          <DashboardTile
+          <BaseTile
             href="/les-lo/afspraken"
             icon="📌"
             title="Afspraken LO"
