@@ -78,7 +78,7 @@ export default function FitnessWorkoutsPage() {
   }, []);
 
   return (
-    <AppShell title="KA LO App" subtitle="GO!Atheneum Avelgem" userName={profile.volledige_naam ?? null}>
+    <AppShell title="LO App" subtitle="Fitness" userName={profile.volledige_naam ?? null}>
       <WorkoutsCardsTemplate
         theme={theme}
         items={items}

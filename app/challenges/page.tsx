@@ -4,17 +4,12 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import AppShell from "../../components/AppShell";
 import ChallengeCard from "./ChallengeCard";
+import BaseHero from "@/components/heroes/BaseHero";
 import { supabase } from "@/lib/supabaseClient";
 
 type Profiel = {
   id: string;
   volledige_naam: string | null;
-};
-
-const brand = {
-  blue: "#255971",
-  teal: "#4B8E8D",
-  mint: "#89C2AA",
 };
 
 const ui = {
@@ -125,44 +120,47 @@ export default function Page() {
 
   return (
     <AppShell
-      title="Challenges"
-      subtitle="GO! Atheneum Avelgem"
+      title="LO App"
+      subtitle="Challenges"
       userName={profiel?.volledige_naam ?? null}
     >
       <div style={{ display: "grid", gap: 14 }}>
-        <section style={hero.wrap}>
-          <div style={hero.bgGlow1} />
-          <div style={hero.bgGlow2} />
+        <BaseHero
+          label="CHALLENGE HUB"
+          title={
+            <>
+              Beweeg. Competeer.
+              <br />
+              <span
+                className="bg-[linear-gradient(90deg,#255971,#4B8E8D,#89C2AA)] bg-clip-text text-transparent"
+              >
+                Scoor voor jezelf en je klas.
+              </span>
+            </>
+          }
+          description={
+            <>
+              Ontdek alle sportieve challenges van school. Doe mee aan de Run &
+              Walk Challenge, test je kracht op de roeier of schrijf je in voor
+              een tornooi.
+            </>
+          }
+          imageSrc="/challenges/challenges.png"
+          imageAlt="Overzicht van de challenges"
+          actions={
+            <>
+              <InfoPill>🏆 Klassementen</InfoPill>
+              <InfoPill>👟 Individuele prestaties</InfoPill>
 
-          <div style={hero.inner}>
-            <div style={{ position: "relative", zIndex: 1, maxWidth: 760 }}>
-              <div style={hero.kicker}>CHALLENGE HUB</div>
-
-              <h1 style={hero.title}>
-                Beweeg. Competeer.
-                <br />
-                <span style={hero.accent}>Scoor voor jezelf en je klas.</span>
-              </h1>
-
-              <div style={hero.sub}>
-                Ontdek alle sportieve challenges van school. Doe mee aan de Run
-                & Walk Challenge, test je kracht op de roeier of schrijf je in
-                voor een tornooi.
-              </div>
-
-              <div style={hero.actions}>
-                <InfoPill>🏆 Klassementen</InfoPill>
-                <InfoPill>👟 Individuele prestaties</InfoPill>
-              </div>
-
-              <div style={{ marginTop: 18 }}>
+              <div style={{ width: "100%", marginTop: 4 }}>
                 <Link href="/dashboard" style={styles.dashboardBtn}>
                   ← Terug naar dashboard
                 </Link>
               </div>
-            </div>
-          </div>
-        </section>
+            </>
+          }
+          imageClassName="scale-[1.02]"
+        />
 
         <SectionCard
           title="Actieve en komende challenges"
@@ -224,73 +222,6 @@ export default function Page() {
     </AppShell>
   );
 }
-
-const hero: Record<string, React.CSSProperties> = {
-  wrap: {
-    position: "relative",
-    overflow: "hidden",
-    padding: 18,
-    borderRadius: 26,
-    border: `1px solid ${ui.border}`,
-    background:
-      "radial-gradient(900px 520px at 0% 0%, rgba(75,142,141,0.22) 0%, rgba(0,0,0,0) 60%), radial-gradient(900px 520px at 100% 0%, rgba(137,194,170,0.18) 0%, rgba(0,0,0,0) 60%), rgba(255,255,255,0.06)",
-  },
-  inner: {
-    position: "relative",
-    zIndex: 1,
-  },
-  bgGlow1: {
-    position: "absolute",
-    width: 260,
-    height: 260,
-    borderRadius: 999,
-    left: -120,
-    top: -140,
-    background: "rgba(75,142,141,0.20)",
-    filter: "blur(24px)",
-  },
-  bgGlow2: {
-    position: "absolute",
-    width: 320,
-    height: 320,
-    borderRadius: 999,
-    right: -160,
-    top: -170,
-    background: "rgba(137,194,170,0.16)",
-    filter: "blur(26px)",
-  },
-  kicker: {
-    fontSize: 12,
-    fontWeight: 950,
-    letterSpacing: 1.2,
-    color: ui.muted,
-  },
-  title: {
-    margin: "8px 0 0 0",
-    fontSize: 32,
-    lineHeight: 1.05,
-    fontWeight: 980,
-    color: ui.text,
-  },
-  accent: {
-    background: `linear-gradient(90deg, ${brand.blue}, ${brand.teal}, ${brand.mint})`,
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  },
-  sub: {
-    marginTop: 12,
-    fontSize: 14,
-    color: ui.muted,
-    maxWidth: 700,
-    lineHeight: 1.6,
-  },
-  actions: {
-    marginTop: 16,
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-};
 
 const styles: Record<string, React.CSSProperties> = {
   dashboardBtn: {

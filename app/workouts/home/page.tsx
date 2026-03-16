@@ -117,9 +117,7 @@ const SECTIONS: Section[] = [
 
   {
     title: "Dag 4 • Deel 2: Rotator Cuff",
-    exercises: [
-      { code: "A", name: "V-W-T RAISES", sets: 3, reps: "10/oef (alles na elkaar)", rest: `10"`, slug: "v-w-t-raises" },
-    ],
+    exercises: [{ code: "A", name: "V-W-T RAISES", sets: 3, reps: "10/oef (alles na elkaar)", rest: `10"`, slug: "v-w-t-raises" }],
   },
 ];
 
@@ -139,7 +137,8 @@ export default function HomeWorkoutsPage() {
   const [vals, setVals] = useState<Record<string, string>>({});
   const setVal = (k: string, v: string) => setVals((p) => ({ ...p, [k]: v }));
 
-  const [weekMode, setWeekMode] = useState<WeekMode>("all");
+  // Standaard starten op week 1
+  const [weekMode, setWeekMode] = useState<WeekMode>(1);
   const weeks = useMemo(() => [1, 2, 3, 4, 5, 6] as const, []);
   const visibleWeeks = useMemo<Week[]>(() => (weekMode === "all" ? [...weeks] : [weekMode]), [weekMode, weeks]);
 
@@ -216,7 +215,7 @@ export default function HomeWorkoutsPage() {
   };
 
   return (
-    <AppShell title="KA LO App" subtitle="Workouts • Home" userName={profile.volledige_naam ?? null}>
+    <AppShell title="LO App" subtitle="Workouts • Home" userName={profile.volledige_naam ?? null}>
       <style>{css}</style>
 
       <div style={{ maxWidth: 1100 }}>
@@ -245,19 +244,28 @@ export default function HomeWorkoutsPage() {
             </div>
 
             <div style={styles.chipsRow}>
-              <button type="button" onClick={() => setWeekMode("all")} className={"chip " + (weekMode === "all" ? "chipActive" : "")}>
-                Alles
-              </button>
               {weeks.map((w) => (
-                <button key={w} type="button" onClick={() => setWeekMode(w)} className={"chip " + (weekMode === w ? "chipActive" : "")}>
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setWeekMode(w)}
+                  className={"chip " + (weekMode === w ? "chipActive" : "")}
+                >
                   W{w}
                 </button>
               ))}
+
+              <button
+                type="button"
+                onClick={() => setWeekMode("all")}
+                className={"chip " + (weekMode === "all" ? "chipActive" : "")}
+              >
+                Alles
+              </button>
             </div>
 
             <div style={styles.filterHint}>
-              Filter:{" "}
-              <b style={{ color: "rgba(255,255,255,0.92)" }}>{weekMode === "all" ? "alles (W1–W6)" : "week " + weekMode}</b>
+              Filter: <b style={{ color: "rgba(255,255,255,0.92)" }}>{weekMode === "all" ? "alles (W1–W6)" : "week " + weekMode}</b>
             </div>
           </div>
         </div>

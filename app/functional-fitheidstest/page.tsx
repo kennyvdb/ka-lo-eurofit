@@ -6,8 +6,6 @@ import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
 import Image from "next/image";
 import React, { useEffect, useMemo, useState } from "react";
-
-// ✅ nieuw: huiswerk tab component
 import HomeworkTab from "./HomeworkTab";
 
 const brand = {
@@ -29,6 +27,7 @@ type Profiel = {
 const ui = {
   text: "rgba(234,240,255,0.92)",
   muted: "rgba(234,240,255,0.72)",
+  muted2: "rgba(234,240,255,0.55)",
   panel: "rgba(255,255,255,0.06)",
   panel2: "rgba(255,255,255,0.08)",
   border: "rgba(255,255,255,0.12)",
@@ -50,9 +49,6 @@ function toYMD(d = new Date()) {
 
 type ScoreValue = number | "";
 
-/**
- * ✅ Matcht Excel (sheet "TEST 1") – 12 onderdelen
- */
 type TestKey =
   | "vma_kmu"
   | "situp_floor_tap_60s"
@@ -77,7 +73,7 @@ type TestDef = {
   min?: number;
   max?: number;
   icon: string;
-  points: (v: number) => number; // 0..10
+  points: (v: number) => number;
   hint?: string;
   image?: string;
 };
@@ -272,7 +268,7 @@ export default function FunctionalFitheidstestPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  const [activeTab, setActiveTab] = useState<"invullen" | "resultaten" | "info" | "huiswerk">("invullen");
+  const [activeTab, setActiveTab] = useState<"invullen" | "info" | "huiswerk">("invullen");
 
   const [date, setDate] = useState(toYMD());
   const [note, setNote] = useState("");
@@ -287,8 +283,8 @@ export default function FunctionalFitheidstestPage() {
   });
 
   const computed = useMemo(() => {
-    const numeric: Record<TestKey, number> = {} as any;
-    const pts: Record<TestKey, number> = {} as any;
+    const numeric: Record<TestKey, number> = {} as Record<TestKey, number>;
+    const pts: Record<TestKey, number> = {} as Record<TestKey, number>;
 
     for (const t of TESTS) {
       const v = scores[t.key];
@@ -298,23 +294,8 @@ export default function FunctionalFitheidstestPage() {
     }
 
     const totalPoints = Object.values(pts).reduce((a, b) => a + b, 0);
-    const maxPoints = TESTS.length * 10;
 
-    const pct = maxPoints ? (totalPoints / maxPoints) * 100 : 0;
-    const tier =
-      pct >= 85
-        ? "Legendary"
-        : pct >= 70
-        ? "Elite"
-        : pct >= 55
-        ? "Savage"
-        : pct >= 40
-        ? "Alpha"
-        : pct >= 25
-        ? "Hungry"
-        : "Rookie";
-
-    return { numeric, pts, totalPoints, maxPoints, pct, tier };
+    return { numeric, pts, totalPoints };
   }, [scores]);
 
   const greetingName = profiel?.volledige_naam?.split(" ")?.[0] ?? "Beast";
@@ -375,6 +356,7 @@ export default function FunctionalFitheidstestPage() {
       setScores((s) => ({ ...s, [k]: "" }));
       return;
     }
+
     const n = Number(raw);
     if (!Number.isFinite(n)) return;
 
@@ -399,6 +381,7 @@ export default function FunctionalFitheidstestPage() {
 
   const handleSave = async () => {
     if (!uid) return;
+
     setSaving(true);
     setError(null);
     setInfo(null);
@@ -417,8 +400,9 @@ export default function FunctionalFitheidstestPage() {
       const { error } = await supabase.from("functional_fitheidstest_submissions").insert(payload);
 
       if (error) throw new Error(error.message);
+
       setInfo("✅ Opgeslagen!");
-      setActiveTab("resultaten");
+      window.location.href = "/functional-fitheidstest/resultaten";
     } catch (e: any) {
       setError(e?.message ?? "Opslaan mislukt.");
     } finally {
@@ -428,6 +412,7 @@ export default function FunctionalFitheidstestPage() {
 
   const handleLoadLatest = async () => {
     if (!uid) return;
+
     setLoadingLatest(true);
     setError(null);
     setInfo(null);
@@ -441,6 +426,7 @@ export default function FunctionalFitheidstestPage() {
         .limit(1);
 
       if (error) throw new Error(error.message);
+
       const row = (data?.[0] as SavedRow | undefined) ?? null;
       if (!row) {
         setInfo("Geen vorige meting gevonden.");
@@ -481,11 +467,10 @@ export default function FunctionalFitheidstestPage() {
         label="Functional"
         title={
           <>
-            Fitheidstest
+            Fitheidstest{" "}
             <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
-              Beast
+              {greetingName}
             </span>
-            {greetingName}
             <img
               src="/hero/beast.png"
               alt="Beast icoon"
@@ -509,20 +494,6 @@ export default function FunctionalFitheidstestPage() {
         actions={
           <>
             <Link
-              href="/challenges"
-              className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
-            >
-              Challenges
-            </Link>
-
-            <Link
-              href="/eurofittest"
-              className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
-            >
-              Eurofit
-            </Link>
-
-            <Link
               href="/dashboard"
               className="inline-flex h-11 items-center rounded-2xl border border-slate-300/25 bg-[linear-gradient(180deg,rgba(12,18,24,0.72),rgba(0,0,0,0.58))] px-4 font-black text-[rgba(234,240,255,0.92)] shadow-[0_12px_30px_rgba(0,0,0,0.28)] transition duration-200 hover:-translate-y-0.5 hover:border-teal-200/25 hover:shadow-[0_16px_34px_rgba(0,0,0,0.32),0_0_0_1px_rgba(75,142,141,0.10)]"
             >
@@ -536,7 +507,9 @@ export default function FunctionalFitheidstestPage() {
         <div style={{ minWidth: 0 }}>
           <div style={{ marginTop: 0, fontSize: 13, color: ui.muted }}>
             Vul je scores in zoals op het invulblad.{" "}
-            <span style={{ color: ui.text, fontWeight: 950 }}>{teacherMode ? "Leerkrachtmodus" : "Leerlingmodus"}</span>
+            <span style={{ color: ui.text, fontWeight: 950 }}>
+              {teacherMode ? "Leerkrachtmodus" : "Leerlingmodus"}
+            </span>
             {profiel?.klas_naam ? <span style={{ color: ui.muted }}> • {profiel.klas_naam}</span> : null}
           </div>
         </div>
@@ -551,6 +524,7 @@ export default function FunctionalFitheidstestPage() {
           <b>Oeps:</b> {error}
         </div>
       )}
+
       {info && (
         <div style={styles.okBox}>
           <b>Info:</b> {info}
@@ -561,12 +535,15 @@ export default function FunctionalFitheidstestPage() {
         <TabBtn active={activeTab === "invullen"} onClick={() => setActiveTab("invullen")}>
           Invullen
         </TabBtn>
-        <TabBtn active={activeTab === "resultaten"} onClick={() => setActiveTab("resultaten")}>
+
+        <Link href="/functional-fitheidstest/resultaten" style={styles.tabLink}>
           Resultaten
-        </TabBtn>
+        </Link>
+
         <TabBtn active={activeTab === "info"} onClick={() => setActiveTab("info")}>
           Uitleg
         </TabBtn>
+
         <TabBtn active={activeTab === "huiswerk"} onClick={() => setActiveTab("huiswerk")}>
           Huiswerk
         </TabBtn>
@@ -583,7 +560,9 @@ export default function FunctionalFitheidstestPage() {
               inputMode="text"
               placeholder="YYYY-MM-DD"
             />
-            <div style={{ marginTop: 6, fontSize: 12, color: ui.muted }}>Tip: zet dezelfde datum als op je invulblad.</div>
+            <div style={{ marginTop: 6, fontSize: 12, color: ui.muted }}>
+              Tip: zet dezelfde datum als op je invulblad.
+            </div>
           </div>
 
           <div style={styles.metaCard}>
@@ -594,7 +573,9 @@ export default function FunctionalFitheidstestPage() {
               style={styles.input}
               placeholder="bv. blessure, natte zaal, ... "
             />
-            <div style={{ marginTop: 6, fontSize: 12, color: ui.muted }}>Korte context helpt bij vergelijken.</div>
+            <div style={{ marginTop: 6, fontSize: 12, color: ui.muted }}>
+              Korte context helpt bij vergelijken.
+            </div>
           </div>
         </div>
       ) : null}
@@ -629,8 +610,10 @@ export default function FunctionalFitheidstestPage() {
               <div>
                 <div style={{ fontWeight: 950, color: ui.text }}>Leerkrachtmodus</div>
                 <div style={{ marginTop: 3, fontSize: 13, color: ui.muted }}>
-                  Deze pagina is klaar als invulscherm. Wil je dat leerkrachten <b style={{ color: ui.text }}>leerlingen kunnen selecteren</b> en klasscores kunnen
-                  ingeven zoals in Excel? Dan voeg ik een “klas-overzicht + leerling-selector” toe op basis van jullie tabellen.
+                  Deze pagina is klaar als invulscherm. Wil je dat leerkrachten{" "}
+                  <b style={{ color: ui.text }}>leerlingen kunnen selecteren</b> en klasscores kunnen
+                  ingeven zoals in Excel? Dan voeg ik een “klas-overzicht + leerling-selector” toe op basis van
+                  jullie tabellen.
                 </div>
               </div>
               <div style={styles.pill}>TEACHER</div>
@@ -642,108 +625,54 @@ export default function FunctionalFitheidstestPage() {
 
             <div className="functional-grid" style={styles.gridWrap}>
               {TESTS.map((t) => (
-                <TestCard key={t.key} def={t} value={scores[t.key]} points={computed.pts[t.key]} onChange={(raw) => setOne(t.key, raw)} />
+                <TestCard
+                  key={t.key}
+                  def={t}
+                  value={scores[t.key]}
+                  points={computed.pts[t.key]}
+                  onChange={(raw) => setOne(t.key, raw)}
+                />
               ))}
             </div>
           </section>
-
-          <SummaryCard
-            total={computed.totalPoints}
-            max={computed.maxPoints}
-            pct={computed.pct}
-            tier={computed.tier}
-            date={date}
-            schooljaar={profiel?.schooljaar ?? null}
-          />
-        </>
-      ) : activeTab === "resultaten" ? (
-        <>
-          <SummaryCard
-            total={computed.totalPoints}
-            max={computed.maxPoints}
-            pct={computed.pct}
-            tier={computed.tier}
-            date={date}
-            schooljaar={profiel?.schooljaar ?? null}
-          />
-
-          <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
-            <div style={styles.panel}>
-              <div style={{ fontWeight: 950, color: ui.text }}>📊 Detailpunten</div>
-              <div style={{ marginTop: 8, display: "grid", gap: 10 }}>
-                {TESTS.map((t) => (
-                  <RowBar key={t.key} label={`${t.icon} ${t.title}`} value={computed.pts[t.key]} max={10} right={`${computed.pts[t.key]}/10`} />
-                ))}
-              </div>
-              <div style={{ marginTop: 10, fontSize: 12.5, color: ui.muted }}>
-                *Puntensysteem is momenteel <b style={{ color: ui.text }}>placeholder</b>. Vervang de punten-normen met je Excel-regels.
-              </div>
-            </div>
-
-            <div style={styles.panel}>
-              <div style={{ fontWeight: 950, color: ui.text }}>🧾 Ingevulde scores</div>
-              <div style={{ marginTop: 8, display: "grid", gap: 10 }}>
-                {TESTS.map((t) => (
-                  <div key={t.key} style={styles.kvRow}>
-                    <div style={{ color: ui.muted, fontSize: 12.5, minWidth: 0 }}>
-                      {t.icon} {t.title}
-                    </div>
-                    <div style={{ color: ui.text, fontWeight: 950, fontSize: 12.5 }}>
-                      {typeof scores[t.key] === "number" ? `${scores[t.key]} ${t.unit}` : "—"}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {note?.trim() ? (
-                <div style={{ marginTop: 10, color: ui.muted, fontSize: 12.5 }}>
-                  <b style={{ color: ui.text }}>Opmerking:</b> {note.trim()}
-                </div>
-              ) : null}
-            </div>
-
-            <div style={styles.actionRow}>
-              <button onClick={() => setActiveTab("invullen")} style={styles.blackBtn}>
-                Aanpassen →
-              </button>
-              <button onClick={handleSave} disabled={saving} style={{ ...styles.primaryBtn, opacity: saving ? 0.7 : 1 }}>
-                {saving ? "Opslaan..." : "Opslaan"}
-              </button>
-            </div>
-          </div>
         </>
       ) : activeTab === "info" ? (
         <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
           <div style={styles.panel}>
-            <div style={{ fontWeight: 980, color: ui.text }}>Hoe werkt deze pagina?</div>
-            <div style={{ marginTop: 8, color: ui.muted, fontSize: 13.5, lineHeight: 1.35 }}>
-              Dit is het invulscherm voor de <b style={{ color: ui.text }}>Functional Fitheidstest</b> in dezelfde stijl als je dashboard. Leerlingen vullen per
-              onderdeel hun score in (zoals op het Excel-invulblad). Daarna zie je een overzicht en kan je opslaan.
-              <br />
-              <br />
-              <b style={{ color: ui.text }}>Belangrijk:</b> de puntberekening in deze versie is een <b style={{ color: ui.text }}>placeholder</b>. Jij hebt een
-              Excelbestand met de echte normtabellen. Zodra je die regels (of kolommen) overneemt, kan ik de punten exact laten matchen.
+            <div style={{ fontWeight: 980, color: ui.text }}>Wat is de functionele fitheidstest?</div>
+            <div style={{ marginTop: 8, color: ui.muted, fontSize: 13.5, lineHeight: 1.5 }}>
+              De <b style={{ color: ui.text }}>functionele fitheidstest</b> is een startmeting die we afnemen
+              vóór de leerlingen beginnen aan hun workoutprogramma. Tijdens deze test voeren ze een aantal
+              oefeningen uit die verschillende onderdelen van hun fysieke fitheid meten, zoals{" "}
+              <b style={{ color: ui.text }}>kracht</b>, <b style={{ color: ui.text }}>uithoudingsvermogen</b>,{" "}
+              <b style={{ color: ui.text }}>stabiliteit</b> en <b style={{ color: ui.text }}>mobiliteit</b>.
             </div>
           </div>
 
           <div style={styles.panel}>
-            <div style={{ fontWeight: 980, color: ui.text }}>Wat heb je nodig om het 1-op-1 met Excel te matchen?</div>
-            <ul style={{ marginTop: 10, color: ui.muted, fontSize: 13.5, lineHeight: 1.35, paddingLeft: 18 }}>
-              <li>De lijst met tests + exacte kolomnamen.</li>
-              <li>De normtabellen (per leeftijd/geslacht/klas indien van toepassing).</li>
-              <li>Hoe de totaalscore berekend wordt (som, gemiddelde, weging, bonus, …).</li>
-            </ul>
-            <div style={{ marginTop: 10, color: ui.muted, fontSize: 13.5 }}>
-              Als je de Excel-lay-out wil spiegelen, zet de afbeeldingen in <code>/public/functional/</code>.
+            <div style={{ fontWeight: 980, color: ui.text }}>Waarom doen we deze meting?</div>
+            <div style={{ marginTop: 8, color: ui.muted, fontSize: 13.5, lineHeight: 1.5 }}>
+              De resultaten vormen een <b style={{ color: ui.text }}>eikpunt (nulmeting)</b>. Zo krijgen de
+              leerlingen een duidelijk beeld van hun huidige niveau en weten ze waar ze kunnen groeien.
             </div>
           </div>
 
           <div style={styles.panel}>
-            <div style={{ fontWeight: 980, color: ui.text }}>Opslag in Supabase</div>
-            <div style={{ marginTop: 8, color: ui.muted, fontSize: 13.5, lineHeight: 1.35 }}>
-              Deze pagina probeert op te slaan naar <b style={{ color: ui.text }}>functional_fitheidstest_submissions</b>. Als jullie tabel anders heet of andere
-              kolommen heeft, pas dat aan in <code>handleSave()</code> en <code>handleLoadLatest()</code>.
+            <div style={{ fontWeight: 980, color: ui.text }}>Wat gebeurt er daarna?</div>
+            <div style={{ marginTop: 8, color: ui.muted, fontSize: 13.5, lineHeight: 1.5 }}>
+              Na enkele weken training wordt dezelfde test opnieuw uitgevoerd. Door de resultaten te vergelijken,
+              kunnen de leerlingen zien of en hoeveel ze vooruitgang hebben geboekt.
             </div>
           </div>
+
+          <div style={styles.panel}>
+            <div style={{ fontWeight: 980, color: ui.text }}>Doel van de test 💪</div>
+            <div style={{ marginTop: 8, color: ui.muted, fontSize: 13.5, lineHeight: 1.5 }}>
+              Het doel is om leerlingen te motiveren, hun evolutie zichtbaar te maken en hen bewust te laten
+              werken aan hun eigen fitheid.
+            </div>
+          </div>
+
         </div>
       ) : activeTab === "huiswerk" ? (
         <HomeworkTab
@@ -761,10 +690,15 @@ export default function FunctionalFitheidstestPage() {
   );
 }
 
-/* ---------------------------
-   Components
---------------------------- */
-function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function TabBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       onClick={onClick}
@@ -849,77 +783,6 @@ function TestCard({
   );
 }
 
-function SummaryCard({
-  total,
-  max,
-  pct,
-  tier,
-  date,
-  schooljaar,
-}: {
-  total: number;
-  max: number;
-  pct: number;
-  tier: string;
-  date: string;
-  schooljaar: string | null;
-}) {
-  const w = Math.max(0, Math.min(100, pct));
-
-  return (
-    <div style={{ ...styles.panel, marginTop: 14 }}>
-      <div style={styles.summaryTop}>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 950, color: ui.muted, letterSpacing: 0.6 }}>🐺 Beast score</div>
-          <div style={{ marginTop: 6, fontSize: 18, fontWeight: 980, color: ui.text }}>
-            {tier} • {total}/{max} punten
-          </div>
-          <div style={{ marginTop: 6, fontSize: 12.5, color: ui.muted }}>
-            Datum: <b style={{ color: ui.text }}>{date}</b>
-            {schooljaar ? (
-              <>
-                {" "}
-                • Schooljaar: <b style={{ color: ui.text }}>{schooljaar}</b>
-              </>
-            ) : null}
-          </div>
-        </div>
-
-        <div style={styles.summaryPill}>TOTAL</div>
-      </div>
-
-      <div style={styles.barWrap}>
-        <div style={{ ...styles.barFill, width: `${w}%` }} />
-      </div>
-
-      <div style={{ marginTop: 10, display: "flex", justifyContent: "space-between", fontSize: 12.5, color: ui.muted }}>
-        <span>
-          Progress: <b style={{ color: ui.text }}>{Math.round(w)}%</b>
-        </span>
-        <span style={{ opacity: 0.9 }}>Tip: houd dezelfde testvoorwaarden aan.</span>
-      </div>
-    </div>
-  );
-}
-
-function RowBar({ label, value, max, right }: { label: string; value: number; max: number; right: string }) {
-  const pct = max ? Math.max(0, Math.min(100, (value / max) * 100)) : 0;
-  return (
-    <div style={{ display: "grid", gap: 6 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ color: ui.muted, fontSize: 12.5, minWidth: 0 }}>{label}</div>
-        <div style={{ color: ui.text, fontSize: 12.5, fontWeight: 950 }}>{right}</div>
-      </div>
-      <div style={styles.miniBarWrap}>
-        <div style={{ ...styles.miniBarFill, width: `${pct}%` }} />
-      </div>
-    </div>
-  );
-}
-
-/* ---------------------------
-   Styles
---------------------------- */
 const styles: Record<string, React.CSSProperties> = {
   headerRow: {
     display: "flex",
@@ -1026,17 +889,34 @@ const styles: Record<string, React.CSSProperties> = {
   },
   tabs: {
     marginTop: 14,
-    display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    display: "flex",
+    flexWrap: "wrap",
     gap: 10,
   },
   tabBtn: {
+    minWidth: 150,
+    flex: "1 1 150px",
     height: 46,
     borderRadius: 16,
     border: `1px solid ${ui.border}`,
     color: ui.text,
     fontWeight: 950,
     cursor: "pointer",
+  },
+  tabLink: {
+    minWidth: 150,
+    flex: "1 1 150px",
+    height: 46,
+    borderRadius: 16,
+    border: `1px solid ${ui.border}`,
+    color: ui.text,
+    fontWeight: 950,
+    cursor: "pointer",
+    textDecoration: "none",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "rgba(0,0,0,0.25)",
   },
   metaRow: {
     marginTop: 12,
@@ -1050,7 +930,12 @@ const styles: Record<string, React.CSSProperties> = {
     background: ui.panel,
     border: `1px solid ${ui.border}`,
   },
-  metaLabel: { fontSize: 12, fontWeight: 950, color: ui.muted, letterSpacing: 0.6 },
+  metaLabel: {
+    fontSize: 12,
+    fontWeight: 950,
+    color: ui.muted,
+    letterSpacing: 0.6,
+  },
   input: {
     marginTop: 10,
     width: "100%",
@@ -1081,7 +966,6 @@ const styles: Record<string, React.CSSProperties> = {
     gridTemplateColumns: "repeat(1, minmax(0, 1fr))",
     gap: 14,
   },
-
   testCard: {
     padding: 14,
     borderRadius: 22,
@@ -1090,7 +974,11 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     position: "relative",
   },
-  testTop: { display: "flex", gap: 12, alignItems: "flex-start" },
+  testTop: {
+    display: "flex",
+    gap: 12,
+    alignItems: "flex-start",
+  },
   iconBox: {
     width: 44,
     height: 44,
@@ -1103,8 +991,18 @@ const styles: Record<string, React.CSSProperties> = {
     color: ui.text,
     flexShrink: 0,
   },
-  testTitle: { fontSize: 15, fontWeight: 980, color: ui.text, letterSpacing: 0.2 },
-  testDesc: { marginTop: 4, fontSize: 12.5, color: ui.muted, lineHeight: 1.25 },
+  testTitle: {
+    fontSize: 15,
+    fontWeight: 980,
+    color: ui.text,
+    letterSpacing: 0.2,
+  },
+  testDesc: {
+    marginTop: 4,
+    fontSize: 12.5,
+    color: ui.muted,
+    lineHeight: 1.25,
+  },
   pointsPill: {
     marginLeft: "auto",
     height: 34,
@@ -1119,7 +1017,6 @@ const styles: Record<string, React.CSSProperties> = {
     border: `1px solid ${ui.border}`,
     flexShrink: 0,
   },
-
   imgWrap: {
     marginTop: 12,
     position: "relative",
@@ -1139,14 +1036,18 @@ const styles: Record<string, React.CSSProperties> = {
     border: `1px solid ${ui.border}`,
     overflow: "hidden",
   },
-
   inputRow: {
     marginTop: 12,
     display: "flex",
     gap: 10,
     alignItems: "flex-start",
   },
-  smallLabel: { fontSize: 12, fontWeight: 950, color: ui.muted, letterSpacing: 0.6 },
+  smallLabel: {
+    fontSize: 12,
+    fontWeight: 950,
+    color: ui.muted,
+    letterSpacing: 0.6,
+  },
   unitBox: {
     width: 110,
     padding: 12,
@@ -1154,56 +1055,17 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(0,0,0,0.28)",
     border: `1px solid ${ui.border}`,
   },
-  unitText: { marginTop: 8, fontSize: 13.5, fontWeight: 980, color: ui.text },
-  hint: { marginTop: 8, fontSize: 12.5, color: ui.muted, lineHeight: 1.25 },
-
-  summaryTop: { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start" },
-  summaryPill: {
-    height: 34,
-    padding: "0 12px",
-    borderRadius: 14,
-    display: "grid",
-    placeItems: "center",
-    fontWeight: 950,
-    fontSize: 12,
+  unitText: {
+    marginTop: 8,
+    fontSize: 13.5,
+    fontWeight: 980,
     color: ui.text,
-    background: "rgba(0,0,0,0.45)",
-    border: `1px solid ${ui.border}`,
-    flexShrink: 0,
   },
-  barWrap: {
-    marginTop: 12,
-    height: 12,
-    borderRadius: 999,
-    background: "rgba(0,0,0,0.35)",
-    border: `1px solid ${ui.border}`,
-    overflow: "hidden",
-  },
-  barFill: {
-    height: "100%",
-    borderRadius: 999,
-    background: "linear-gradient(90deg, #255971, #4B8E8D, #89C2AA)",
-  },
-  miniBarWrap: {
-    height: 10,
-    borderRadius: 999,
-    background: "rgba(0,0,0,0.35)",
-    border: `1px solid ${ui.border}`,
-    overflow: "hidden",
-  },
-  miniBarFill: {
-    height: "100%",
-    borderRadius: 999,
-    background: "linear-gradient(90deg, #255971, #4B8E8D, #89C2AA)",
-  },
-  kvRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    padding: "10px 12px",
-    borderRadius: 16,
-    background: "rgba(0,0,0,0.28)",
-    border: `1px solid ${ui.border}`,
+  hint: {
+    marginTop: 8,
+    fontSize: 12.5,
+    color: ui.muted,
+    lineHeight: 1.25,
   },
 };
 

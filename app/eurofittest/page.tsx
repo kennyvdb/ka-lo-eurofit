@@ -7,6 +7,7 @@ import { checkProfileCompletion } from "@/lib/profileCompletion";
 import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 
 /* ---------------------------
@@ -21,16 +22,6 @@ export const brand = {
 /* ---------------------------
    Types
 --------------------------- */
-type EurofitResult = {
-  id: string;
-  test_datum: string; // YYYY-MM-DD
-  test_type: string;
-  waarde: number;
-  eenheid: string;
-  schooljaar?: string | null;
-  aangemaakt_op?: string;
-};
-
 type Geslacht = "jongen" | "meisje";
 
 type NormRow = {
@@ -94,7 +85,7 @@ function getTestMeta(testType: string): TestMeta {
 }
 
 /* ---------------------------
-   Lower is better (volgens normdocument: P95 = best, P5 = slechtst)
+   Lower is better
 --------------------------- */
 const LOWER_IS_BETTER = new Set<string>(["flamingo", "plate_tapping", "shuttle_10x5"]);
 
@@ -123,11 +114,6 @@ function berekenLeeftijd(geboortedatumISO: string, testDatumISO: string) {
   return leeftijd;
 }
 
-/**
- * ✅ Correct volgens bijgevoegde normschalen:
- * - Hoger = beter: P5 = zwak, P95 = sterk
- * - Lager = beter (tijd/fouten): P5 = zwak (hoog), P95 = sterk (laag)
- */
 function beoordeelWaarde(waarde: number, norm: NormRow): Beoordeling {
   const lowerBetter = LOWER_IS_BETTER.has(norm.test_type);
 
@@ -172,9 +158,10 @@ async function handleSessionError(sessionError: any): Promise<boolean> {
 --------------------------- */
 const ui = {
   text: "rgba(234,240,255,0.92)",
-  muted: "rgba(234,240,255,0.72)",
-  muted2: "rgba(234,240,255,0.55)",
-  panel: "rgba(255,255,255,0.06)",
+  muted: "rgba(234,240,255,0.74)",
+  muted2: "rgba(234,240,255,0.58)",
+  panel: "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
+  panelSoft: "linear-gradient(180deg, rgba(75,142,141,0.13), rgba(37,89,113,0.08))",
   border: "rgba(255,255,255,0.12)",
   border2: "rgba(255,255,255,0.18)",
   warnBg: "rgba(255,193,102,0.10)",
@@ -186,19 +173,6 @@ const ui = {
 };
 
 const styles: Record<string, React.CSSProperties> = {
-  headerRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    padding: 16,
-    borderRadius: 20,
-    background: ui.panel,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: ui.border,
-  },
-
   blackBtn: {
     height: 50,
     padding: "0 18px",
@@ -228,6 +202,7 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: "none",
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
   },
   primaryBtn: {
@@ -292,12 +267,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 14,
   },
 
-  tabs: {
-    marginTop: 14,
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-    gap: 10,
-  },
   tabBtn: {
     height: 46,
     borderRadius: 16,
@@ -322,6 +291,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: ui.border,
+    boxShadow: "0 14px 34px rgba(0,0,0,0.18)",
+    backdropFilter: "blur(10px)",
   },
   metaLabel: { fontSize: 12, fontWeight: 950, color: ui.muted, letterSpacing: 0.6 },
   input: {
@@ -340,12 +311,25 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   panel: {
-    padding: 16,
-    borderRadius: 22,
+    padding: 18,
+    borderRadius: 24,
     background: ui.panel,
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: ui.border,
+    boxShadow: "0 14px 34px rgba(0,0,0,0.18)",
+    backdropFilter: "blur(10px)",
+  },
+
+  panelAccent: {
+    padding: 18,
+    borderRadius: 24,
+    background: ui.panelSoft,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "rgba(137,194,170,0.18)",
+    boxShadow: "0 14px 34px rgba(0,0,0,0.18)",
+    backdropFilter: "blur(10px)",
   },
 
   gridWrap: {
@@ -363,6 +347,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderColor: ui.border,
     overflow: "hidden",
     position: "relative",
+    boxShadow: "0 14px 34px rgba(0,0,0,0.18)",
   },
   testTop: { display: "flex", gap: 12, alignItems: "flex-start" },
   iconBox: {
@@ -448,12 +433,146 @@ const styles: Record<string, React.CSSProperties> = {
     borderColor: ui.border,
     overflow: "hidden",
   },
+
+  infoIntro: {
+    display: "grid",
+    gap: 12,
+    gridTemplateColumns: "1.2fr 0.8fr",
+  },
+
+  infoMiniCard: {
+    borderRadius: 20,
+    padding: 16,
+    background: "rgba(0,0,0,0.22)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: ui.border,
+  },
+
+  sectionTitle: {
+    fontWeight: 980,
+    color: ui.text,
+    fontSize: 16,
+    letterSpacing: 0.2,
+  },
+
+  sectionText: {
+    marginTop: 8,
+    color: ui.muted,
+    fontSize: 14,
+    lineHeight: 1.55,
+  },
+
+  statGrid: {
+    marginTop: 10,
+    display: "grid",
+    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+    gap: 10,
+  },
+
+  statCard: {
+    padding: 12,
+    borderRadius: 18,
+    background: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: ui.border,
+  },
+
+  statIcon: {
+    fontSize: 20,
+    lineHeight: 1,
+  },
+
+  statLabel: {
+    marginTop: 8,
+    color: ui.text,
+    fontWeight: 900,
+    fontSize: 13,
+  },
+
+  statSub: {
+    marginTop: 4,
+    color: ui.muted2,
+    fontSize: 12.5,
+    lineHeight: 1.35,
+  },
+
+  onderdelenGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(1, minmax(0, 1fr))",
+    gap: 12,
+    marginTop: 12,
+  },
+
+  onderdeelCard: {
+    padding: 14,
+    borderRadius: 20,
+    background: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: ui.border,
+  },
+
+  onderdeelTop: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+  },
+
+  onderdeelIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 14,
+    display: "grid",
+    placeItems: "center",
+    background: "rgba(0,0,0,0.32)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: ui.border,
+    fontSize: 18,
+    flexShrink: 0,
+  },
+
+  onderdeelTitle: {
+    fontWeight: 950,
+    fontSize: 14,
+    color: ui.text,
+  },
+
+  onderdeelDesc: {
+    marginTop: 8,
+    color: ui.muted,
+    fontSize: 13.5,
+    lineHeight: 1.45,
+  },
+
+  chipsWrap: {
+    marginTop: 10,
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+
+  chip: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "8px 10px",
+    borderRadius: 999,
+    background: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: ui.border,
+    color: ui.text,
+    fontSize: 12.5,
+    fontWeight: 900,
+  },
 };
 
-/* ---------------------------
-   Page
---------------------------- */
 export default function EurofittestPage() {
+  const router = useRouter();
+
   const [loading, setLoading] = useState(true);
   const [uid, setUid] = useState<string | null>(null);
 
@@ -470,7 +589,7 @@ export default function EurofittestPage() {
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const [testDatum, setTestDatum] = useState(today);
 
-  const [activeTab, setActiveTab] = useState<"invullen" | "resultaten" | "info">("invullen");
+  const [activeTab, setActiveTab] = useState<"invullen" | "info">("invullen");
 
   const [scores, setScores] = useState<Record<string, string>>(() => {
     const init: Record<string, string> = {};
@@ -481,7 +600,6 @@ export default function EurofittestPage() {
   const [norms, setNorms] = useState<Record<string, NormRow | null>>({});
   const [normLoading, setNormLoading] = useState(false);
 
-  const [results, setResults] = useState<EurofitResult[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
@@ -538,27 +656,11 @@ export default function EurofittestPage() {
         setVolledigeNaam(prof.data?.volledige_naam ?? null);
       }
 
-      await loadMyResults(userId);
       setLoading(false);
     };
 
     init();
   }, []);
-
-  const loadMyResults = async (userId: string) => {
-    const { data, error } = await supabase
-      .from("eurofittest_resultaten")
-      .select("id, test_datum, test_type, waarde, eenheid, schooljaar, aangemaakt_op")
-      .eq("leerling_id", userId)
-      .order("test_datum", { ascending: false })
-      .order("aangemaakt_op", { ascending: false });
-
-    if (error) {
-      setError(error.message);
-      return;
-    }
-    setResults((data ?? []) as EurofitResult[]);
-  };
 
   useEffect(() => {
     const run = async () => {
@@ -672,8 +774,7 @@ export default function EurofittestPage() {
       if (error) throw new Error(error.message);
 
       setInfo("✅ Opgeslagen!");
-      await loadMyResults(uid);
-      setActiveTab("resultaten");
+      router.push("/eurofittest/resultaten");
     } catch (e: any) {
       setError(e?.message ?? "Opslaan mislukt.");
     } finally {
@@ -746,7 +847,7 @@ export default function EurofittestPage() {
 
   if (loading) {
     return (
-      <AppShell title="LO App" subtitle="Eurofit" userName={volledigeNaam ?? undefined}>
+      <AppShell title="LO App" subtitle="Eurofittest" userName={volledigeNaam ?? undefined}>
         <div style={{ color: ui.text }}>Eurofit laden…</div>
       </AppShell>
     );
@@ -772,15 +873,11 @@ export default function EurofittestPage() {
         label="EUROFIT"
         title={
           <>
-            Eurofittest
+            Eurofittest{" "}
             <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
               {greetingName}
             </span>
-            <img
-              src="/hero/beast.png"
-              alt="Beast icoon"
-              className="h-14 w-14 object-contain sm:h-16 sm:w-16"
-            />
+            <img src="/hero/beast.png" alt="Beast icoon" className="h-14 w-14 object-contain sm:h-16 sm:w-16" />
           </>
         }
         description={
@@ -845,13 +942,33 @@ export default function EurofittestPage() {
         </div>
       ) : null}
 
-      <div style={styles.tabs}>
+      <div
+        style={{
+          marginTop: 14,
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gap: 10,
+        }}
+      >
         <TabBtn active={activeTab === "invullen"} onClick={() => setActiveTab("invullen")}>
           Invullen
         </TabBtn>
-        <TabBtn active={activeTab === "resultaten"} onClick={() => setActiveTab("resultaten")}>
+
+        <Link
+          href="/eurofittest/resultaten"
+          style={{
+            ...styles.tabBtn,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            textDecoration: "none",
+            background: "rgba(0,0,0,0.25)",
+            borderColor: ui.border,
+          }}
+        >
           Resultaten
-        </TabBtn>
+        </Link>
+
         <TabBtn active={activeTab === "info"} onClick={() => setActiveTab("info")}>
           Uitleg
         </TabBtn>
@@ -978,85 +1095,190 @@ export default function EurofittestPage() {
             })}
           </div>
         </section>
-      ) : activeTab === "resultaten" ? (
-        <section style={{ marginTop: 14, display: "grid", gap: 12 }}>
-          <div style={styles.panel}>
-            <div style={{ fontWeight: 980, color: ui.text }}>📌 Mijn resultaten</div>
-            <div style={{ marginTop: 8, color: ui.muted, fontSize: 13.5 }}>
-              Resultaten worden chronologisch getoond (nieuwste boven).
-            </div>
-          </div>
-
-          {results.length === 0 ? (
-            <div style={styles.panel}>
-              <div style={{ color: ui.muted }}>Nog geen resultaten.</div>
-            </div>
-          ) : (
-            <div style={{ display: "grid", gap: 10 }}>
-              {results.map((r) => {
-                const meta = getTestMeta(r.test_type);
-                const norm = norms[r.test_type] ?? null;
-                const beoordeling = norm ? beoordeelWaarde(r.waarde, norm) : null;
-
-                return (
-                  <div
-                    key={r.id}
-                    style={{
-                      ...styles.panel,
-                      padding: 14,
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      alignItems: "flex-start",
-                    }}
-                  >
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontWeight: 950, color: ui.text }}>
-                        {meta.icon} {meta.label}
-                      </div>
-                      <div style={{ color: ui.muted, marginTop: 4 }}>{r.test_datum}</div>
-                      {r.schooljaar ? <div style={{ color: ui.muted }}>Schooljaar: {r.schooljaar}</div> : null}
-                    </div>
-
-                    <div style={{ display: "grid", justifyItems: "end", gap: 6 }}>
-                      <div style={{ fontWeight: 950, color: ui.text, whiteSpace: "nowrap" }}>
-                        {r.waarde} {r.eenheid}
-                      </div>
-
-                      {beoordeling ? (
-                        <span style={{ ...styles.badge, background: beoordeling.kleur }}>{beoordeling.label}</span>
-                      ) : (
-                        <span style={{ color: ui.muted2 }}>—</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
       ) : (
         <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
-          <div style={styles.panel}>
-            <div style={{ fontWeight: 980, color: ui.text }}>Hoe werkt Eurofit hier?</div>
-            <div style={{ marginTop: 8, color: ui.muted, fontSize: 13.5, lineHeight: 1.35 }}>
-              Je vult per onderdeel je score in en je krijgt meteen een beoordeling op basis van percentielen (P5…P95).
-              <br />
-              <br />
-              <b style={{ color: ui.text }}>Belangrijk:</b> Voor testen waarbij <b style={{ color: ui.text }}>lager beter is</b>,
-              is de interpretatie volgens de normtabellen: <b style={{ color: ui.text }}>P95 = best</b> (laagste tijd/fouten) en{" "}
-              <b style={{ color: ui.text }}>P5 = zwakker</b> (hogere tijd/fouten).
+          <div className="info-intro-grid" style={styles.infoIntro}>
+            <div style={styles.panelAccent}>
+              <div style={styles.sectionTitle}>Wat is de Eurofit Test?</div>
+              <div style={styles.sectionText}>
+                De Eurofit Test is een reeks fitheidstesten die op school gebruikt worden om de lichamelijke conditie van
+                leerlingen te meten. Met verschillende oefeningen wordt gekeken naar onder andere{" "}
+                <b style={{ color: ui.text }}>kracht</b>, <b style={{ color: ui.text }}>snelheid</b>,{" "}
+                <b style={{ color: ui.text }}>uithoudingsvermogen</b>, <b style={{ color: ui.text }}>lenigheid</b> en{" "}
+                <b style={{ color: ui.text }}>evenwicht</b>.
+                <br />
+                <br />
+                De resultaten helpen leerlingen om inzicht te krijgen in hun eigen fitheid en om hun vooruitgang te volgen.
+                Het doel is <b style={{ color: ui.text }}>niet om te vergelijken met anderen</b>, maar om te zien hoe je
+                eigen conditie evolueert en hoe je die kan verbeteren. 💪🏃‍♂️
+              </div>
+            </div>
+
+            <div style={styles.panel}>
+              <div style={styles.sectionTitle}>Wat meet je?</div>
+              <div style={styles.statGrid}>
+                <div style={styles.statCard}>
+                  <div style={styles.statIcon}>💪</div>
+                  <div style={styles.statLabel}>Kracht</div>
+                  <div style={styles.statSub}>Spierkracht en rompsterkte</div>
+                </div>
+                <div style={styles.statCard}>
+                  <div style={styles.statIcon}>⚡</div>
+                  <div style={styles.statLabel}>Snelheid</div>
+                  <div style={styles.statSub}>Snelle bewegingen en reactietijd</div>
+                </div>
+                <div style={styles.statCard}>
+                  <div style={styles.statIcon}>🏃</div>
+                  <div style={styles.statLabel}>Uithouding</div>
+                  <div style={styles.statSub}>Langer blijven presteren</div>
+                </div>
+                <div style={styles.statCard}>
+                  <div style={styles.statIcon}>🧘</div>
+                  <div style={styles.statLabel}>Lenigheid</div>
+                  <div style={styles.statSub}>Beweeglijkheid van je lichaam</div>
+                </div>
+              </div>
             </div>
           </div>
 
           <div style={styles.panel}>
-            <div style={{ fontWeight: 980, color: ui.text }}>Welke testen zijn “lager = beter”?</div>
-            <ul style={{ marginTop: 10, color: ui.muted, fontSize: 13.5, lineHeight: 1.35, paddingLeft: 18 }}>
-              <li>Flamingo balans (fouten)</li>
-              <li>Plate tapping (sec)</li>
-              <li>10×5 shuttle run (sec)</li>
-            </ul>
-            <div style={{ marginTop: 10, color: ui.muted, fontSize: 13.5 }}>De rest is “hoger = beter”.</div>
+            <div style={styles.sectionTitle}>Onderdelen van de Eurofit</div>
+            <div style={styles.sectionText}>
+              Hieronder zie je welke testen in deze pagina zitten en welke fitheidscomponent ze vooral meten.
+            </div>
+
+            <div className="onderdelen-grid" style={styles.onderdelenGrid}>
+              <div style={styles.onderdeelCard}>
+                <div style={styles.onderdeelTop}>
+                  <div style={styles.onderdeelIcon}>🦩</div>
+                  <div style={styles.onderdeelTitle}>Flamingo balans</div>
+                </div>
+                <div style={styles.onderdeelDesc}>
+                  Meet je <b style={{ color: ui.text }}>evenwicht</b> en lichaamscontrole. Je probeert zo stabiel mogelijk
+                  te blijven staan.
+                </div>
+              </div>
+
+              <div style={styles.onderdeelCard}>
+                <div style={styles.onderdeelTop}>
+                  <div style={styles.onderdeelIcon}>🖐️</div>
+                  <div style={styles.onderdeelTitle}>Plate tapping</div>
+                </div>
+                <div style={styles.onderdeelDesc}>
+                  Meet je <b style={{ color: ui.text }}>snelheid van armbewegingen</b> en coördinatie.
+                </div>
+              </div>
+
+              <div style={styles.onderdeelCard}>
+                <div style={styles.onderdeelTop}>
+                  <div style={styles.onderdeelIcon}>🧘</div>
+                  <div style={styles.onderdeelTitle}>Sit &amp; reach</div>
+                </div>
+                <div style={styles.onderdeelDesc}>
+                  Meet je <b style={{ color: ui.text }}>lenigheid</b>, vooral van rug en hamstrings.
+                </div>
+              </div>
+
+              <div style={styles.onderdeelCard}>
+                <div style={styles.onderdeelTop}>
+                  <div style={styles.onderdeelIcon}>🦘</div>
+                  <div style={styles.onderdeelTitle}>Verspringen uit stand</div>
+                </div>
+                <div style={styles.onderdeelDesc}>
+                  Meet de <b style={{ color: ui.text }}>explosieve beenkracht</b>.
+                </div>
+              </div>
+
+              <div style={styles.onderdeelCard}>
+                <div style={styles.onderdeelTop}>
+                  <div style={styles.onderdeelIcon}>✊</div>
+                  <div style={styles.onderdeelTitle}>Handknijpkracht</div>
+                </div>
+                <div style={styles.onderdeelDesc}>
+                  Meet de <b style={{ color: ui.text }}>statische kracht</b> van hand en onderarm.
+                </div>
+              </div>
+
+              <div style={styles.onderdeelCard}>
+                <div style={styles.onderdeelTop}>
+                  <div style={styles.onderdeelIcon}>💪</div>
+                  <div style={styles.onderdeelTitle}>Sit-ups (30s)</div>
+                </div>
+                <div style={styles.onderdeelDesc}>
+                  Meet de <b style={{ color: ui.text }}>rompkracht</b> en spieruithouding van buikspieren.
+                </div>
+              </div>
+
+              <div style={styles.onderdeelCard}>
+                <div style={styles.onderdeelTop}>
+                  <div style={styles.onderdeelIcon}>🪝</div>
+                  <div style={styles.onderdeelTitle}>Bent-arm hang</div>
+                </div>
+                <div style={styles.onderdeelDesc}>
+                  Meet de <b style={{ color: ui.text }}>krachtuithouding</b> van armen en schouders.
+                </div>
+              </div>
+
+              <div style={styles.onderdeelCard}>
+                <div style={styles.onderdeelTop}>
+                  <div style={styles.onderdeelIcon}>⚡</div>
+                  <div style={styles.onderdeelTitle}>10×5 shuttle run</div>
+                </div>
+                <div style={styles.onderdeelDesc}>
+                  Meet <b style={{ color: ui.text }}>snelheid</b>, wendbaarheid en richtingsverandering.
+                </div>
+              </div>
+
+              <div style={styles.onderdeelCard}>
+                <div style={styles.onderdeelTop}>
+                  <div style={styles.onderdeelIcon}>🏃</div>
+                  <div style={styles.onderdeelTitle}>20m shuttle run</div>
+                </div>
+                <div style={styles.onderdeelDesc}>
+                  Meet je <b style={{ color: ui.text }}>uithoudingsvermogen</b> en aerobe conditie.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={styles.panel}>
+            <div style={styles.sectionTitle}>Hoe werkt Eurofit hier?</div>
+            <div style={styles.sectionText}>
+              Je vult per onderdeel je score in en je krijgt meteen een beoordeling op basis van percentielen (P5…P95).
+              Zo krijg je snel een beeld van waar je sterk in bent en waar je nog kan groeien.
+              <br />
+              <br />
+              <b style={{ color: ui.text }}>Belangrijk:</b> het doel is vooral je <b style={{ color: ui.text }}>eigen
+              progressie</b> te volgen, niet om jezelf constant met anderen te vergelijken.
+            </div>
+
+            <div style={styles.chipsWrap}>
+              <div style={styles.chip}>📈 Eigen vooruitgang volgen</div>
+              <div style={styles.chip}>🎯 Sterktes en werkpunten zien</div>
+              <div style={styles.chip}>🧠 Meteen feedback per test</div>
+            </div>
+          </div>
+
+          <div style={styles.panel}>
+            <div style={styles.sectionTitle}>Welke testen zijn “lager = beter”?</div>
+            <div style={styles.sectionText}>
+              Bij sommige onderdelen is een <b style={{ color: ui.text }}>lagere score beter</b>, omdat je dan minder fouten
+              maakt of sneller bent.
+            </div>
+
+            <div style={styles.chipsWrap}>
+              <div style={styles.chip}>🦩 Flamingo balans</div>
+              <div style={styles.chip}>🖐️ Plate tapping</div>
+              <div style={styles.chip}>⚡ 10×5 shuttle run</div>
+            </div>
+
+            <div style={{ ...styles.sectionText, marginTop: 12 }}>
+              Voor deze testen geldt in de normtabellen: <b style={{ color: ui.text }}>P95 = best</b> en{" "}
+              <b style={{ color: ui.text }}>P5 = zwakker</b>.
+              <br />
+              <br />
+              Bij de andere testen is het omgekeerd: <b style={{ color: ui.text }}>hoger = beter</b>.
+            </div>
           </div>
         </div>
       )}
@@ -1064,9 +1286,6 @@ export default function EurofittestPage() {
   );
 }
 
-/* ---------------------------
-   Components
---------------------------- */
 function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
@@ -1084,9 +1303,6 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
   );
 }
 
-/* ---------------------------
-   CSS Injector (no styled-jsx)
---------------------------- */
 function injectEurofitResponsiveCSS() {
   if (typeof window === "undefined") return;
 
@@ -1099,6 +1315,12 @@ function injectEurofitResponsiveCSS() {
     @media (min-width: 900px) {
       .meta-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
       .eurofit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .onderdelen-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+      .info-intro-grid { grid-template-columns: 1.2fr 0.8fr !important; }
+    }
+
+    @media (max-width: 899px) {
+      .info-intro-grid { grid-template-columns: 1fr !important; }
     }
   `;
   document.head.appendChild(style);

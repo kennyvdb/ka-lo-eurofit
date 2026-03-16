@@ -34,6 +34,8 @@ type GymEx = {
   w2?: string;
   w3?: string;
   w4?: string;
+  w5?: string;
+  w6?: string;
   rest?: string;
 };
 
@@ -43,80 +45,80 @@ const DAYS: Day[] = [
   {
     title: "Dag 1 • borst / delts / triceps",
     exercises: [
-      { code: "A", name: "30° incline chest press", tempo: "4010", w1: "12/10/8/12+", w2: "10/8/6/10+", w3: "8/6/4/8+", w4: "12", rest: "2–3'" },
-      { code: "B", name: "Cable chest fly", tempo: "2212", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
-      { code: "C", name: "BB bench press", tempo: "3010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", rest: "2'" },
-      { code: "D", name: "Seated DB shoulder press", tempo: "4010", w1: "8", w2: "10", w3: "12", w4: "8", rest: "2'" },
-      { code: "E", name: "DB side raises", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
-      { code: "F", name: "Tricep dips", tempo: "6010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", rest: "2–3'" },
-      { code: "G", name: "Rope tricep pulldown", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
+      { code: "A", name: "30° incline chest press", tempo: "4010", w1: "12/10/8/12+", w2: "10/8/6/10+", w3: "8/6/4/8+", w4: "12", w5: "10/8/6/10+", w6: "8/6/4/8+", rest: "2–3'" },
+      { code: "B", name: "Cable chest fly", tempo: "2212", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
+      { code: "C", name: "BB bench press", tempo: "3010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", w5: "6+max+max", w6: "6+max+max", rest: "2'" },
+      { code: "D", name: "Seated DB shoulder press", tempo: "4010", w1: "8", w2: "10", w3: "12", w4: "8", w5: "10", w6: "12", rest: "2'" },
+      { code: "E", name: "DB side raises", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
+      { code: "F", name: "Tricep dips", tempo: "6010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", w5: "6+max+max", w6: "6+max+max", rest: "2–3'" },
+      { code: "G", name: "Rope tricep pulldown", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
     ],
   },
   {
     title: "Dag 2 • lower body (quad dominant)",
     exercises: [
-      { code: "A", name: "Leg press", tempo: "4010", w1: "12/10/8/12+", w2: "10/8/6/10+", w3: "8/6/4/8+", w4: "12", rest: "2–3'" },
-      { code: "B", name: "Split squat", tempo: "2212", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
-      { code: "C", name: "Front/back squat", tempo: "3010", w1: "6+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", rest: "2–3'" },
-      { code: "D", name: "Romanian deadlift", tempo: "4010", w1: "8", w2: "10", w3: "12", w4: "8", rest: "2'" },
-      { code: "E", name: "Leg curl", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
-      { code: "F", name: "Standing calf raise", tempo: "5010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", rest: "2–3'" },
+      { code: "A", name: "Leg press", tempo: "4010", w1: "12/10/8/12+", w2: "10/8/6/10+", w3: "8/6/4/8+", w4: "12", w5: "10/8/6/10+", w6: "8/6/4/8+", rest: "2–3'" },
+      { code: "B", name: "Split squat", tempo: "2212", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
+      { code: "C", name: "Front/back squat", tempo: "3010", w1: "6+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", w5: "6+max+max", w6: "6+max+max", rest: "2–3'" },
+      { code: "D", name: "Romanian deadlift", tempo: "4010", w1: "8", w2: "10", w3: "12", w4: "8", w5: "10", w6: "12", rest: "2'" },
+      { code: "E", name: "Leg curl", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
+      { code: "F", name: "Standing calf raise", tempo: "5010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", w5: "6+max+max", w6: "6+max+max", rest: "2–3'" },
     ],
   },
   {
     title: "Dag 3 • rug / rear delts / biceps",
     exercises: [
-      { code: "A", name: "Lat pulldown wide grip", tempo: "4010", w1: "12/10/8/12+", w2: "10/8/6/10+", w3: "8/6/4/8+", w4: "12", rest: "2–3'" },
-      { code: "B", name: "Straight arm pulldown", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
-      { code: "C", name: "Chin ups", tempo: "3010", w1: "6+max", w2: "6+max", w3: "6+max+max", w4: "6+max+max", rest: "2'" },
-      { code: "D", name: "45° incline DB rows", tempo: "4010", w1: "8", w2: "10", w3: "12", w4: "8", rest: "2'" },
-      { code: "E", name: "Reverse DB fly’s", tempo: "2210", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
-      { code: "F", name: "EZ bar bicep curls", tempo: "5010", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2–3'" },
-      { code: "G", name: "Seated DB hammer curls", tempo: "5010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", rest: "2'" },
+      { code: "A", name: "Lat pulldown wide grip", tempo: "4010", w1: "12/10/8/12+", w2: "10/8/6/10+", w3: "8/6/4/8+", w4: "12", w5: "10/8/6/10+", w6: "8/6/4/8+", rest: "2–3'" },
+      { code: "B", name: "Straight arm pulldown", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
+      { code: "C", name: "Chin ups", tempo: "3010", w1: "6+max", w2: "6+max", w3: "6+max+max", w4: "6+max+max", w5: "6+max", w6: "6+max+max", rest: "2'" },
+      { code: "D", name: "45° incline DB rows", tempo: "4010", w1: "8", w2: "10", w3: "12", w4: "8", w5: "10", w6: "12", rest: "2'" },
+      { code: "E", name: "Reverse DB fly’s", tempo: "2210", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
+      { code: "F", name: "EZ bar bicep curls", tempo: "5010", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2–3'" },
+      { code: "G", name: "Seated DB hammer curls", tempo: "5010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", w5: "6+max+max", w6: "6+max+max", rest: "2'" },
     ],
   },
   {
     title: "Dag 4 • delts / borst / triceps",
     exercises: [
-      { code: "A", name: "60° incline press", tempo: "4010", w1: "12/10/8/12+", w2: "10/8/6/10+", w3: "8/6/4/8+", w4: "12", rest: "2–3'" },
-      { code: "B", name: "Seated front raise", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
-      { code: "C", name: "Military press", tempo: "3010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", rest: "2'" },
-      { code: "D", name: "Dips", tempo: "4010", w1: "8", w2: "10", w3: "12", w4: "8", rest: "2'" },
-      { code: "E", name: "DB floor flies", tempo: "2210", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
-      { code: "F", name: "Lying DB tricep extensions", tempo: "5010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", rest: "2–3'" },
-      { code: "G", name: "Cable overhead tricep extensions", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
+      { code: "A", name: "60° incline press", tempo: "4010", w1: "12/10/8/12+", w2: "10/8/6/10+", w3: "8/6/4/8+", w4: "12", w5: "10/8/6/10+", w6: "8/6/4/8+", rest: "2–3'" },
+      { code: "B", name: "Seated front raise", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
+      { code: "C", name: "Military press", tempo: "3010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", w5: "6+max+max", w6: "6+max+max", rest: "2'" },
+      { code: "D", name: "Dips", tempo: "4010", w1: "8", w2: "10", w3: "12", w4: "8", w5: "10", w6: "12", rest: "2'" },
+      { code: "E", name: "DB floor flies", tempo: "2210", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
+      { code: "F", name: "Lying DB tricep extensions", tempo: "5010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", w5: "6+max+max", w6: "6+max+max", rest: "2–3'" },
+      { code: "G", name: "Cable overhead tricep extensions", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
     ],
   },
   {
     title: "Dag 5 • lower body (hamstrings focus)",
     exercises: [
-      { code: "A", name: "Romanian deadlift", tempo: "4010", w1: "12/10/8/12+", w2: "10/8/6/10+", w3: "8/6/4/8+", w4: "12", rest: "2–3'" },
-      { code: "B", name: "Lying leg curl", tempo: "2212", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
-      { code: "C", name: "Back extension", tempo: "3010", w1: "6+max", w2: "6+max", w3: "6+max", w4: "6+max", rest: "2'" },
-      { code: "D", name: "Hack squat", tempo: "4010", w1: "8", w2: "10", w3: "12", w4: "8", rest: "2'" },
-      { code: "E", name: "Leg extensions", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
-      { code: "F", name: "Calf raises", tempo: "5010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", rest: "2–3'" },
+      { code: "A", name: "Romanian deadlift", tempo: "4010", w1: "12/10/8/12+", w2: "10/8/6/10+", w3: "8/6/4/8+", w4: "12", w5: "10/8/6/10+", w6: "8/6/4/8+", rest: "2–3'" },
+      { code: "B", name: "Lying leg curl", tempo: "2212", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
+      { code: "C", name: "Back extension", tempo: "3010", w1: "6+max", w2: "6+max", w3: "6+max", w4: "6+max", w5: "6+max", w6: "6+max", rest: "2'" },
+      { code: "D", name: "Hack squat", tempo: "4010", w1: "8", w2: "10", w3: "12", w4: "8", w5: "10", w6: "12", rest: "2'" },
+      { code: "E", name: "Leg extensions", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
+      { code: "F", name: "Calf raises", tempo: "5010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", w5: "6+max+max", w6: "6+max+max", rest: "2–3'" },
     ],
   },
   {
     title: "Dag 6 • rug / rear delts / biceps",
     exercises: [
-      { code: "A", name: "Wide pronated seated rows", tempo: "4010", w1: "12/10/8/12+", w2: "10/8/6/10+", w3: "8/6/4/8+", w4: "12", rest: "2–3'" },
-      { code: "B", name: "Face pulls", tempo: "2212", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
-      { code: "C", name: "Upright barbell rows", tempo: "3010", w1: "6+max", w2: "6+max", w3: "6+max+max", w4: "6+max+max", rest: "2'" },
-      { code: "D", name: "DB shrugs", tempo: "2012", w1: "8", w2: "10", w3: "12", w4: "8", rest: "2'" },
-      { code: "E", name: "Bent over DB lateral raise", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2'" },
-      { code: "F", name: "Barbell drag curls", tempo: "5010", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", rest: "2–3'" },
-      { code: "G", name: "EZ bar reverse curls", tempo: "5010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", rest: "2'" },
+      { code: "A", name: "Wide pronated seated rows", tempo: "4010", w1: "12/10/8/12+", w2: "10/8/6/10+", w3: "8/6/4/8+", w4: "12", w5: "10/8/6/10+", w6: "8/6/4/8+", rest: "2–3'" },
+      { code: "B", name: "Face pulls", tempo: "2212", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
+      { code: "C", name: "Upright barbell rows", tempo: "3010", w1: "6+max", w2: "6+max", w3: "6+max+max", w4: "6+max+max", w5: "6+max", w6: "6+max+max", rest: "2'" },
+      { code: "D", name: "DB shrugs", tempo: "2012", w1: "8", w2: "10", w3: "12", w4: "8", w5: "10", w6: "12", rest: "2'" },
+      { code: "E", name: "Bent over DB lateral raise", tempo: "2012", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2'" },
+      { code: "F", name: "Barbell drag curls", tempo: "5010", w1: "8", w2: "8+max", w3: "8+max+max", w4: "8", w5: "8+max", w6: "8+max+max", rest: "2–3'" },
+      { code: "G", name: "EZ bar reverse curls", tempo: "5010", w1: "6+max+max", w2: "6+max+max", w3: "6+max+max", w4: "6+max+max", w5: "6+max+max", w6: "6+max+max", rest: "2'" },
     ],
   },
 ];
 
-type Week = 1 | 2 | 3 | 4;
+type Week = 1 | 2 | 3 | 4 | 5 | 6;
 type WeekMode = Week | "all";
 
 function storageKey(userId: string) {
-  return `fitness_gym_phase1_v5_4w_mobileonly:${userId}`;
+  return `fitness_gym_phase1_v6_6w_mobileonly:${userId}`;
 }
 
 export default function FitnessGymPage() {
@@ -126,12 +128,11 @@ export default function FitnessGymPage() {
   const [uid, setUid] = useState<string>("");
   const [vals, setVals] = useState<Record<string, string>>({});
 
-  const [weekMode, setWeekMode] = useState<WeekMode>("all");
+  const [weekMode, setWeekMode] = useState<WeekMode>(1);
 
-  // ✅ meerdere dagen open (start met dag 1 open)
-  const [openDays, setOpenDays] = useState<Set<number>>(() => new Set([0]));
+  // alles gesloten bij start
+  const [openDays, setOpenDays] = useState<Set<number>>(() => new Set());
 
-  // ✅ refs per dag om scroll "netjes" te houden bij openen/sluiten
   const dayRefs = useRef<Array<HTMLDivElement | null>>([]);
 
   useEffect(() => {
@@ -176,11 +177,10 @@ export default function FitnessGymPage() {
 
   const setVal = (k: string, v: string) => setVals((p) => ({ ...p, [k]: v }));
 
-  const weeks = useMemo(() => [1, 2, 3, 4] as const, []);
+  const weeks = useMemo(() => [1, 2, 3, 4, 5, 6] as const, []);
   const visibleWeeks = useMemo<Week[]>(() => (weekMode === "all" ? [...weeks] : [weekMode]), [weekMode, weeks]);
   const weekText = (ex: GymEx, w: Week) => ((ex as any)[`w${w}`] ?? "-") as string;
 
-  // ✅ toggle + scroll zonder vervelende sprong
   const toggleDay = (idx: number) => {
     setOpenDays((prev) => {
       const next = new Set(prev);
@@ -205,7 +205,7 @@ export default function FitnessGymPage() {
         <div style={styles.header}>
           <div style={{ minWidth: 0 }}>
             <div style={styles.kicker}>FITNESS @ GYM</div>
-            <h1 style={{ fontSize: 24, fontWeight: 980, margin: "6px 0 0 0", color: ui.text }}>Fase 1 (Week 1–4)</h1>
+            <h1 style={{ fontSize: 24, fontWeight: 980, margin: "6px 0 0 0", color: ui.text }}>Fase 1 (Week 1–6)</h1>
             <div style={{ color: ui.muted, marginTop: 6 }}>
               Vul je trainingsgewichten in • {email && <>ingelogd als <b>{email}</b></>}
             </div>
@@ -222,7 +222,7 @@ export default function FitnessGymPage() {
             </div>
 
             <div style={styles.filterHint}>
-              Filter: <b style={{ color: "rgba(255,255,255,0.92)" }}>{weekMode === "all" ? "alles (W1–W4)" : `week ${weekMode}`}</b>
+              Filter: <b style={{ color: "rgba(255,255,255,0.92)" }}>{weekMode === "all" ? "alles (W1–W6)" : `week ${weekMode}`}</b>
             </div>
           </div>
 
@@ -246,21 +246,25 @@ export default function FitnessGymPage() {
                     dayRefs.current[dayIdx] = el;
                   }}
                 >
-                  <button type="button" onClick={() => toggleDay(dayIdx)} style={styles.accordionHeader} aria-expanded={isOpen}>
+                  <button
+                    type="button"
+                    onClick={() => toggleDay(dayIdx)}
+                    style={styles.accordionHeader}
+                    aria-expanded={isOpen}
+                    aria-label={`${day.title} ${isOpen ? "inklappen" : "uitklappen"}`}
+                  >
                     <div style={{ minWidth: 0 }}>
                       <div style={styles.sectionTitle}>{day.title}</div>
-                      <div style={styles.sectionMeta}>{weekMode === "all" ? "4 weken zichtbaar" : `Alleen week ${weekMode}`} • auto-save</div>
+                      <div style={styles.sectionMeta}>{weekMode === "all" ? "6 weken zichtbaar" : `Alleen week ${weekMode}`} • auto-save</div>
                     </div>
 
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flex: "0 0 auto" }}>
-                      <span style={styles.accordionPill}>{isOpen ? "Sluiten" : "Open"}</span>
                       <span style={{ ...styles.chev, transform: isOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
                     </div>
                   </button>
 
                   {isOpen && (
                     <>
-                      {/* ✅ DESKTOP: enkel tabel */}
                       <div style={{ marginTop: 10 }}>
                         <table className="fitTable">
                           <colgroup>
@@ -269,7 +273,7 @@ export default function FitnessGymPage() {
                             <col style={{ width: 78 }} />
                             <col className="colPlan" />
                             <col style={{ width: 78 }} />
-                            <col style={{ width: weekMode === "all" ? 280 : 170 }} />
+                            <col style={{ width: weekMode === "all" ? 320 : 170 }} />
                           </colgroup>
 
                           <thead>
@@ -277,9 +281,9 @@ export default function FitnessGymPage() {
                               <th className="thTiny">#</th>
                               <th className="thLeft">Oefening</th>
                               <th className="thTiny">Tempo</th>
-                              <th className="thPlan">Weekplanning {weekMode === "all" ? "(W1–W4)" : `(W${weekMode})`}</th>
+                              <th className="thPlan">Weekplanning {weekMode === "all" ? "(W1–W6)" : `(W${weekMode})`}</th>
                               <th className="thTiny">Rust</th>
-                              <th className="thWeights">Jouw gewicht {weekMode === "all" ? "(W1–W4)" : `(W${weekMode})`}</th>
+                              <th className="thWeights">Jouw gewicht {weekMode === "all" ? "(W1–W6)" : `(W${weekMode})`}</th>
                             </tr>
                           </thead>
 
@@ -342,8 +346,6 @@ export default function FitnessGymPage() {
                         </table>
                       </div>
 
-                      {/* ✅ MOBILE: “uitbreiding” kaartjes ONLY op gsm */}
-                      {/* ⚠️ BELANGRIJK: GEEN inline display:grid meer, anders kan CSS het niet verbergen op desktop */}
                       <div className="mobileOnly" style={{ marginTop: 10 }}>
                         {day.exercises.map((ex) => {
                           const base = `d${dayIdx}:${ex.code}`;
@@ -474,18 +476,6 @@ const styles: Record<string, React.CSSProperties> = {
   sectionTitle: { fontSize: 14, fontWeight: 980, color: ui.text, lineHeight: 1.15 },
   sectionMeta: { marginTop: 4, fontSize: 12, fontWeight: 850, color: ui.muted },
 
-  accordionPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 28,
-    padding: "0 10px",
-    borderRadius: 999,
-    border: `1px solid rgba(255,255,255,0.14)`,
-    background: "rgba(255,255,255,0.05)",
-    color: ui.muted,
-    fontWeight: 950,
-    fontSize: 12,
-  },
   chev: {
     width: 28,
     height: 28,
@@ -504,7 +494,6 @@ const styles: Record<string, React.CSSProperties> = {
 };
 
 const css = `
-  /* chips */
   .chip{
     height:34px; padding:0 12px; border-radius:999px;
     border:1px solid rgba(255,255,255,0.14);
@@ -520,8 +509,6 @@ const css = `
     box-shadow:0 10px 26px rgba(0,0,0,0.18);
   }
 
-  /* ✅ KAARTJES ALLEEN OP ECHTE GSM/TOUCH
-     (en vooral: NIET op desktop) */
   .mobileOnly{ display:none; }
   .fitTable{ display:table; }
 
@@ -530,7 +517,6 @@ const css = `
     .fitTable{ display:none; }
   }
 
-  /* desktop table */
   .fitTable{
     width:100%;
     border-collapse:separate;
@@ -539,7 +525,7 @@ const css = `
     border-radius:16px;
     border:1px solid ${ui.border};
     background:${ui.glass2};
-    table-layout:auto; /* ✅ past kolommen aan inhoud */
+    table-layout:auto;
   }
 
   .fitTable th{
@@ -561,10 +547,9 @@ const css = `
   .thTiny, .tdTiny{ text-align:center; }
   .thLeft, .tdLeft{ text-align:left; }
 
-  /* weekplanning niet te breed op desktop */
   .colPlan{ width:auto; }
-  .tdPlanCell{ max-width: 300px; }
-  .thPlan{ max-width: 300px; }
+  .tdPlanCell{ max-width: 320px; }
+  .thPlan{ max-width: 320px; }
 
   .planGrid{ display:grid; gap:6px; }
   .planItem{
@@ -604,7 +589,6 @@ const css = `
     box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
   }
 
-  /* mobile cards */
   .mCard{
     border:1px solid ${ui.border};
     background:${ui.glass2};

@@ -1,114 +1,168 @@
 "use client";
 
+import React from "react";
+import Link from "next/link";
 import AppShell from "@/components/AppShell";
-import { DocRow, PageHero, Panel, SquareTile, ui } from "../_ui";
 
-export default function KijkwijzersPage() {
+const ui = {
+  text: "rgba(234,240,255,0.92)",
+  muted: "rgba(234,240,255,0.72)",
+  border: "rgba(255,255,255,0.12)",
+  border2: "rgba(255,255,255,0.18)",
+  glass: "rgba(6, 12, 20, 0.42)",
+  glass2: "rgba(6, 12, 20, 0.58)",
+};
+
+export default function UnderConstructionPage() {
   return (
-    <AppShell title="LO App" subtitle="GO! Atheneum Avelgem" userName={null}>
-      <PageHero
-        kicker="LES LO"
-        title={
-          <>
-            Kijkwijzers <span style={{ opacity: 0.85 }}>👀</span>
-          </>
-        }
-        subtitle={
-          <>
-            Gebruik deze kijkwijzers tijdens de les. Je kan ze ook downloaden of afdrukken.
-          </>
-        }
-        right={
-          <>
-            <div style={{ fontWeight: 950, color: ui.text, fontSize: 13 }}>Snel naar</div>
-            <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-              <a href="#downloads" style={quickLink}>
-                Downloads ↘
-              </a>
-              <a href="#inles" style={quickLink}>
-                In de les ↘
-              </a>
-            </div>
-          </>
-        }
-      />
+    <AppShell title="KA LO App" subtitle="GO! Atheneum Avelgem" userName={null}>
+      <style>{css}</style>
 
-      <section style={{ marginTop: 14 }}>
-        <div className="grid">
-          <SquareTile href="/les-lo/rollen" icon="🎭" title="Rollenkaarten" desc="Scheidsrechter, coach…" />
-          <SquareTile href="/les-lo/jaarplanning" icon="🗓️" title="Jaarplanning" desc="Kies je leerkracht" />
-          <SquareTile href="/les-lo/evaluaties" icon="✅" title="Evaluaties" desc="Rubrics & feedback" />
-          <SquareTile href="/les-lo/afspraken" icon="📌" title="Afspraken LO" desc="Regels & afspraken" />
+      <div style={styles.wrap}>
+        <div style={styles.card}>
+          <div style={styles.badge}>ONDER CONSTRUCTIE</div>
+
+          <div style={styles.iconWrap}>
+            <div style={styles.icon}>🚧</div>
+          </div>
+
+          <h1 style={styles.title}>Deze pagina is nog in opbouw</h1>
+
+          <p style={styles.text}>
+            We werken momenteel aan deze pagina. Kom binnenkort nog eens terug.
+          </p>
+
+          <div style={styles.actions}>
+            <Link href="/" style={styles.primaryBtn}>
+              Naar home
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => window.history.back()}
+              style={styles.secondaryBtn}
+            >
+              Ga terug
+            </button>
+          </div>
         </div>
-
-        <style jsx>{`
-          .grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 14px;
-          }
-          @media (min-width: 900px) {
-            .grid {
-              grid-template-columns: repeat(4, minmax(0, 1fr));
-            }
-          }
-        `}</style>
-      </section>
-
-      <section id="downloads" style={{ marginTop: 14 }}>
-        <Panel kicker="Kijkwijzers" title="Downloads">
-          <div style={{ display: "grid", gap: 10 }}>
-            <DocRow title="Kijkwijzer — Template" meta="PDF/Doc" href="/docs/kijkwijzers/template.pdf" />
-            <DocRow title="Kijkwijzer — Balspelen" meta="PDF" href="/docs/kijkwijzers/balspelen.pdf" />
-            <DocRow title="Kijkwijzer — Atletiek" meta="PDF" href="/docs/kijkwijzers/atletiek.pdf" />
-            <DocRow title="Kijkwijzer — Turnen" meta="PDF" href="/docs/kijkwijzers/turnen.pdf" />
-          </div>
-
-          <div style={note}>
-            Vervang deze links door je echte documenten (Smartschool / Supabase Storage / public/docs).
-          </div>
-        </Panel>
-      </section>
-
-      <section id="inles" style={{ marginTop: 14 }}>
-        <Panel kicker="Praktisch" title="Zo gebruik je een kijkwijzer">
-          <ul style={ul}>
-            <li>Lees eerst de criteria (wat is “goed uitgevoerd”?)</li>
-            <li>Kijk naar 1–2 punten tegelijk (niet alles tegelijk)</li>
-            <li>Gebruik de taal van de kijkwijzer in feedback (“ik zag dat je…”)</li>
-            <li>Noteer 1 actiepunt en 1 succespunt</li>
-          </ul>
-        </Panel>
-      </section>
+      </div>
     </AppShell>
   );
 }
 
-const quickLink: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "10px 12px",
-  borderRadius: 14,
-  border: `1px solid ${ui.border}`,
-  background: "rgba(0,0,0,0.35)",
-  color: ui.text,
-  textDecoration: "none",
-  fontWeight: 900,
-  fontSize: 13,
+const styles: Record<string, React.CSSProperties> = {
+  wrap: {
+    minHeight: "calc(100vh - 120px)",
+    display: "grid",
+    placeItems: "center",
+    padding: "24px 16px",
+  },
+
+  card: {
+    width: "100%",
+    maxWidth: 720,
+    borderRadius: 28,
+    padding: "32px 24px",
+    border: `1px solid ${ui.border}`,
+    background: `
+      radial-gradient(700px 280px at 0% 0%, rgba(37,89,113,0.22), transparent 60%),
+      radial-gradient(700px 280px at 100% 0%, rgba(75,142,141,0.18), transparent 60%),
+      radial-gradient(700px 280px at 50% 100%, rgba(137,194,170,0.14), transparent 60%),
+      ${ui.glass}
+    `,
+    boxShadow: "0 22px 60px rgba(0,0,0,0.28)",
+    textAlign: "center",
+  },
+
+  badge: {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    height: 34,
+    padding: "0 14px",
+    borderRadius: 999,
+    border: `1px solid ${ui.border2}`,
+    background: "rgba(255,255,255,0.05)",
+    color: ui.muted,
+    fontSize: 12,
+    fontWeight: 950,
+    letterSpacing: 0.8,
+  },
+
+  iconWrap: {
+    marginTop: 20,
+    display: "flex",
+    justifyContent: "center",
+  },
+
+  icon: {
+    width: 96,
+    height: 96,
+    borderRadius: 24,
+    display: "grid",
+    placeItems: "center",
+    fontSize: 42,
+    border: `1px solid ${ui.border2}`,
+    background: "linear-gradient(135deg, rgba(37,89,113,0.55), rgba(75,142,141,0.35))",
+    boxShadow: "0 14px 30px rgba(0,0,0,0.22)",
+  },
+
+  title: {
+    margin: "22px 0 10px 0",
+    color: ui.text,
+    fontSize: 32,
+    lineHeight: 1.1,
+    fontWeight: 980,
+  },
+
+  text: {
+    margin: "0 auto",
+    maxWidth: 520,
+    color: ui.muted,
+    fontSize: 16,
+    lineHeight: 1.6,
+  },
+
+  actions: {
+    marginTop: 24,
+    display: "flex",
+    justifyContent: "center",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+
+  primaryBtn: {
+    height: 46,
+    padding: "0 18px",
+    borderRadius: 16,
+    border: `1px solid ${ui.border2}`,
+    background: "linear-gradient(135deg, rgba(37,89,113,0.72), rgba(75,142,141,0.45))",
+    color: ui.text,
+    textDecoration: "none",
+    fontWeight: 950,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 10px 26px rgba(0,0,0,0.22)",
+  },
+
+  secondaryBtn: {
+    height: 46,
+    padding: "0 18px",
+    borderRadius: 16,
+    border: `1px solid ${ui.border}`,
+    background: "rgba(255,255,255,0.05)",
+    color: ui.text,
+    fontWeight: 950,
+    cursor: "pointer",
+  },
 };
 
-const note: React.CSSProperties = {
-  marginTop: 12,
-  paddingTop: 12,
-  borderTop: `1px solid ${ui.border}`,
-  color: ui.muted,
-  fontSize: 12.5,
-};
-
-const ul: React.CSSProperties = {
-  margin: 0,
-  paddingLeft: 18,
-  color: ui.text,
-  lineHeight: 1.55,
-};
+const css = `
+  @media (max-width: 640px){
+    h1{
+      font-size: 26px !important;
+    }
+  }
+`;

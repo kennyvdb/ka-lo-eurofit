@@ -46,7 +46,7 @@ export default function LesLOHubPage() {
   return (
     <AppShell
       title="LO App"
-      subtitle="GO! Atheneum Avelgem"
+      subtitle="Les LO"
       userName={profiel?.volledige_naam ?? null}
     >
       <BaseHero

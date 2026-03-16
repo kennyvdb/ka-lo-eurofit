@@ -1,6 +1,8 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
+import BaseHero from "@/components/heroes/BaseHero";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { KLASSEN, getKlasMeta } from "@/shared/klassen/klassen";
@@ -37,24 +39,12 @@ const ui = {
   text: "#EEF4FF",
   muted: "rgba(238,244,255,0.72)",
   muted2: "rgba(238,244,255,0.54)",
-  panel: "rgba(255,255,255,0.06)",
-  panelStrong: "rgba(255,255,255,0.08)",
-  border: "rgba(255,255,255,0.10)",
-  border2: "rgba(255,255,255,0.16)",
-  inputBg: "rgba(7,13,27,0.45)",
-  inputBgSoft: "rgba(7,13,27,0.30)",
-  shadow: "0 10px 30px rgba(0,0,0,0.20)",
-  success: "#22c55e",
-  successBg: "rgba(34,197,94,0.14)",
-  successBorder: "rgba(34,197,94,0.26)",
-  error: "#ff6b81",
   errorBg: "rgba(255,107,129,0.14)",
   errorBorder: "rgba(255,107,129,0.26)",
-  warn: "#f7c66b",
+  successBg: "rgba(34,197,94,0.14)",
+  successBorder: "rgba(34,197,94,0.26)",
   warnBg: "rgba(247,198,107,0.12)",
   warnBorder: "rgba(247,198,107,0.28)",
-  brandA: "#7c6cff",
-  brandB: "#22d3ee",
 };
 
 function getCurrentSchoolYearBelgium(d = new Date()) {
@@ -94,15 +84,79 @@ function getMessageTone(message: string) {
     return {
       bg: ui.errorBg,
       border: ui.errorBorder,
-      color: ui.text,
+      textClass: "text-white",
     };
   }
 
   return {
     bg: ui.successBg,
     border: ui.successBorder,
-    color: ui.text,
+    textClass: "text-white",
   };
+}
+
+function StatusBadge({
+  children,
+  tone,
+}: {
+  children: React.ReactNode;
+  tone: "success" | "error";
+}) {
+  const className =
+    tone === "success"
+      ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
+      : "border-red-400/20 bg-red-400/10 text-red-200";
+
+  return (
+    <span
+      className={[
+        "inline-flex rounded-full border px-3 py-1.5 text-xs font-bold",
+        className,
+      ].join(" ")}
+    >
+      {children}
+    </span>
+  );
+}
+
+function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
+  return (
+    <div className="mb-5">
+      <h2 className="text-lg font-black text-white">{title}</h2>
+      <p className="mt-1 text-sm leading-6 text-white/65">{subtitle}</p>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="grid gap-2">
+      <label className="text-sm font-black text-white">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid gap-2">
+      <label className="text-sm font-black text-white">{label}</label>
+      <div className="flex min-h-[46px] items-center rounded-2xl border border-white/15 bg-black/20 px-4 py-3 text-sm text-white">
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function InfoTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+      <div className="text-xs font-black uppercase tracking-[0.08em] text-white/50">
+        {label}
+      </div>
+      <div className="mt-2 text-xl font-black text-white">{value}</div>
+    </div>
+  );
 }
 
 export default function ProfielPage() {
@@ -192,7 +246,9 @@ export default function ProfielPage() {
       geboortedatum: profile.geboortedatum || null,
     };
 
-    const { error } = await supabase.from("profielen").upsert(payload, { onConflict: "id" });
+    const { error } = await supabase
+      .from("profielen")
+      .upsert(payload, { onConflict: "id" });
 
     if (error) {
       setMessage(`Opslaan mislukt: ${error.message}`);
@@ -240,7 +296,9 @@ export default function ProfielPage() {
       schooljaar_bevestigd_op: todayISO(),
     };
 
-    const { error } = await supabase.from("profielen").upsert(payload, { onConflict: "id" });
+    const { error } = await supabase
+      .from("profielen")
+      .upsert(payload, { onConflict: "id" });
 
     if (error) {
       setMessage(`Bevestigen mislukt: ${error.message}`);
@@ -264,162 +322,203 @@ export default function ProfielPage() {
 
   return (
     <AppShell
-      title="KA LO App"
-      subtitle="GO! Atheneum Avelgem"
+      title="LO App"
+      subtitle="Profiel"
       userName={profile.volledige_naam ?? null}
     >
-      <div style={styles.page}>
-        <section style={styles.hero}>
-          <div style={styles.heroContent}>
-            <div>
-              <div style={styles.eyebrow}>Account</div>
-              <h1 style={styles.pageTitle}>Profiel</h1>
-              <p style={styles.pageSubtitle}>
-                Beheer je persoonlijke gegevens en bevestig je klas voor het huidige schooljaar.
-              </p>
-            </div>
-
-            <div style={styles.heroMeta}>
-              <div style={styles.userPill}>
-                <span style={styles.userPillLabel}>{roleLabel}</span>
-              </div>
-              {!!email && <div style={styles.userMail}>{email}</div>}
-            </div>
-          </div>
-        </section>
-
-        {loading ? (
-          <div style={styles.loadingCard}>Bezig met laden…</div>
-        ) : (
+      <BaseHero
+        label="ACCOUNT"
+        title={<>Profiel</>}
+        description={
           <>
-            {!!message && messageTone && (
+            Beheer je persoonlijke gegevens en bevestig je klas voor het huidige
+            schooljaar.
+          </>
+        }
+        imageSrc="/profiel/profiel.png"
+        imageAlt="Profiel overzicht"
+        quoteTitle="Profiel"
+        quote="Hou je vaste gegevens up-to-date en bevestig elk schooljaar je klas."
+        quoteAuthor="KA LO App"
+        imageClassName="max-h-[300px] md:max-h-[340px]"
+        actions={
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-white/15"
+            >
+              ← Terug naar home
+            </Link>
+
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
+              {roleLabel}
+            </span>
+
+            {!!email && (
+              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
+                {email}
+              </span>
+            )}
+          </div>
+        }
+      />
+
+      {loading ? (
+        <main className="mt-5 grid min-h-[180px] place-items-center px-2">
+          <div className="rounded-[24px] border border-white/10 bg-white/5 px-6 py-4 text-white/75">
+            Bezig met laden…
+          </div>
+        </main>
+      ) : (
+        <>
+          {!!message && messageTone && (
+            <div
+              className="mt-4 rounded-[20px] border p-4 text-sm text-white"
+              style={{
+                background: messageTone.bg,
+                borderColor: messageTone.border,
+              }}
+            >
+              {message}
+            </div>
+          )}
+
+          <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-5">
+            <SectionHeader
+              title="Schooljaar"
+              subtitle="Controleer of je gegevens bevestigd zijn voor het actieve schooljaar."
+            />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <InfoTile label="Huidig schooljaar" value={currentSchoolYear} />
+
+              <div className="rounded-[20px] border border-white/10 bg-white/5 p-4">
+                <div className="text-xs font-black uppercase tracking-[0.08em] text-white/50">
+                  Status
+                </div>
+                <div className="mt-3">
+                  {schoolYearIsCurrent ? (
+                    <StatusBadge tone="success">Bevestigd</StatusBadge>
+                  ) : (
+                    <StatusBadge tone="error">
+                      Opnieuw bevestigen vereist
+                    </StatusBadge>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-5">
+            <SectionHeader
+              title="Vaste gegevens"
+              subtitle="Deze gegevens wijzigen niet per schooljaar."
+            />
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Voornaam">
+                <input
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="min-h-[46px] w-full rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+                  placeholder="Voornaam"
+                />
+              </Field>
+
+              <Field label="Naam">
+                <input
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="min-h-[46px] w-full rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35"
+                  placeholder="Naam"
+                />
+              </Field>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Field label="Geslacht">
+                <select
+                  value={profile.geslacht ?? ""}
+                  onChange={(e) =>
+                    setProfile((p) => ({
+                      ...p,
+                      geslacht: (e.target.value || null) as "M" | "V" | null,
+                    }))
+                  }
+                  className="min-h-[46px] w-full rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white outline-none"
+                >
+                  <option value="">Kies…</option>
+                  <option value="M">M</option>
+                  <option value="V">V</option>
+                </select>
+              </Field>
+
+              <Field label="Geboortedatum">
+                <input
+                  type="date"
+                  value={profile.geboortedatum ?? ""}
+                  onChange={(e) =>
+                    setProfile((p) => ({
+                      ...p,
+                      geboortedatum: e.target.value || null,
+                    }))
+                  }
+                  className="min-h-[46px] w-full rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white outline-none"
+                />
+              </Field>
+            </div>
+
+            <div className="mt-5 flex justify-start">
+              <button
+                type="button"
+                onClick={saveFixedProfile}
+                disabled={savingFixed}
+                className="inline-flex h-11 items-center rounded-2xl border border-white/15 bg-black/40 px-4 text-sm font-black text-white transition hover:bg-black/55 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {savingFixed ? "Opslaan…" : "Opslaan vaste gegevens"}
+              </button>
+            </div>
+          </section>
+
+          <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-5">
+            <SectionHeader
+              title="Gegevens voor dit schooljaar"
+              subtitle="Hier bevestig je je klas voor het actieve schooljaar."
+            />
+
+            {!schoolYearIsCurrent && (
               <div
+                className="mb-5 rounded-[20px] border p-4 text-sm leading-6 text-white"
                 style={{
-                  ...styles.alert,
-                  background: messageTone.bg,
-                  border: `1px solid ${messageTone.border}`,
-                  color: messageTone.color,
+                  background: ui.warnBg,
+                  borderColor: ui.warnBorder,
                 }}
               >
-                {message}
+                Bevestig opnieuw voor <b>{currentSchoolYear}</b>. Je kan hier
+                enkel je klas aanpassen.
               </div>
             )}
 
-            <section style={styles.card}>
-              <SectionHeader
-                title="Schooljaar"
-                subtitle="Controleer of je gegevens bevestigd zijn voor het actieve schooljaar."
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <ReadOnlyField
+                label="Graad"
+                value={profile.graad ? `${profile.graad}e graad` : "—"}
               />
-
-              <div style={styles.infoRow}>
-                <InfoTile label="Huidig schooljaar" value={currentSchoolYear} />
-                <div style={styles.infoTile}>
-                  <div style={styles.infoLabel}>Status</div>
-                  <div style={{ marginTop: 8 }}>
-                    {schoolYearIsCurrent ? (
-                      <StatusBadge tone="success">Bevestigd</StatusBadge>
-                    ) : (
-                      <StatusBadge tone="error">Opnieuw bevestigen vereist</StatusBadge>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section style={styles.card}>
-              <SectionHeader
-                title="Vaste gegevens"
-                subtitle="Deze gegevens wijzigen niet per schooljaar."
+              <ReadOnlyField
+                label="Leerjaar"
+                value={profile.leerjaar ?? "—"}
               />
-
-              <div style={styles.grid2}>
-                <Field label="Voornaam">
-                  <input
-                    value={firstName}
-                    onChange={(e) => setFirstName(e.target.value)}
-                    style={styles.input}
-                    placeholder="Voornaam"
-                  />
-                </Field>
-
-                <Field label="Naam">
-                  <input
-                    value={lastName}
-                    onChange={(e) => setLastName(e.target.value)}
-                    style={styles.input}
-                    placeholder="Naam"
-                  />
-                </Field>
-              </div>
-
-              <div style={styles.grid2}>
-                <Field label="Geslacht">
-                  <select
-                    value={profile.geslacht ?? ""}
-                    onChange={(e) =>
-                      setProfile((p) => ({
-                        ...p,
-                        geslacht: (e.target.value || null) as "M" | "V" | null,
-                      }))
-                    }
-                    style={styles.input}
-                  >
-                    <option value="">Kies…</option>
-                    <option value="M">M</option>
-                    <option value="V">V</option>
-                  </select>
-                </Field>
-
-                <Field label="Geboortedatum">
-                  <input
-                    type="date"
-                    value={profile.geboortedatum ?? ""}
-                    onChange={(e) =>
-                      setProfile((p) => ({
-                        ...p,
-                        geboortedatum: e.target.value || null,
-                      }))
-                    }
-                    style={styles.input}
-                  />
-                </Field>
-              </div>
-
-              <div style={styles.actions}>
-                <button
-                  type="button"
-                  onClick={saveFixedProfile}
-                  disabled={savingFixed}
-                  style={{
-                    ...styles.primaryBtn,
-                    opacity: savingFixed ? 0.72 : 1,
-                    cursor: savingFixed ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {savingFixed ? "Opslaan…" : "Opslaan vaste gegevens"}
-                </button>
-              </div>
-            </section>
-
-            <section style={styles.card}>
-              <SectionHeader
-                title="Gegevens voor dit schooljaar"
-                subtitle="Hier bevestig je je klas voor het actieve schooljaar."
+              <ReadOnlyField
+                label="Finaliteit"
+                value={profile.finaliteit ?? "—"}
               />
+              <ReadOnlyField
+                label="Schooljaar (opgeslagen)"
+                value={profile.schooljaar ?? "—"}
+              />
+            </div>
 
-              {!schoolYearIsCurrent && (
-                <div style={styles.warning}>
-                  Bevestig opnieuw voor <b>{currentSchoolYear}</b>. Je kan hier enkel je klas aanpassen.
-                </div>
-              )}
-
-              <div style={styles.grid2}>
-                <ReadOnlyField label="Graad" value={profile.graad ? `${profile.graad}e graad` : "—"} />
-                <ReadOnlyField label="Leerjaar" value={profile.leerjaar ?? "—"} />
-                <ReadOnlyField label="Finaliteit" value={profile.finaliteit ?? "—"} />
-                <ReadOnlyField label="Schooljaar (opgeslagen)" value={profile.schooljaar ?? "—"} />
-              </div>
-
+            <div className="mt-4">
               <Field label="Klas">
                 <select
                   value={profile.klas_naam ?? ""}
@@ -435,7 +534,7 @@ export default function ProfielPage() {
                       finaliteit: meta ? meta.finaliteit : p.finaliteit,
                     }));
                   }}
-                  style={styles.input}
+                  className="min-h-[46px] w-full rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white outline-none"
                 >
                   <option value="">Kies je klas…</option>
 
@@ -464,330 +563,32 @@ export default function ProfielPage() {
                   </optgroup>
                 </select>
               </Field>
+            </div>
 
-              <div style={styles.actionsBetween}>
-                <button
-                  type="button"
-                  onClick={confirmSchoolYearAndSaveClassOnly}
-                  disabled={savingYear}
-                  style={{
-                    ...styles.primaryBtn,
-                    opacity: savingYear ? 0.72 : 1,
-                    cursor: savingYear ? "not-allowed" : "pointer",
-                  }}
-                >
-                  {savingYear ? "Bevestigen…" : `Bevestig schooljaar ${currentSchoolYear}`}
-                </button>
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
+              <button
+                type="button"
+                onClick={confirmSchoolYearAndSaveClassOnly}
+                disabled={savingYear}
+                className="inline-flex h-11 items-center rounded-2xl border border-white/15 bg-black/40 px-4 text-sm font-black text-white transition hover:bg-black/55 disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                {savingYear
+                  ? "Bevestigen…"
+                  : `Bevestig schooljaar ${currentSchoolYear}`}
+              </button>
 
-                <div style={styles.footnote}>
-                  Laatste bevestiging:{" "}
-                  <b style={{ color: ui.text }}>
-                    {profile.schooljaar_bevestigd_op ? profile.schooljaar_bevestigd_op : "—"}
-                  </b>
-                </div>
+              <div className="text-sm text-white/55">
+                Laatste bevestiging:{" "}
+                <b className="text-white">
+                  {profile.schooljaar_bevestigd_op
+                    ? profile.schooljaar_bevestigd_op
+                    : "—"}
+                </b>
               </div>
-            </section>
-          </>
-        )}
-      </div>
+            </div>
+          </section>
+        </>
+      )}
     </AppShell>
   );
 }
-
-function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div style={styles.sectionHeader}>
-      <div>
-        <h2 style={styles.sectionTitle}>{title}</h2>
-        <p style={styles.sectionSubtitle}>{subtitle}</p>
-      </div>
-    </div>
-  );
-}
-
-function StatusBadge({
-  children,
-  tone,
-}: {
-  children: React.ReactNode;
-  tone: "success" | "error";
-}) {
-  const badgeStyles =
-    tone === "success"
-      ? {
-          background: ui.successBg,
-          border: `1px solid ${ui.successBorder}`,
-          color: ui.success,
-        }
-      : {
-          background: ui.errorBg,
-          border: `1px solid ${ui.errorBorder}`,
-          color: ui.error,
-        };
-
-  return <span style={{ ...styles.badge, ...badgeStyles }}>{children}</span>;
-}
-
-function InfoTile({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={styles.infoTile}>
-      <div style={styles.infoLabel}>{label}</div>
-      <div style={styles.infoValue}>{value}</div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={styles.field}>
-      <label style={styles.label}>{label}</label>
-      {children}
-    </div>
-  );
-}
-
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={styles.field}>
-      <label style={styles.label}>{label}</label>
-      <div style={styles.readOnlyBox}>{value}</div>
-    </div>
-  );
-}
-
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    width: "100%",
-    maxWidth: 860,
-    margin: "0 auto",
-    paddingBottom: 32,
-  },
-
-  hero: {
-    position: "relative",
-    overflow: "hidden",
-    borderRadius: 28,
-    padding: 24,
-    background: `
-      radial-gradient(circle at top right, rgba(34,211,238,0.18), transparent 30%),
-      radial-gradient(circle at top left, rgba(124,108,255,0.22), transparent 35%),
-      rgba(255,255,255,0.06)
-    `,
-    border: `1px solid ${ui.border}`,
-    boxShadow: ui.shadow,
-    marginBottom: 16,
-  },
-  heroContent: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 20,
-    flexWrap: "wrap",
-  },
-  eyebrow: {
-    fontSize: 12,
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    fontWeight: 800,
-    color: ui.muted2,
-    marginBottom: 8,
-  },
-  pageTitle: {
-    margin: 0,
-    fontSize: 32,
-    lineHeight: 1.05,
-    fontWeight: 950,
-    color: ui.text,
-  },
-  pageSubtitle: {
-    margin: "10px 0 0",
-    fontSize: 15,
-    lineHeight: 1.6,
-    maxWidth: 560,
-    color: ui.muted,
-  },
-  heroMeta: {
-    display: "grid",
-    gap: 10,
-    minWidth: 220,
-  },
-  userPill: {
-    display: "inline-flex",
-    alignItems: "center",
-    width: "fit-content",
-    padding: "10px 14px",
-    borderRadius: 999,
-    background: "rgba(255,255,255,0.08)",
-    border: `1px solid ${ui.border2}`,
-  },
-  userPillLabel: {
-    color: ui.text,
-    fontWeight: 800,
-    fontSize: 14,
-  },
-  userMail: {
-    color: ui.muted,
-    fontSize: 14,
-    wordBreak: "break-word",
-  },
-
-  loadingCard: {
-    padding: 18,
-    borderRadius: 20,
-    background: ui.panel,
-    border: `1px solid ${ui.border}`,
-    color: ui.muted,
-  },
-
-  alert: {
-    padding: "14px 16px",
-    borderRadius: 18,
-    marginBottom: 16,
-    fontWeight: 600,
-  },
-
-  card: {
-    padding: 20,
-    borderRadius: 24,
-    background: ui.panel,
-    border: `1px solid ${ui.border}`,
-    boxShadow: ui.shadow,
-    marginTop: 16,
-  },
-
-  sectionHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 16,
-    marginBottom: 18,
-  },
-  sectionTitle: {
-    margin: 0,
-    fontSize: 20,
-    fontWeight: 900,
-    color: ui.text,
-  },
-  sectionSubtitle: {
-    margin: "6px 0 0",
-    fontSize: 14,
-    lineHeight: 1.6,
-    color: ui.muted,
-  },
-
-  infoRow: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 14,
-  },
-  infoTile: {
-    padding: 16,
-    borderRadius: 18,
-    background: ui.panelStrong,
-    border: `1px solid ${ui.border}`,
-  },
-  infoLabel: {
-    fontSize: 13,
-    fontWeight: 700,
-    color: ui.muted2,
-  },
-  infoValue: {
-    marginTop: 8,
-    fontSize: 22,
-    fontWeight: 900,
-    color: ui.text,
-    lineHeight: 1.2,
-  },
-
-  grid2: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-    gap: 14,
-  },
-
-  field: {
-    display: "grid",
-    gap: 8,
-    marginBottom: 14,
-  },
-  label: {
-    fontWeight: 800,
-    fontSize: 14,
-    color: ui.text,
-  },
-
-  input: {
-    width: "100%",
-    minHeight: 46,
-    padding: "12px 14px",
-    borderRadius: 16,
-    border: `1px solid ${ui.border2}`,
-    background: ui.inputBg,
-    color: ui.text,
-    outline: "none",
-    fontSize: 14,
-    boxSizing: "border-box",
-  },
-
-  readOnlyBox: {
-    minHeight: 46,
-    display: "flex",
-    alignItems: "center",
-    padding: "12px 14px",
-    borderRadius: 16,
-    border: `1px solid ${ui.border2}`,
-    background: ui.inputBgSoft,
-    color: ui.text,
-    fontSize: 14,
-    boxSizing: "border-box",
-  },
-
-  actions: {
-    display: "flex",
-    justifyContent: "flex-start",
-    marginTop: 6,
-  },
-  actionsBetween: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 16,
-    flexWrap: "wrap",
-    marginTop: 6,
-  },
-
-  primaryBtn: {
-    padding: "12px 18px",
-    borderRadius: 16,
-    border: `1px solid ${ui.border2}`,
-    background: `linear-gradient(135deg, ${ui.brandA}, ${ui.brandB})`,
-    color: "#fff",
-    fontWeight: 900,
-    fontSize: 14,
-    boxShadow: "0 10px 24px rgba(34,211,238,0.14)",
-  },
-
-  badge: {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "8px 12px",
-    borderRadius: 999,
-    fontSize: 13,
-    fontWeight: 800,
-  },
-
-  warning: {
-    padding: 14,
-    borderRadius: 18,
-    background: ui.warnBg,
-    border: `1px solid ${ui.warnBorder}`,
-    color: ui.text,
-    marginBottom: 16,
-    lineHeight: 1.5,
-  },
-
-  footnote: {
-    color: ui.muted2,
-    fontSize: 13,
-  },
-};

@@ -257,7 +257,7 @@ export default function AfsprakenLOPage() {
         <Panel kicker="Sport" title="Buitenschoolse, naschoolse sport">
           <div style={subPanel}>
             <div style={subTitle}>Helpers veldloop lagere school</div>
-            <p style={p}>Janne, Charlize, Cheyenne, Lente, Bo, Mirthe, Ode, Nessa</p>
+            <p style={p}></p>
           </div>
 
           <div style={subPanel}>

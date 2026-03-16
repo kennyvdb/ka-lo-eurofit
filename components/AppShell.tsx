@@ -62,7 +62,7 @@ function getInitials(name?: string | null) {
 
 export default function AppShell({
   title = "LO App",
-  subtitle = "GO! Atheneum Avelgem",
+  subtitle = "GO! atheneum Avelgem",
   userName,
   children,
 }: AppShellProps) {
@@ -87,8 +87,11 @@ export default function AppShell({
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
       if (!menuRef.current) return;
-      if (!menuRef.current.contains(e.target as Node)) setOpen(false);
+      if (!menuRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
     }
+
     document.addEventListener("mousedown", onClickOutside);
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
@@ -96,6 +99,19 @@ export default function AppShell({
   useEffect(() => {
     setOpen(false);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!open) {
+      document.body.style.overflow = "";
+      return;
+    }
+
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [open]);
 
   const isActive = (href: string) => pathname === href;
 
@@ -111,6 +127,7 @@ export default function AppShell({
     first?: boolean;
   }) => {
     const active = isActive(href);
+
     return (
       <Link
         href={href}
@@ -137,8 +154,13 @@ export default function AppShell({
       <header className="sticky top-0 z-50 border-b border-white/10 bg-neutral-950/60 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <div ref={menuRef} className="relative">
-            <button type="button" aria-label="Menu" onClick={() => setOpen((v) => !v)} className="menuBtn">
-              <div className="grid gap-1.5 relative z-10">
+            <button
+              type="button"
+              aria-label="Menu"
+              onClick={() => setOpen((v) => !v)}
+              className="menuBtn"
+            >
+              <div className="relative z-10 grid gap-1.5">
                 <span className="block h-0.5 w-5 bg-white/90" />
                 <span className="block h-0.5 w-5 bg-white/90" />
                 <span className="block h-0.5 w-5 bg-white/90" />
@@ -156,7 +178,7 @@ export default function AppShell({
                   <span className="brandGlow brandGlow1" />
                   <span className="brandGlow brandGlow2" />
 
-                  <div className="flex items-center gap-3 relative z-10">
+                  <div className="relative z-10 flex items-center gap-3">
                     <div className="logoGlow">
                       <img
                         src="/logo-atheneum-transparant.png"
@@ -175,7 +197,9 @@ export default function AppShell({
                   <div className="userCard">
                     <div className="min-w-0">
                       <div className="text-xs text-white/55">Aangemeld als</div>
-                      <div className="truncate text-sm font-semibold text-white">{displayUserName}</div>
+                      <div className="truncate text-sm font-semibold text-white">
+                        {displayUserName}
+                      </div>
                     </div>
 
                     <div className="avatarSm">
@@ -194,7 +218,9 @@ export default function AppShell({
                   <NavLink href="/dashboard/profiel" label="Profiel" icon="👤" />
                 </nav>
 
-                <div className="menuTip">Tip: voeg later “Leerkracht” items toe op basis van role.</div>
+                <div className="menuTip">
+                  Tip: voeg later “Leerkracht” items toe op basis van role.
+                </div>
               </div>
             )}
           </div>
@@ -255,49 +281,109 @@ export default function AppShell({
           }
 
           .menuBtn{
-            height:44px;width:44px;border-radius:18px;
+            height:44px;
+            width:44px;
+            border-radius:18px;
             border:1px solid var(--uiBorder2);
             background:var(--uiPanel);
-            display:grid;place-items:center;
-            position:relative;overflow:hidden;
+            display:grid;
+            place-items:center;
+            position:relative;
+            overflow:hidden;
             transition:transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
             box-shadow:0 10px 26px rgba(0,0,0,0.25);
           }
-          .menuBtn:active{ transform:scale(0.98); }
-          .menuGlow{ position:absolute; inset:0; pointer-events:none; opacity:0.95; }
-          .glowBlob{ position:absolute; border-radius:999px; filter:blur(22px); }
-          .glowA{ left:-40px; top:-40px; width:110px; height:110px; background:rgba(75,142,141,0.22); }
-          .glowB{ right:-46px; top:-46px; width:130px; height:130px; background:rgba(137,194,170,0.16); filter:blur(24px); }
+
+          .menuBtn:active{
+            transform:scale(0.98);
+          }
+
+          .menuGlow{
+            position:absolute;
+            inset:0;
+            pointer-events:none;
+            opacity:0.95;
+          }
+
+          .glowBlob{
+            position:absolute;
+            border-radius:999px;
+            filter:blur(22px);
+          }
+
+          .glowA{
+            left:-40px;
+            top:-40px;
+            width:110px;
+            height:110px;
+            background:rgba(75,142,141,0.22);
+          }
+
+          .glowB{
+            right:-46px;
+            top:-46px;
+            width:130px;
+            height:130px;
+            background:rgba(137,194,170,0.16);
+            filter:blur(24px);
+          }
 
           .menuDrop{
-            position:absolute; left:0; top:56px; width:320px;
-            overflow:hidden; border-radius:20px;
+            position:fixed;
+            top:64px;
+            left:16px;
+            width:min(320px, calc(100vw - 32px));
+            max-height:calc(100dvh - 80px);
+            overflow-y:auto;
+            overflow-x:hidden;
+            -webkit-overflow-scrolling:touch;
+            overscroll-behavior:contain;
+
+            border-radius:20px;
             border:1px solid var(--uiBorder);
             background:rgba(10,10,10,0.92);
             box-shadow:0 28px 70px rgba(0,0,0,0.55);
+            z-index:999;
           }
 
           .menuBrand{
-            position:relative; overflow:hidden;
+            position:relative;
+            overflow:hidden;
             padding:16px;
             border-bottom:1px solid rgba(255,255,255,0.10);
           }
+
           .brandGlow{
-            pointer-events:none; position:absolute; border-radius:999px;
+            pointer-events:none;
+            position:absolute;
+            border-radius:999px;
           }
+
           .brandGlow1{
-            left:-120px; top:-120px; width:300px; height:300px;
-            filter:blur(34px); background:rgba(75,142,141,0.18);
+            left:-120px;
+            top:-120px;
+            width:300px;
+            height:300px;
+            filter:blur(34px);
+            background:rgba(75,142,141,0.18);
           }
+
           .brandGlow2{
-            right:-160px; top:-150px; width:360px; height:360px;
-            filter:blur(38px); background:rgba(137,194,170,0.14);
+            right:-160px;
+            top:-150px;
+            width:360px;
+            height:360px;
+            filter:blur(38px);
+            background:rgba(137,194,170,0.14);
           }
 
           .logoGlow{
-            height:44px; width:44px;
-            position:relative; overflow:hidden;
-            display:grid; place-items:center;
+            height:44px;
+            width:44px;
+            position:relative;
+            overflow:hidden;
+            display:grid;
+            place-items:center;
             border-radius:999px;
             border:1px solid var(--uiBorder2);
             background:var(--uiPanel);
@@ -315,13 +401,15 @@ export default function AppShell({
             padding:4px 6px;
             border-radius:14px;
           }
+
           .topLogoImg{
             height:44px;
             width:auto;
             object-fit:contain;
             display:block;
-            filter: drop-shadow(0 12px 26px rgba(0,0,0,0.42))
-                    drop-shadow(0 0 18px rgba(75,142,141,0.22));
+            filter:
+              drop-shadow(0 12px 26px rgba(0,0,0,0.42))
+              drop-shadow(0 0 18px rgba(75,142,141,0.22));
             opacity:0.98;
           }
 
@@ -343,7 +431,10 @@ export default function AppShell({
 
           .userCard{
             margin-top:12px;
-            display:flex; align-items:center; justify-content:space-between; gap:12px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
             padding:12px;
             border-radius:18px;
             border:1px solid rgba(255,255,255,0.10);
@@ -353,8 +444,10 @@ export default function AppShell({
           }
 
           .avatarTop, .avatarSm{
-            position:relative; overflow:hidden;
-            display:grid; place-items:center;
+            position:relative;
+            overflow:hidden;
+            display:grid;
+            place-items:center;
             border-radius:999px;
             font-weight:950;
             letter-spacing:0.4px;
@@ -373,8 +466,18 @@ export default function AppShell({
             text-decoration:none;
             transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
           }
-          .avatarTop{ height:44px; width:44px; font-size:13px; }
-          .avatarSm{ height:36px; width:36px; font-size:13px; }
+
+          .avatarTop{
+            height:44px;
+            width:44px;
+            font-size:13px;
+          }
+
+          .avatarSm{
+            height:36px;
+            width:36px;
+            font-size:13px;
+          }
 
           .avatarTop:hover{
             transform:translateY(-1px);
@@ -385,10 +488,12 @@ export default function AppShell({
           }
 
           .ring{
-            position:absolute; inset:0;
+            position:absolute;
+            inset:0;
             border-radius:999px;
             padding:1px;
-            background: linear-gradient(135deg,
+            background: linear-gradient(
+              135deg,
               rgba(37,89,113,0.70),
               rgba(75,142,141,0.60),
               rgba(137,194,170,0.48)
@@ -401,7 +506,10 @@ export default function AppShell({
           }
 
           .appNavLink{
-            display:flex; align-items:center; justify-content:space-between; gap:12px;
+            display:flex;
+            align-items:center;
+            justify-content:space-between;
+            gap:12px;
             padding:12px 16px;
             font-size:14px;
             font-weight:900;
@@ -410,26 +518,57 @@ export default function AppShell({
             text-decoration:none;
             transition: transform 160ms ease, background 160ms ease, color 160ms ease;
           }
-          .appNavFirst{ border-top:none; }
+
+          .appNavFirst{
+            border-top:none;
+          }
+
           .appNavLink:not(.appNavFirst){
             border-top:1px solid rgba(255,255,255,0.10);
           }
 
-          .appNavIdle{ color: rgba(234,240,255,0.72); background:transparent; }
-          .appNavIdle:hover{ color:var(--uiText); background: rgba(255,255,255,0.06); }
-          .appNavActive{ color:var(--uiText); background: rgba(255,255,255,0.10); }
+          .appNavIdle{
+            color: rgba(234,240,255,0.72);
+            background:transparent;
+          }
 
-          .appNavLeft{ display:flex; align-items:center; gap:12px; min-width:0; }
-          .appNavLabel{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-          .appNavArrow{ color: rgba(234,240,255,0.45); }
+          .appNavIdle:hover{
+            color:var(--uiText);
+            background: rgba(255,255,255,0.06);
+          }
+
+          .appNavActive{
+            color:var(--uiText);
+            background: rgba(255,255,255,0.10);
+          }
+
+          .appNavLeft{
+            display:flex;
+            align-items:center;
+            gap:12px;
+            min-width:0;
+          }
+
+          .appNavLabel{
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+          }
+
+          .appNavArrow{
+            color: rgba(234,240,255,0.45);
+          }
 
           .appNavIcon{
-            height:32px; width:32px;
+            height:32px;
+            width:32px;
             border-radius:14px;
-            display:grid; place-items:center;
+            display:grid;
+            place-items:center;
             border:1px solid rgba(255,255,255,0.10);
             background: rgba(255,255,255,0.05);
           }
+
           .appNavIconActive{
             border-color: rgba(255,255,255,0.15);
             background: rgba(255,255,255,0.10);
@@ -437,16 +576,21 @@ export default function AppShell({
 
           .appNavEdge{
             pointer-events:none;
-            position:absolute; inset:0;
+            position:absolute;
+            inset:0;
             opacity:0;
             transition: opacity 160ms ease;
-            background: linear-gradient(135deg,
+            background: linear-gradient(
+              135deg,
               rgba(37,89,113,0.20),
               rgba(75,142,141,0.18),
               rgba(137,194,170,0.16)
             );
           }
-          .appNavLink:hover .appNavEdge{ opacity:1; }
+
+          .appNavLink:hover .appNavEdge{
+            opacity:1;
+          }
 
           .menuTip{
             border-top:1px solid rgba(255,255,255,0.10);

@@ -107,7 +107,7 @@ export default function WorkoutsPage() {
   return (
     <AppShell
       title="LO App"
-      subtitle="GO! Atheneum Avelgem"
+      subtitle="Running"
       userName={profiel?.volledige_naam ?? null}
     >
       <WorkoutsHero
@@ -224,13 +224,6 @@ function WorkoutsHero({
             className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
           >
             Terug naar dashboard
-          </Link>
-
-          <Link
-            href="/challenges"
-            className="inline-flex h-11 items-center rounded-2xl border border-slate-300/25 bg-[linear-gradient(180deg,rgba(12,18,24,0.72),rgba(0,0,0,0.58))] px-4 font-black text-[rgba(234,240,255,0.92)] shadow-[0_12px_30px_rgba(0,0,0,0.28)] transition duration-200 hover:-translate-y-0.5 hover:border-teal-200/25 hover:shadow-[0_16px_34px_rgba(0,0,0,0.32),0_0_0_1px_rgba(75,142,141,0.10)]"
-          >
-            Challenges →
           </Link>
         </>
       }

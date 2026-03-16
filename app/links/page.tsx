@@ -89,7 +89,7 @@ function ExternalLinkCard({ item }: LinkCardProps) {
               <div className="text-[15px] font-black tracking-[0.01em] text-white">
                 {item.naam}
               </div>
-              <div className="mt-1 text-xs break-all text-white/60">{item.url}</div>
+              <div className="mt-1 break-all text-xs text-white/60">{item.url}</div>
             </div>
           </div>
 
@@ -121,7 +121,7 @@ function ExternalLinkCard({ item }: LinkCardProps) {
 
 export default function LinksPage() {
   return (
-    <AppShell title="Links" subtitle="GO! Atheneum Avelgem">
+    <AppShell title="LO App" subtitle="Links">
       <BaseHero
         label="HANDIGE LINKS"
         title={<>Externe websites en sportbronnen</>}
@@ -135,9 +135,18 @@ export default function LinksPage() {
         imageAlt="Links overzicht"
         imageClassName="max-h-[300px] md:max-h-[340px]"
         actions={
-          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
-            {links.length} links
-          </span>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-white/15"
+            >
+              ← Terug naar home
+            </Link>
+
+            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
+              {links.length} links
+            </span>
+          </div>
         }
       />
 

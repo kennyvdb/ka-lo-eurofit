@@ -117,7 +117,7 @@ export default function ReservatiesPage() {
   return (
     <AppShell
       title="LO App"
-      subtitle="GO! Atheneum Avelgem"
+      subtitle="Reservaties"
       userName={profiel?.volledige_naam ?? null}
     >
       <ReservatiesHero

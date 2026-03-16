@@ -110,12 +110,11 @@ const SECTIONS: Section[] = [
   },
 ];
 
-type Week = 1 | 2 | 3 | 4;
+type Week = 1 | 2 | 3 | 4 | 5 | 6;
 type WeekMode = Week | "all";
 
 function storageKey(userId: string) {
-  // bewust geen backticks om parsing issues te vermijden
-  return "fitness_school_v2_4w:" + userId;
+  return "fitness_school_v2_6w:" + userId;
 }
 
 export default function FitnessSchoolPage() {
@@ -127,11 +126,11 @@ export default function FitnessSchoolPage() {
   const [vals, setVals] = useState<Record<string, string>>({});
   const setVal = (k: string, v: string) => setVals((p) => ({ ...p, [k]: v }));
 
-  const [weekMode, setWeekMode] = useState<WeekMode>("all");
-  const weeks = useMemo(() => [1, 2, 3, 4] as const, []);
+  const [weekMode, setWeekMode] = useState<WeekMode>(1);
+  const weeks = useMemo(() => [1, 2, 3, 4, 5, 6] as const, []);
   const visibleWeeks = useMemo<Week[]>(() => (weekMode === "all" ? [...weeks] : [weekMode]), [weekMode, weeks]);
 
-  const [openSecs, setOpenSecs] = useState<Set<number>>(() => new Set([0]));
+  const [openSecs, setOpenSecs] = useState<Set<number>>(() => new Set());
   const secRefs = useRef<Array<HTMLDivElement | null>>([]);
 
   useEffect(() => {
@@ -199,7 +198,7 @@ export default function FitnessSchoolPage() {
           <div style={{ minWidth: 0 }}>
             <div style={styles.kicker}>FITNESS @ SCHOOL</div>
             <h1 style={{ fontSize: 24, fontWeight: 980, margin: "6px 0 0 0", color: ui.text }}>
-              Invulbaar schema (Week 1–4)
+              Invulbaar schema (Week 1–6)
             </h1>
             <div style={{ color: ui.muted, marginTop: 6 }}>
               Vul je kg/reps per set in • {email && <>ingelogd als <b>{email}</b></>}
@@ -224,7 +223,7 @@ export default function FitnessSchoolPage() {
             <div style={styles.filterHint}>
               Filter:{" "}
               <b style={{ color: "rgba(255,255,255,0.92)" }}>
-                {weekMode === "all" ? "alles (W1–W4)" : "week " + weekMode}
+                {weekMode === "all" ? "alles (W1–W6)" : "week " + weekMode}
               </b>
             </div>
           </div>
@@ -253,7 +252,7 @@ export default function FitnessSchoolPage() {
                     <div style={{ minWidth: 0 }}>
                       <div style={styles.sectionTitle}>{sec.title}</div>
                       <div style={styles.sectionMeta}>
-                        {weekMode === "all" ? "4 weken zichtbaar" : "Alleen week " + weekMode} • auto-save
+                       {weekMode === "all" ? "W1–W6 zichtbaar" : "Alleen week " + weekMode} • auto-save
                       </div>
                     </div>
 
@@ -265,7 +264,6 @@ export default function FitnessSchoolPage() {
 
                   {isOpen && (
                     <>
-                      {/* DESKTOP: tabel */}
                       <div style={{ marginTop: 10 }}>
                         <table className="fitTable">
                           <colgroup>
@@ -274,7 +272,7 @@ export default function FitnessSchoolPage() {
                             <col style={{ width: 72 }} />
                             <col style={{ width: 88 }} />
                             <col style={{ width: 78 }} />
-                            <col style={{ width: weekMode === "all" ? 520 : 320 }} />
+                            <col style={{ width: weekMode === "all" ? 760 : 320 }} />
                           </colgroup>
 
                           <thead>
@@ -284,7 +282,7 @@ export default function FitnessSchoolPage() {
                               <th className="thTiny">Sets</th>
                               <th className="thTiny">Reps</th>
                               <th className="thTiny">Rust</th>
-                              <th className="thWeights">Jouw invulling {weekMode === "all" ? "(W1–W4)" : "(W" + weekMode + ")"}</th>
+                              <th className="thWeights">Jouw invulling {weekMode === "all" ? "(W1–W6)" : "(W" + weekMode + ")"}</th>
                             </tr>
                           </thead>
 
@@ -306,7 +304,8 @@ export default function FitnessSchoolPage() {
                                     <div
                                       className="weekGrid"
                                       style={{
-                                        gridTemplateColumns: weekMode === "all" ? "repeat(2, minmax(0, 1fr))" : "repeat(1, minmax(0, 1fr))",
+                                        gridTemplateColumns:
+                                          weekMode === "all" ? "repeat(2, minmax(0, 1fr))" : "repeat(1, minmax(0, 1fr))",
                                       }}
                                     >
                                       {visibleWeeks.map((w) => {
@@ -346,7 +345,6 @@ export default function FitnessSchoolPage() {
                         </table>
                       </div>
 
-                      {/* MOBILE: kaartjes (alleen op echte gsm/touch) */}
                       <div className="mobileOnly" style={{ marginTop: 10 }}>
                         {sec.exercises.map((ex) => {
                           const base = "s" + secIdx + ":" + ex.code;
@@ -737,5 +735,3 @@ const css =
     box-shadow: inset 0 0 0 1px rgba(0,0,0,0.25);
   }
 `;
-
-// let op: css string hierboven sluit correct af met een backtick in deze file (geen losse backticks elders).

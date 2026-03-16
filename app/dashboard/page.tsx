@@ -324,7 +324,7 @@ export default function DashboardPage() {
   return (
     <AppShell
       title="LO App"
-      subtitle="GO! Atheneum Avelgem"
+      subtitle="GO! atheneum Avelgem"
       userName={profiel?.volledige_naam}
     >
       <Hero
@@ -589,7 +589,6 @@ function Hero({
       <style jsx>{`
         .heroInner {
           display: grid;
-          grid-template-columns: 1.1fr 0.9fr;
           gap: 14px;
           align-items: stretch;
           position: relative;
@@ -601,19 +600,26 @@ function Hero({
           justify-content: flex-end;
         }
 
-        @media (max-width: 700px) {
+        @media (min-width: 768px) {
+          .heroInner {
+            grid-template-columns: minmax(0, 1fr) 440px;
+          }
+        }
+
+        @media (max-width: 767px) {
           .heroInner {
             grid-template-columns: 1fr;
           }
+
           .heroArt {
             margin-top: 8px;
             justify-content: flex-start;
           }
+
           .illuBox {
-            max-height: 320px;
-            height: auto !important;
             width: 100%;
-            aspect-ratio: 1 / 1;
+            min-height: 260px;
+            max-height: 320px;
           }
         }
 
@@ -621,7 +627,9 @@ function Hero({
           .hero :global(h1) {
             font-size: 26px !important;
           }
+
           .illuBox {
+            min-height: 220px;
             max-height: 280px;
           }
         }
@@ -737,14 +745,16 @@ const hero: Record<string, React.CSSProperties> = {
     lineHeight: 1.25,
   },
   quoteAuthor: { marginTop: 8, fontSize: 12.5, color: ui.muted },
-  artCol: { position: "relative", zIndex: 1 },
+  artCol: {
+    position: "relative",
+    zIndex: 1,
+    width: "100%",
+  },
   illuBox: {
     position: "relative",
     height: "100%",
-    aspectRatio: "1 / 1",
-    width: "auto",
-    maxWidth: "100%",
-    marginLeft: "auto",
+    width: "100%",
+    minHeight: 320,
     borderRadius: 22,
     overflow: "hidden",
     border: `1px solid ${ui.border}`,

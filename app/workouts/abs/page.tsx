@@ -66,8 +66,8 @@ export default function AbsWorkoutsPage() {
 
   return (
     <AppShell
-      title="KA LO App"
-      subtitle="GO!Atheneum Avelgem"
+      title="LO App"
+      subtitle="Abs"
       userName={profile.volledige_naam ?? null}
     >
       <div className="mx-auto max-w-[1100px]">

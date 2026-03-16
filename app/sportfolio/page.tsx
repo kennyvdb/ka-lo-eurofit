@@ -279,8 +279,8 @@ export default function SportfolioPage() {
 
   return (
     <AppShell
-      title="Sportfolio"
-      subtitle="GO! Atheneum Avelgem"
+      title="LO App"
+      subtitle="Sportfolio"
       userName={profiel?.volledige_naam}
     >
       <BaseHero
@@ -299,7 +299,14 @@ export default function SportfolioPage() {
         quoteAuthor="Sportfolio"
         imageClassName="max-h-[320px] md:max-h-[360px]"
         actions={
-          <>
+          <div className="flex flex-wrap items-center gap-3">
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-white/15"
+            >
+              ← Terug naar home
+            </Link>
+
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
               {roleLabel}
             </span>
@@ -315,7 +322,7 @@ export default function SportfolioPage() {
                 {profiel.schooljaar}
               </span>
             ) : null}
-          </>
+          </div>
         }
       />
 
