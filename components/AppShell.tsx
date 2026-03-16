@@ -34,16 +34,29 @@ const navItems = [
   { href: "/hall-of-fame", label: "Hall of Fame", icon: "🏆" },
   { href: "/workouts", label: "Workouts", icon: "💪" },
   { href: "/les-lo", label: "Les LO", icon: "🏃‍♂️" },
+  { href: "/reservaties", label: "Reservaties", icon: "📅" },
+  {
+    href: "/extramurale-sportactiviteiten",
+    label: "Extramurale sportactiviteiten",
+    icon: "🚴",
+  },
   { href: "/links", label: "Links", icon: "🔗" },
 ];
 
-function getInitials(name?: string | null) {
+function normalizeName(name?: string | null) {
   const cleaned = (name ?? "").trim();
+  return cleaned.length > 0 ? cleaned : null;
+}
+
+function getInitials(name?: string | null) {
+  const cleaned = normalizeName(name);
   if (!cleaned) return "KA";
+
   const parts = cleaned.split(/\s+/).filter(Boolean);
   const first = parts[0]?.[0] ?? "";
   const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
   const initials = (first + last).toUpperCase();
+
   return initials || "KA";
 }
 
@@ -57,7 +70,19 @@ export default function AppShell({
   const pathname = usePathname();
   const menuRef = useRef<HTMLDivElement | null>(null);
 
-  const initials = useMemo(() => getInitials(userName), [userName]);
+  const [resolvedUserName, setResolvedUserName] = useState<string | null>(() =>
+    normalizeName(userName)
+  );
+
+  useEffect(() => {
+    const nextName = normalizeName(userName);
+    if (nextName) {
+      setResolvedUserName(nextName);
+    }
+  }, [userName]);
+
+  const initials = useMemo(() => getInitials(resolvedUserName), [resolvedUserName]);
+  const displayUserName = resolvedUserName ?? "—";
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -111,7 +136,6 @@ export default function AppShell({
     <div className="min-h-dvh bg-neutral-950 text-white">
       <header className="sticky top-0 z-50 border-b border-white/10 bg-neutral-950/60 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
-          {/* Hamburger + dropdown */}
           <div ref={menuRef} className="relative">
             <button type="button" aria-label="Menu" onClick={() => setOpen((v) => !v)} className="menuBtn">
               <div className="grid gap-1.5 relative z-10">
@@ -133,7 +157,6 @@ export default function AppShell({
                   <span className="brandGlow brandGlow2" />
 
                   <div className="flex items-center gap-3 relative z-10">
-                    {/* dropdown logo blijft in cirkel */}
                     <div className="logoGlow">
                       <img
                         src="/logo-atheneum-transparant.png"
@@ -152,7 +175,7 @@ export default function AppShell({
                   <div className="userCard">
                     <div className="min-w-0">
                       <div className="text-xs text-white/55">Aangemeld als</div>
-                      <div className="truncate text-sm font-semibold text-white">{userName ?? "—"}</div>
+                      <div className="truncate text-sm font-semibold text-white">{displayUserName}</div>
                     </div>
 
                     <div className="avatarSm">
@@ -176,7 +199,6 @@ export default function AppShell({
             )}
           </div>
 
-          {/* Center title + 2 logos (✅ GEEN cirkels meer) */}
           <div className="flex items-center gap-4">
             <div className="topLogoFree">
               <img
@@ -202,15 +224,18 @@ export default function AppShell({
             </div>
           </div>
 
-          {/* Top-right avatar */}
-          <Link href="/dashboard/profiel" aria-label="Profiel" title={userName ?? "Profiel"} className="avatarTop">
+          <Link
+            href="/dashboard/profiel"
+            aria-label="Profiel"
+            title={displayUserName}
+            className="avatarTop"
+          >
             {initials}
             <span className="ring" aria-hidden="true" />
             <span className="sweep" aria-hidden="true" />
           </Link>
         </div>
 
-        {/* ✅ gewone <style> (NIET styled-jsx) */}
         <style>{`
           :root{
             --uiText: ${ui.text};
@@ -229,7 +254,6 @@ export default function AppShell({
             100% { transform: translateX(60%) rotate(10deg); }
           }
 
-          /* menu button */
           .menuBtn{
             height:44px;width:44px;border-radius:18px;
             border:1px solid var(--uiBorder2);
@@ -245,7 +269,6 @@ export default function AppShell({
           .glowA{ left:-40px; top:-40px; width:110px; height:110px; background:rgba(75,142,141,0.22); }
           .glowB{ right:-46px; top:-46px; width:130px; height:130px; background:rgba(137,194,170,0.16); filter:blur(24px); }
 
-          /* dropdown */
           .menuDrop{
             position:absolute; left:0; top:56px; width:320px;
             overflow:hidden; border-radius:20px;
@@ -271,7 +294,6 @@ export default function AppShell({
             filter:blur(38px); background:rgba(137,194,170,0.14);
           }
 
-          /* dropdown logo */
           .logoGlow{
             height:44px; width:44px;
             position:relative; overflow:hidden;
@@ -285,14 +307,13 @@ export default function AppShell({
               0 0 18px rgba(75,142,141,0.25);
           }
 
-          /* ✅ TOPBAR LOGOS zonder cirkel */
           .topLogoFree{
             position:relative;
             display:grid;
             place-items:center;
             overflow:hidden;
             padding:4px 6px;
-            border-radius:14px; /* zacht hoekje, geen cirkel */
+            border-radius:14px;
           }
           .topLogoImg{
             height:44px;
@@ -304,7 +325,6 @@ export default function AppShell({
             opacity:0.98;
           }
 
-          /* sweep overlay (werkt op logoGlow, topLogoFree, avatars) */
           .sweep{
             position:absolute;
             inset:-40% -60%;
@@ -321,7 +341,6 @@ export default function AppShell({
             opacity:0.9;
           }
 
-          /* user card */
           .userCard{
             margin-top:12px;
             display:flex; align-items:center; justify-content:space-between; gap:12px;
@@ -333,7 +352,6 @@ export default function AppShell({
             z-index:10;
           }
 
-          /* avatars */
           .avatarTop, .avatarSm{
             position:relative; overflow:hidden;
             display:grid; place-items:center;
@@ -382,7 +400,6 @@ export default function AppShell({
             pointer-events:none;
           }
 
-          /* nav links */
           .appNavLink{
             display:flex; align-items:center; justify-content:space-between; gap:12px;
             padding:12px 16px;
@@ -431,7 +448,6 @@ export default function AppShell({
           }
           .appNavLink:hover .appNavEdge{ opacity:1; }
 
-          /* menu tip */
           .menuTip{
             border-top:1px solid rgba(255,255,255,0.10);
             padding:12px;
@@ -441,7 +457,6 @@ export default function AppShell({
         `}</style>
       </header>
 
-      {/* Content */}
       <main className="mx-auto max-w-5xl px-4 py-4 pb-[calc(5rem+env(safe-area-inset-bottom))]">
         <div
           className="rounded-3xl border border-white/10 bg-white/5 p-4"

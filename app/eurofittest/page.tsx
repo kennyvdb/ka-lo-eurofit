@@ -2,11 +2,21 @@
 
 import AppShell from "@/components/AppShell";
 import ProfileRequiredGate from "@/components/ProfileRequiredGate";
+import BaseHero from "@/components/heroes/BaseHero";
 import { checkProfileCompletion } from "@/lib/profileCompletion";
 import { supabase } from "@/lib/supabaseClient";
 import Image from "next/image";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
+
+/* ---------------------------
+   Brand colors
+--------------------------- */
+export const brand = {
+  blue: "#255971",
+  teal: "#4B8E8D",
+  mint: "#89C2AA",
+};
 
 /* ---------------------------
    Types
@@ -130,7 +140,6 @@ function beoordeelWaarde(waarde: number, norm: NormRow): Beoordeling {
     zeerGoed: "#0f5a2f",
   };
 
-  // hoger = beter (klassiek)
   if (!lowerBetter) {
     if (waarde <= norm.p5) return { label: "Zeer zwak", kleur: COLORS.zeerZwak };
     if (waarde < norm.p20) return { label: "Zwak", kleur: COLORS.zwak };
@@ -140,8 +149,6 @@ function beoordeelWaarde(waarde: number, norm: NormRow): Beoordeling {
     return { label: "Zeer goed", kleur: COLORS.zeerGoed };
   }
 
-  // ✅ lager = beter (volgens tabellen: P95 is best/laagste)
-  // best → slechtst: <=P95, <=P80, <=P50, <=P20, <=P5, daarboven = zeer zwak
   if (waarde <= norm.p95) return { label: "Zeer goed", kleur: COLORS.zeerGoed };
   if (waarde <= norm.p80) return { label: "Goed", kleur: COLORS.goed };
   if (waarde <= norm.p50) return { label: "Gemiddeld goed", kleur: COLORS.gemGoed };
@@ -174,8 +181,8 @@ const ui = {
   warnBorder: "rgba(255,193,102,0.28)",
   errorBg: "rgba(255,85,112,0.15)",
   errorBorder: "rgba(255,85,112,0.28)",
-  okBg: "rgba(104,180,255,0.10)",
-  okBorder: "rgba(104,180,255,0.24)",
+  okBg: "rgba(37,89,113,0.14)",
+  okBorder: "rgba(137,194,170,0.28)",
 };
 
 const styles: Record<string, React.CSSProperties> = {
@@ -230,7 +237,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderWidth: 1,
     borderStyle: "solid",
     borderColor: ui.border2,
-    background: "linear-gradient(90deg, rgba(104,180,255,0.28), rgba(255,104,180,0.22)), rgba(0,0,0,0.70)",
+    background: `linear-gradient(90deg, rgba(37,89,113,0.45), rgba(75,142,141,0.35)), rgba(0,0,0,0.70)`,
     color: ui.text,
     fontWeight: 980,
     cursor: "pointer",
@@ -332,14 +339,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 950,
   },
 
-  actionRow: {
-    marginTop: 14,
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-    alignItems: "center",
-  },
-
   panel: {
     padding: 16,
     borderRadius: 22,
@@ -437,7 +436,7 @@ const styles: Record<string, React.CSSProperties> = {
     borderStyle: "solid",
     borderColor: ui.border,
     background:
-      "radial-gradient(700px 220px at 10% 20%, rgba(104,180,255,0.12), rgba(0,0,0,0) 60%), radial-gradient(700px 220px at 90% 80%, rgba(255,104,180,0.10), rgba(0,0,0,0) 60%), rgba(0,0,0,0.22)",
+      "radial-gradient(700px 220px at 10% 20%, rgba(37,89,113,0.18), rgba(0,0,0,0) 60%), radial-gradient(700px 220px at 90% 80%, rgba(137,194,170,0.16), rgba(0,0,0,0) 60%), rgba(0,0,0,0.22)",
   },
   imgPad: {
     position: "absolute",
@@ -489,12 +488,10 @@ export default function EurofittestPage() {
   const [saving, setSaving] = useState(false);
   const [loadingLatest, setLoadingLatest] = useState(false);
 
-  // ✅ inject responsive CSS (zonder styled-jsx)
   useEffect(() => {
     injectEurofitResponsiveCSS();
   }, []);
 
-  // profiel check
   useEffect(() => {
     const run = async () => {
       const res = await checkProfileCompletion();
@@ -503,7 +500,6 @@ export default function EurofittestPage() {
     run();
   }, []);
 
-  // init
   useEffect(() => {
     const init = async () => {
       setLoading(true);
@@ -547,7 +543,6 @@ export default function EurofittestPage() {
     };
 
     init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadMyResults = async (userId: string) => {
@@ -565,7 +560,6 @@ export default function EurofittestPage() {
     setResults((data ?? []) as EurofitResult[]);
   };
 
-  // norms (leeftijd + geslacht + testDatum)
   useEffect(() => {
     const run = async () => {
       setError(null);
@@ -734,9 +728,6 @@ export default function EurofittestPage() {
     }
   };
 
-  /* ---------------------------
-     Guards
-  --------------------------- */
   if (!profileReady) {
     return (
       <AppShell title="LO App" subtitle="GO! Atheneum Avelgem" userName={volledigeNaam ?? undefined}>
@@ -763,7 +754,7 @@ export default function EurofittestPage() {
 
   if (!uid) {
     return (
-      <AppShell title="LO App" subtitle="Eurofit">
+      <AppShell title="LO App" subtitle="Eurofittest">
         <div style={styles.panel}>
           <div style={{ fontWeight: 980, color: ui.text }}>Eurofittest</div>
           <div style={{ marginTop: 8, color: ui.muted }}>Je bent niet ingelogd.</div>
@@ -775,32 +766,67 @@ export default function EurofittestPage() {
     );
   }
 
-  /* ---------------------------
-     Render
-  --------------------------- */
   return (
     <AppShell title="LO App" subtitle="Eurofittest" userName={volledigeNaam ?? undefined}>
-      <HeroEurofit greetingName={greetingName} />
-
-      <div style={{ ...styles.headerRow, marginTop: 14 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ marginTop: 0, fontSize: 13, color: ui.muted }}>
-            Vul je Eurofit-scores in.{" "}
+      <BaseHero
+        label="EUROFIT"
+        title={
+          <>
+            Eurofittest
+            <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
+              {greetingName}
+            </span>
+            <img
+              src="/hero/beast.png"
+              alt="Beast icoon"
+              className="h-14 w-14 object-contain sm:h-16 sm:w-16"
+            />
+          </>
+        }
+        description={
+          <>
+            Vul je scores in, vergelijk met normen en volg je progressie.
             {normLoading ? (
-              <span style={{ color: ui.text, fontWeight: 950 }}>Normen laden…</span>
+              <span className="font-black text-[rgba(234,240,255,0.92)]"> Normen laden…</span>
             ) : (
-              <span style={{ color: ui.muted2 }}>Normen staan klaar.</span>
+              <span className="text-[rgba(234,240,255,0.55)]"> Normen staan klaar.</span>
             )}
-            {leeftijdLive !== null ? <span style={{ color: ui.muted }}> • Leeftijd: {leeftijdLive}</span> : null}
-            {geslacht ? <span style={{ color: ui.muted }}> • Geslacht: {geslacht}</span> : null}
-            <span style={{ color: ui.muted }}> • Schooljaar: {schooljaarLive}</span>
-          </div>
-        </div>
+            {leeftijdLive !== null ? <span className="opacity-85"> • Leeftijd: {leeftijdLive}</span> : null}
+            {geslacht ? <span className="opacity-85"> • Geslacht: {geslacht}</span> : null}
+            <span className="opacity-85"> • Schooljaar: {schooljaarLive}</span>
+          </>
+        }
+        imageSrc="/eurofit/eurofittest.png"
+        imageAlt="Eurofit illustratie"
+        quoteTitle="Focus"
+        quote="Measure. Improve. Repeat."
+        quoteAuthor="Eurofit protocol"
+        imageClassName="scale-105 md:scale-110 transition-transform duration-500"
+        actions={
+          <>
+            <Link
+              href="/functional-fitheidstest"
+              className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
+            >
+              Functional
+            </Link>
 
-        <Link href="/dashboard" style={styles.blackBtnLink}>
-          Terug →
-        </Link>
-      </div>
+            <Link
+              href="/challenges"
+              className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
+            >
+              Challenges
+            </Link>
+
+            <Link
+              href="/dashboard"
+              className="inline-flex h-11 items-center rounded-2xl border border-slate-300/25 bg-[linear-gradient(180deg,rgba(12,18,24,0.72),rgba(0,0,0,0.58))] px-4 font-black text-[rgba(234,240,255,0.92)] shadow-[0_12px_30px_rgba(0,0,0,0.28)] transition duration-200 hover:-translate-y-0.5 hover:border-teal-200/25 hover:shadow-[0_16px_34px_rgba(0,0,0,0.32),0_0_0_1px_rgba(75,142,141,0.10)]"
+            >
+              Dashboard →
+            </Link>
+          </>
+        }
+      />
 
       {error && (
         <div style={styles.errorBox}>
@@ -894,7 +920,6 @@ export default function EurofittestPage() {
                     )}
                   </div>
 
-                  {/* ✅ Afbeelding (zoals Functional) */}
                   <div style={styles.imgWrap}>
                     <div style={styles.imgPad}>
                       <Image
@@ -970,7 +995,7 @@ export default function EurofittestPage() {
             <div style={{ display: "grid", gap: 10 }}>
               {results.map((r) => {
                 const meta = getTestMeta(r.test_type);
-                const norm = norms[r.test_type] ?? null; // normen van huidige datum/leeftijd
+                const norm = norms[r.test_type] ?? null;
                 const beoordeling = norm ? beoordeelWaarde(r.waarde, norm) : null;
 
                 return (
@@ -1018,7 +1043,7 @@ export default function EurofittestPage() {
               Je vult per onderdeel je score in en je krijgt meteen een beoordeling op basis van percentielen (P5…P95).
               <br />
               <br />
-              <b style={{ color: ui.text }}>Belangrijk:</b> Voor testen waarbij <b style={{ color: ui.text }}>lager beter is</b> (tijd/fouten),
+              <b style={{ color: ui.text }}>Belangrijk:</b> Voor testen waarbij <b style={{ color: ui.text }}>lager beter is</b>,
               is de interpretatie volgens de normtabellen: <b style={{ color: ui.text }}>P95 = best</b> (laagste tijd/fouten) en{" "}
               <b style={{ color: ui.text }}>P5 = zwakker</b> (hogere tijd/fouten).
             </div>
@@ -1040,169 +1065,6 @@ export default function EurofittestPage() {
 }
 
 /* ---------------------------
-   Hero
---------------------------- */
-function HeroEurofit({ greetingName }: { greetingName: string }) {
-  return (
-    <section style={hero.wrap}>
-      <div style={hero.bgGlow1} />
-      <div style={hero.bgGlow2} />
-
-      <div className="eurofit-hero-inner" style={hero.inner}>
-        <div style={hero.content}>
-          <div style={hero.kicker}>EUROFIT</div>
-
-          <h1 style={{ ...hero.title, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            Eurofittest <span style={hero.accent}>{greetingName}</span>
-            <Image src="/hero/beast.png" alt="Beast" width={54} height={54} priority style={{ display: "block", objectFit: "contain" }} />
-          </h1>
-
-          <div style={hero.sub}>Vul je scores in, vergelijk met normen en volg je progressie.</div>
-
-          <div style={hero.actions}>
-            <Link href="/functional-fitheidstest" style={hero.secondary}>
-              Functional
-            </Link>
-            <Link href="/challenges" style={hero.secondary}>
-              Challenges
-            </Link>
-            <Link href="/dashboard" style={hero.primary}>
-              Dashboard →
-            </Link>
-          </div>
-
-          <div style={hero.quoteCard}>
-            <div style={hero.quoteLabel}>Focus</div>
-            <div style={hero.quoteText}>“Measure. Improve. Repeat.”</div>
-            <div style={hero.quoteAuthor}>— Eurofit protocol</div>
-          </div>
-        </div>
-
-        <div style={hero.artCol}>
-          <div style={hero.illuBox}>
-            <Image
-              src="/eurofit/eurofittest.png"
-              alt="LO illustratie"
-              fill
-              priority
-              sizes="(max-width: 700px) 100vw, 40vw"
-              style={{ objectFit: "contain", objectPosition: "center", padding: 14, opacity: 0.96 }}
-            />
-          </div>
-        </div>
-      </div>
-    </section>
-  );
-}
-
-const hero: Record<string, React.CSSProperties> = {
-  wrap: {
-    position: "relative",
-    overflow: "hidden",
-    padding: 16,
-    borderRadius: 26,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: ui.border,
-    background:
-      "radial-gradient(900px 520px at 0% 0%, rgba(104,180,255,0.22) 0%, rgba(0,0,0,0) 60%), radial-gradient(900px 520px at 100% 0%, rgba(255,104,180,0.18) 0%, rgba(0,0,0,0) 60%), rgba(255,255,255,0.06)",
-  },
-  bgGlow1: {
-    position: "absolute",
-    width: 260,
-    height: 260,
-    borderRadius: 999,
-    left: -120,
-    top: -140,
-    background: "rgba(104,180,255,0.22)",
-    filter: "blur(24px)",
-  },
-  bgGlow2: {
-    position: "absolute",
-    width: 320,
-    height: 320,
-    borderRadius: 999,
-    right: -160,
-    top: -170,
-    background: "rgba(255,104,180,0.18)",
-    filter: "blur(26px)",
-  },
-  inner: {
-    position: "relative",
-    display: "grid",
-    gridTemplateColumns: "1.1fr 0.9fr",
-    gap: 14,
-    alignItems: "start",
-    zIndex: 1,
-  },
-  content: { position: "relative", maxWidth: 620, zIndex: 1 },
-  kicker: { fontSize: 12, fontWeight: 950, letterSpacing: 1.2, color: ui.muted },
-  title: { margin: "8px 0 0 0", fontSize: 30, lineHeight: 1.05, fontWeight: 980, color: ui.text },
-  accent: {
-    background: "linear-gradient(90deg, rgba(104,180,255,1), rgba(255,104,180,1))",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  },
-  sub: { marginTop: 10, fontSize: 13.5, color: ui.muted, maxWidth: 520 },
-  actions: { marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" },
-  primary: {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 46,
-    padding: "0 14px",
-    borderRadius: 16,
-    textDecoration: "none",
-    color: ui.text,
-    fontWeight: 950,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: ui.border2,
-    background: "rgba(0,0,0,0.55)",
-    boxShadow: "0 12px 30px rgba(0,0,0,0.28)",
-  },
-  secondary: {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 46,
-    padding: "0 14px",
-    borderRadius: 16,
-    textDecoration: "none",
-    color: ui.text,
-    fontWeight: 950,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: ui.border,
-    background: "rgba(0,0,0,0.35)",
-  },
-  quoteCard: {
-    marginTop: 14,
-    borderRadius: 20,
-    padding: 14,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: ui.border,
-    background: "rgba(0,0,0,0.35)",
-    backdropFilter: "blur(8px)",
-    maxWidth: 520,
-  },
-  quoteLabel: { fontSize: 12, fontWeight: 950, color: ui.muted },
-  quoteText: { marginTop: 8, fontSize: 16, fontWeight: 950, color: ui.text, lineHeight: 1.25 },
-  quoteAuthor: { marginTop: 8, fontSize: 12.5, color: ui.muted },
-  artCol: { position: "relative", zIndex: 1 },
-  illuBox: {
-    position: "relative",
-    width: "100%",
-    height: 250,
-    borderRadius: 22,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: ui.border,
-    background: "rgba(0,0,0,0.18)",
-  },
-};
-
-/* ---------------------------
    Components
 --------------------------- */
 function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -1211,7 +1073,9 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
       onClick={onClick}
       style={{
         ...styles.tabBtn,
-        background: active ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.25)",
+        background: active
+          ? "linear-gradient(90deg, rgba(37,89,113,0.35), rgba(75,142,141,0.22)), rgba(0,0,0,0.55)"
+          : "rgba(0,0,0,0.25)",
         borderColor: active ? ui.border2 : ui.border,
       }}
     >
@@ -1221,7 +1085,7 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 }
 
 /* ---------------------------
-   ✅ CSS Injector (no styled-jsx)
+   CSS Injector (no styled-jsx)
 --------------------------- */
 function injectEurofitResponsiveCSS() {
   if (typeof window === "undefined") return;
@@ -1235,9 +1099,6 @@ function injectEurofitResponsiveCSS() {
     @media (min-width: 900px) {
       .meta-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
       .eurofit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-    }
-    @media (max-width: 700px) {
-      .eurofit-hero-inner { grid-template-columns: 1fr !important; }
     }
   `;
   document.head.appendChild(style);

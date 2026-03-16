@@ -3,130 +3,28 @@
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { KLASSEN, Finaliteit, getKlasMeta } from "@/shared/klassen/klassen";
 
-type Geslacht = "jongen" | "meisje";
+type Geslacht = "M" | "V";
 type Role = "student" | "teacher";
-
-const FINALITEITEN = ["A-stroom", "B-stroom", "Arbeidsmarkt", "Doorstroom", "Dubbele finaliteit"] as const;
-type Finaliteit = (typeof FINALITEITEN)[number];
-
-type KlasMeta = {
-  klas: string;
-  graad: 1 | 2 | 3;
-  leerjaar: 1 | 2 | 3 | 4 | 5 | 6;
-  finaliteit: Finaliteit;
-};
-
-// ✅ Klassenlijst + metadata (graad/leerjaar/finaliteit)
-const KLASSEN: KlasMeta[] = [
-  { klas: "1 A A", graad: 1, leerjaar: 1, finaliteit: "A-stroom" },
-  { klas: "1 A B", graad: 1, leerjaar: 1, finaliteit: "A-stroom" },
-  { klas: "1 A C", graad: 1, leerjaar: 1, finaliteit: "A-stroom" },
-  { klas: "1 A D", graad: 1, leerjaar: 1, finaliteit: "A-stroom" },
-  { klas: "1 A E", graad: 1, leerjaar: 1, finaliteit: "A-stroom" },
-  { klas: "1 A F", graad: 1, leerjaar: 1, finaliteit: "A-stroom" },
-  { klas: "1 TOP A", graad: 1, leerjaar: 1, finaliteit: "B-stroom" },
-  { klas: "1 TOP B", graad: 1, leerjaar: 1, finaliteit: "B-stroom" },
-
-  { klas: "2 E&O B", graad: 1, leerjaar: 2, finaliteit: "A-stroom" },
-  { klas: "2 KLATA A", graad: 1, leerjaar: 2, finaliteit: "A-stroom" },
-  { klas: "2 MAWE C", graad: 1, leerjaar: 2, finaliteit: "A-stroom" },
-  { klas: "2 MAWE D", graad: 1, leerjaar: 2, finaliteit: "A-stroom" },
-  { klas: "2 MT&W A", graad: 1, leerjaar: 2, finaliteit: "A-stroom" },
-  { klas: "2 MT&W B", graad: 1, leerjaar: 2, finaliteit: "A-stroom" },
-  { klas: "2 STEM C", graad: 1, leerjaar: 2, finaliteit: "A-stroom" },
-  { klas: "2 STEM D", graad: 1, leerjaar: 2, finaliteit: "A-stroom" },
-  { klas: "2 TOP - M&W", graad: 1, leerjaar: 2, finaliteit: "B-stroom" },
-  { klas: "2 TOP - STEM", graad: 1, leerjaar: 2, finaliteit: "B-stroom" },
-
-  { klas: "3 AM HOUT", graad: 2, leerjaar: 3, finaliteit: "Arbeidsmarkt" },
-  { klas: "3 AM MECH", graad: 2, leerjaar: 3, finaliteit: "Arbeidsmarkt" },
-  { klas: "3 AM ZORG", graad: 2, leerjaar: 3, finaliteit: "Arbeidsmarkt" },
-  { klas: "3 DS BIOTECH", graad: 2, leerjaar: 3, finaliteit: "Doorstroom" },
-  { klas: "3 DS ECWE", graad: 2, leerjaar: 3, finaliteit: "Doorstroom" },
-  { klas: "3 DS HUWE", graad: 2, leerjaar: 3, finaliteit: "Doorstroom" },
-  { klas: "3 DS LAT", graad: 2, leerjaar: 3, finaliteit: "Doorstroom" },
-  { klas: "3 DS MAWE", graad: 2, leerjaar: 3, finaliteit: "Doorstroom" },
-  { klas: "3 DS MOTA", graad: 2, leerjaar: 3, finaliteit: "Doorstroom" },
-  { klas: "3 DS NAWE", graad: 2, leerjaar: 3, finaliteit: "Doorstroom" },
-  { klas: "3 DS TEWE", graad: 2, leerjaar: 3, finaliteit: "Doorstroom" },
-  { klas: "3 DF B&O", graad: 2, leerjaar: 3, finaliteit: "Dubbele finaliteit" },
-  { klas: "3 DF ELTE", graad: 2, leerjaar: 3, finaliteit: "Dubbele finaliteit" },
-  { klas: "3 DF M&W", graad: 2, leerjaar: 3, finaliteit: "Dubbele finaliteit" },
-
-  { klas: "4 AM HOUT", graad: 2, leerjaar: 4, finaliteit: "Arbeidsmarkt" },
-  { klas: "4 AM MECH", graad: 2, leerjaar: 4, finaliteit: "Arbeidsmarkt" },
-  { klas: "4 AM ZORG", graad: 2, leerjaar: 4, finaliteit: "Arbeidsmarkt" },
-  { klas: "4 DS BIOTECH", graad: 2, leerjaar: 4, finaliteit: "Doorstroom" },
-  { klas: "4 DS ECWE", graad: 2, leerjaar: 4, finaliteit: "Doorstroom" },
-  { klas: "4 DS HUWE", graad: 2, leerjaar: 4, finaliteit: "Doorstroom" },
-  { klas: "4 DS LAT", graad: 2, leerjaar: 4, finaliteit: "Doorstroom" },
-  { klas: "4 DS MAWE", graad: 2, leerjaar: 4, finaliteit: "Doorstroom" },
-  { klas: "4 DS MOTA", graad: 2, leerjaar: 4, finaliteit: "Doorstroom" },
-  { klas: "4 DS NAWE", graad: 2, leerjaar: 4, finaliteit: "Doorstroom" },
-  { klas: "4 DS TEWE", graad: 2, leerjaar: 4, finaliteit: "Doorstroom" },
-  { klas: "4 DF B&O", graad: 2, leerjaar: 4, finaliteit: "Dubbele finaliteit" },
-  { klas: "4 DF ELTE", graad: 2, leerjaar: 4, finaliteit: "Dubbele finaliteit" },
-  { klas: "4 DF M&W", graad: 2, leerjaar: 4, finaliteit: "Dubbele finaliteit" },
-
-  { klas: "5 AM BBS", graad: 3, leerjaar: 5, finaliteit: "Arbeidsmarkt" },
-  { klas: "5 AM MECH", graad: 3, leerjaar: 5, finaliteit: "Arbeidsmarkt" },
-  { klas: "5 AM BAZO", graad: 3, leerjaar: 5, finaliteit: "Arbeidsmarkt" },
-  { klas: "5 DS BIOTECH", graad: 3, leerjaar: 5, finaliteit: "Doorstroom" },
-  { klas: "5 DS ECMT", graad: 3, leerjaar: 5, finaliteit: "Doorstroom" },
-  { klas: "5 DS HUWE", graad: 3, leerjaar: 5, finaliteit: "Doorstroom" },
-  { klas: "5 DS LAMT", graad: 3, leerjaar: 5, finaliteit: "Doorstroom" },
-  { klas: "5 DS LAWI", graad: 3, leerjaar: 5, finaliteit: "Doorstroom" },
-  { klas: "5 DS MOTA", graad: 3, leerjaar: 5, finaliteit: "Doorstroom" },
-  { klas: "5 DS TEWE", graad: 3, leerjaar: 5, finaliteit: "Doorstroom" },
-  { klas: "5 DS WEWE", graad: 3, leerjaar: 5, finaliteit: "Doorstroom" },
-  { klas: "5 DS WEWI", graad: 3, leerjaar: 5, finaliteit: "Doorstroom" },
-  { klas: "5 DF COMO", graad: 3, leerjaar: 5, finaliteit: "Dubbele finaliteit" },
-  { klas: "5 DF ELTE", graad: 3, leerjaar: 5, finaliteit: "Dubbele finaliteit" },
-  { klas: "5 DF GEZO", graad: 3, leerjaar: 5, finaliteit: "Dubbele finaliteit" },
-  { klas: "5 DF O&B", graad: 3, leerjaar: 5, finaliteit: "Dubbele finaliteit" },
-
-  { klas: "6 AM BBS", graad: 3, leerjaar: 6, finaliteit: "Arbeidsmarkt" },
-  { klas: "6 AM MECH", graad: 3, leerjaar: 6, finaliteit: "Arbeidsmarkt" },
-  { klas: "6 AM BAZO", graad: 3, leerjaar: 6, finaliteit: "Arbeidsmarkt" },
-  { klas: "6 DS BIOTECH", graad: 3, leerjaar: 6, finaliteit: "Doorstroom" },
-  { klas: "6 DS ECMT", graad: 3, leerjaar: 6, finaliteit: "Doorstroom" },
-  { klas: "6 DS ECWI", graad: 3, leerjaar: 6, finaliteit: "Doorstroom" },
-  { klas: "6 DS HUWE", graad: 3, leerjaar: 6, finaliteit: "Doorstroom" },
-  { klas: "6 DS LAMT", graad: 3, leerjaar: 6, finaliteit: "Doorstroom" },
-  { klas: "6 DS LAWI", graad: 3, leerjaar: 6, finaliteit: "Doorstroom" },
-  { klas: "6 DS MOTA", graad: 3, leerjaar: 6, finaliteit: "Doorstroom" },
-  { klas: "6 DS TEWE", graad: 3, leerjaar: 6, finaliteit: "Doorstroom" },
-  { klas: "6 DS WEWE", graad: 3, leerjaar: 6, finaliteit: "Doorstroom" },
-  { klas: "6 DS WEWI", graad: 3, leerjaar: 6, finaliteit: "Doorstroom" },
-  { klas: "6 DF COMO", graad: 3, leerjaar: 6, finaliteit: "Dubbele finaliteit" },
-  { klas: "6 DF ELTE", graad: 3, leerjaar: 6, finaliteit: "Dubbele finaliteit" },
-  { klas: "6 DF GEZO", graad: 3, leerjaar: 6, finaliteit: "Dubbele finaliteit" },
-  { klas: "6 DF O&B", graad: 3, leerjaar: 6, finaliteit: "Dubbele finaliteit" },
-];
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(true);
 
-  // Auth
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // ✅ Voornaam/naam/rol
   const [voornaam, setVoornaam] = useState("");
   const [naam, setNaam] = useState("");
   const [role, setRole] = useState<Role>("student");
 
-  // Profiel
-  const [geslacht, setGeslacht] = useState<Geslacht>("jongen");
+  const [geslacht, setGeslacht] = useState<Geslacht>("M");
   const [geboortedatum, setGeboortedatum] = useState<string>("");
 
-  // Auto ingevuld via klas
   const [graad, setGraad] = useState<number>(1);
   const [leerjaar, setLeerjaar] = useState<number>(1);
   const [finaliteit, setFinaliteit] = useState<Finaliteit>("A-stroom");
 
-  // Dropdown klas
   const [klasNaam, setKlasNaam] = useState<string>("");
 
   const [submitting, setSubmitting] = useState(false);
@@ -134,13 +32,6 @@ export default function RegisterPage() {
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  const klasIndex = useMemo(() => {
-    const map = new Map<string, KlasMeta>();
-    for (const k of KLASSEN) map.set(k.klas, k);
-    return map;
-  }, []);
-
-  // ✅ bij openen: check session (en vang refresh token fout af)
   useEffect(() => {
     const run = async () => {
       setLoading(true);
@@ -175,7 +66,7 @@ export default function RegisterPage() {
   const onKlasChange = (newKlas: string) => {
     setKlasNaam(newKlas);
 
-    const meta = klasIndex.get(newKlas);
+    const meta = getKlasMeta(newKlas);
     if (meta) {
       setGraad(meta.graad);
       setLeerjaar(meta.leerjaar);
@@ -195,15 +86,13 @@ export default function RegisterPage() {
     if (!voornaam.trim() || !naam.trim()) return setError("Vul je voornaam en naam in.");
     if (!geboortedatum) return setError("Vul je geboortedatum in.");
 
-    // ✅ klas verplicht voor leerling
     if (role === "student") {
       if (!klasNaam) return setError("Kies je klas.");
-      if (!klasIndex.get(klasNaam)) return setError("Onbekende klas geselecteerd.");
+      if (!getKlasMeta(klasNaam)) return setError("Onbekende klas geselecteerd.");
     }
 
     setSubmitting(true);
 
-    // 1) Account maken
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
       password,
@@ -228,10 +117,8 @@ export default function RegisterPage() {
       return;
     }
 
-    // 2) Profiel upsert
-    const meta = klasNaam ? klasIndex.get(klasNaam) : undefined;
+    const meta = klasNaam ? getKlasMeta(klasNaam) : undefined;
     const volledigeNaam = `${voornaam.trim()} ${naam.trim()}`.trim();
-
     const rolNL = role === "teacher" ? "leerkracht" : "leerling";
 
     const payload: any = {
@@ -239,12 +126,8 @@ export default function RegisterPage() {
       volledige_naam: volledigeNaam,
       geslacht,
       geboortedatum,
-
-      // Engelse kolom voor je app-logica
-      role, // "student" | "teacher"
-
-      // Nederlandse kolom met CHECK constraint
-      rol: rolNL, // "leerling" | "leerkracht"
+      role,
+      rol: rolNL,
     };
 
     if (role === "student" && meta) {
@@ -268,7 +151,6 @@ export default function RegisterPage() {
       return;
     }
 
-    // 3) Naar dashboard
     window.location.replace("/dashboard");
   };
 
@@ -311,7 +193,6 @@ export default function RegisterPage() {
           )}
 
           <form onSubmit={handleRegister} className="mt-5 space-y-4">
-            {/* Auth */}
             <div>
               <label className="mb-1 block text-xs font-medium text-white/60">E-mail</label>
               <input
@@ -341,7 +222,6 @@ export default function RegisterPage() {
 
             <div className="my-2 h-px bg-white/10" />
 
-            {/* Naam */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium text-white/60">Voornaam</label>
@@ -364,7 +244,6 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* Rol */}
             <div>
               <label className="mb-1 block text-xs font-medium text-white/60">Rol</label>
               <select
@@ -391,7 +270,6 @@ export default function RegisterPage() {
               </p>
             </div>
 
-            {/* Geslacht + geboortedatum */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium text-white/60">Geslacht</label>
@@ -401,8 +279,8 @@ export default function RegisterPage() {
                   className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white
                              focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                 >
-                  <option value="jongen">Jongen</option>
-                  <option value="meisje">Meisje</option>
+                  <option value="M">M</option>
+                  <option value="V">V</option>
                 </select>
               </div>
 
@@ -419,7 +297,6 @@ export default function RegisterPage() {
               </div>
             </div>
 
-            {/* Klas */}
             <div>
               <label className="mb-1 block text-xs font-medium text-white/60">Klas</label>
               <select
@@ -463,7 +340,6 @@ export default function RegisterPage() {
               </select>
             </div>
 
-            {/* Auto velden */}
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="mb-1 block text-xs font-medium text-white/60">Graad</label>

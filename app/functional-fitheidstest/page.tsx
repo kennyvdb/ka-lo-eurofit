@@ -1,6 +1,7 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
+import BaseHero from "@/components/heroes/BaseHero";
 import { supabase } from "@/lib/supabaseClient";
 import Link from "next/link";
 import Image from "next/image";
@@ -8,6 +9,12 @@ import React, { useEffect, useMemo, useState } from "react";
 
 // ✅ nieuw: huiswerk tab component
 import HomeworkTab from "./HomeworkTab";
+
+const brand = {
+  blue: "#255971",
+  teal: "#4B8E8D",
+  mint: "#89C2AA",
+};
 
 type Profiel = {
   id: string;
@@ -30,8 +37,8 @@ const ui = {
   warnBorder: "rgba(255,193,102,0.28)",
   errorBg: "rgba(255,85,112,0.15)",
   errorBorder: "rgba(255,85,112,0.28)",
-  okBg: "rgba(104,180,255,0.10)",
-  okBorder: "rgba(104,180,255,0.24)",
+  okBg: "rgba(37,89,113,0.14)",
+  okBorder: "rgba(137,194,170,0.28)",
 };
 
 function toYMD(d = new Date()) {
@@ -70,16 +77,11 @@ type TestDef = {
   min?: number;
   max?: number;
   icon: string;
-  // eenvoudige “punten”-mapping (placeholder) – pas aan volgens je Excel-normen
   points: (v: number) => number; // 0..10
   hint?: string;
-  image?: string; // optioneel: pad naar afbeelding in /public
+  image?: string;
 };
 
-/**
- * ✅ TESTS = exacte volgorde/benaming zoals Excel
- * Puntensysteem blijft placeholder (geen normtabellen in dit bestand).
- */
 const TESTS: TestDef[] = [
   {
     key: "vma_kmu",
@@ -91,7 +93,7 @@ const TESTS: TestDef[] = [
     min: 0,
     max: 30,
     icon: "🏃‍♂️",
-    points: (v) => clamp10(Math.floor((v - 8) / 1.2)), // placeholder
+    points: (v) => clamp10(Math.floor((v - 8) / 1.2)),
     image: "/functional/vma.png",
   },
   {
@@ -104,7 +106,7 @@ const TESTS: TestDef[] = [
     min: 0,
     max: 200,
     icon: "🧱",
-    points: (v) => clamp10(Math.floor(v / 6)), // placeholder
+    points: (v) => clamp10(Math.floor(v / 6)),
     image: "/functional/situp-abmat.png",
   },
   {
@@ -117,7 +119,7 @@ const TESTS: TestDef[] = [
     min: 0,
     max: 300,
     icon: "🎯",
-    points: (v) => clamp10(Math.floor(v / 8)), // placeholder
+    points: (v) => clamp10(Math.floor(v / 8)),
     image: "/functional/wallball.png",
   },
   {
@@ -130,7 +132,7 @@ const TESTS: TestDef[] = [
     min: 0,
     max: 200,
     icon: "💪",
-    points: (v) => clamp10(Math.floor(v / 5)), // placeholder
+    points: (v) => clamp10(Math.floor(v / 5)),
     image: "/functional/pushups.png",
   },
   {
@@ -143,7 +145,7 @@ const TESTS: TestDef[] = [
     min: 0,
     max: 200,
     icon: "🔥",
-    points: (v) => clamp10(Math.floor(v / 4)), // placeholder
+    points: (v) => clamp10(Math.floor(v / 4)),
     image: "/functional/burpees.png",
   },
   {
@@ -156,7 +158,7 @@ const TESTS: TestDef[] = [
     min: 0,
     max: 900,
     icon: "🧊",
-    points: (v) => clamp10(Math.floor(v / 25)), // placeholder
+    points: (v) => clamp10(Math.floor(v / 25)),
     image: "/functional/wallsit.png",
   },
   {
@@ -169,7 +171,7 @@ const TESTS: TestDef[] = [
     min: 0,
     max: 200,
     icon: "🪝",
-    points: (v) => clamp10(Math.floor(v / 4)), // placeholder
+    points: (v) => clamp10(Math.floor(v / 4)),
     image: "/functional/inverted-row.png",
   },
   {
@@ -182,7 +184,7 @@ const TESTS: TestDef[] = [
     min: 0,
     max: 900,
     icon: "🧘‍♂️",
-    points: (v) => clamp10(Math.floor(v / 30)), // placeholder
+    points: (v) => clamp10(Math.floor(v / 30)),
     hint: "Tip: rechte lijn schouders–heupen–hielen.",
     image: "/functional/plank.png",
   },
@@ -196,7 +198,7 @@ const TESTS: TestDef[] = [
     min: 0,
     max: 250,
     icon: "🦘",
-    points: (v) => clamp10(Math.floor(v / 6)), // placeholder
+    points: (v) => clamp10(Math.floor(v / 6)),
     image: "/functional/box-jumps.png",
   },
   {
@@ -209,7 +211,7 @@ const TESTS: TestDef[] = [
     min: 0,
     max: 200,
     icon: "🏋️",
-    points: (v) => clamp10(Math.floor(v / 5)), // placeholder
+    points: (v) => clamp10(Math.floor(v / 5)),
     image: "/functional/dips.png",
   },
   {
@@ -222,7 +224,7 @@ const TESTS: TestDef[] = [
     min: 0,
     max: 400,
     icon: "🦵",
-    points: (v) => clamp10(Math.floor(v / 10)), // placeholder
+    points: (v) => clamp10(Math.floor(v / 10)),
     image: "/functional/airsquats.png",
   },
   {
@@ -235,7 +237,7 @@ const TESTS: TestDef[] = [
     min: 0,
     max: 900,
     icon: "🤸",
-    points: (v) => clamp10(Math.floor(v / 15)), // placeholder
+    points: (v) => clamp10(Math.floor(v / 15)),
     image: "/functional/handstand.png",
   },
 ];
@@ -254,7 +256,7 @@ type SavedRow = {
   id: string;
   user_id: string;
   schooljaar: string | null;
-  date: string; // ymd
+  date: string;
   scores: Record<string, number>;
   points: Record<string, number>;
   total_points: number;
@@ -270,7 +272,6 @@ export default function FunctionalFitheidstestPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  // ✅ nieuw: huiswerk tab
   const [activeTab, setActiveTab] = useState<"invullen" | "resultaten" | "info" | "huiswerk">("invullen");
 
   const [date, setDate] = useState(toYMD());
@@ -299,7 +300,6 @@ export default function FunctionalFitheidstestPage() {
     const totalPoints = Object.values(pts).reduce((a, b) => a + b, 0);
     const maxPoints = TESTS.length * 10;
 
-    // “Beast rating”
     const pct = maxPoints ? (totalPoints / maxPoints) * 100 : 0;
     const tier =
       pct >= 85
@@ -332,6 +332,8 @@ export default function FunctionalFitheidstestPage() {
   };
 
   useEffect(() => {
+    injectFunctionalResponsiveCSS();
+
     const run = async () => {
       setLoading(true);
       setError(null);
@@ -473,12 +475,63 @@ export default function FunctionalFitheidstestPage() {
     );
   }
 
-    return (
+  return (
     <AppShell title="LO App" subtitle="Functional fitheidstest" userName={profiel?.volledige_naam}>
-      {/* HERO */}
-      <HeroFunctional greetingName={greetingName} klasNaam={profiel?.klas_naam} />
+      <BaseHero
+        label="Functional"
+        title={
+          <>
+            Fitheidstest
+            <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
+              Beast
+            </span>
+            {greetingName}
+            <img
+              src="/hero/beast.png"
+              alt="Beast icoon"
+              className="h-14 w-14 object-contain sm:h-16 sm:w-16"
+            />
+          </>
+        }
+        description={
+          <>
+            Vul je scores in en bewaak je progressie.
+            <span className="opacity-85"> • {teacherMode ? "Leerkrachtmodus" : "Leerlingmodus"}</span>
+            {profiel?.klas_naam ? <span className="opacity-85"> • {profiel.klas_naam}</span> : null}
+          </>
+        }
+        imageSrc="/functional/functionalfitness.png"
+        imageAlt="LO illustratie"
+        quoteTitle="Focus"
+        quote="Meet. Train. Repeat."
+        quoteAuthor="Beast protocol"
+        imageClassName="scale-105 md:scale-110 transition-transform duration-500"
+        actions={
+          <>
+            <Link
+              href="/challenges"
+              className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
+            >
+              Challenges
+            </Link>
 
-      {/* header row */}
+            <Link
+              href="/eurofittest"
+              className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
+            >
+              Eurofit
+            </Link>
+
+            <Link
+              href="/dashboard"
+              className="inline-flex h-11 items-center rounded-2xl border border-slate-300/25 bg-[linear-gradient(180deg,rgba(12,18,24,0.72),rgba(0,0,0,0.58))] px-4 font-black text-[rgba(234,240,255,0.92)] shadow-[0_12px_30px_rgba(0,0,0,0.28)] transition duration-200 hover:-translate-y-0.5 hover:border-teal-200/25 hover:shadow-[0_16px_34px_rgba(0,0,0,0.32),0_0_0_1px_rgba(75,142,141,0.10)]"
+            >
+              Dashboard →
+            </Link>
+          </>
+        }
+      />
+
       <div style={{ ...styles.headerRow, marginTop: 14 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ marginTop: 0, fontSize: 13, color: ui.muted }}>
@@ -493,7 +546,6 @@ export default function FunctionalFitheidstestPage() {
         </Link>
       </div>
 
-      {/* alerts */}
       {error && (
         <div style={styles.errorBox}>
           <b>Oeps:</b> {error}
@@ -505,7 +557,6 @@ export default function FunctionalFitheidstestPage() {
         </div>
       )}
 
-      {/* Tabs */}
       <div style={styles.tabs}>
         <TabBtn active={activeTab === "invullen"} onClick={() => setActiveTab("invullen")}>
           Invullen
@@ -516,13 +567,11 @@ export default function FunctionalFitheidstestPage() {
         <TabBtn active={activeTab === "info"} onClick={() => setActiveTab("info")}>
           Uitleg
         </TabBtn>
-        {/* ✅ nieuw */}
         <TabBtn active={activeTab === "huiswerk"} onClick={() => setActiveTab("huiswerk")}>
           Huiswerk
         </TabBtn>
       </div>
 
-      {/* Meta row (alleen relevant op invullen/resultaten) */}
       {activeTab !== "huiswerk" ? (
         <div className="meta-grid-2" style={styles.metaRow}>
           <div style={styles.metaCard}>
@@ -550,10 +599,8 @@ export default function FunctionalFitheidstestPage() {
         </div>
       ) : null}
 
-      {/* Content */}
       {activeTab === "invullen" ? (
         <>
-          {/* Quick actions */}
           <div style={styles.actionRow}>
             <button
               onClick={handleLoadLatest}
@@ -590,31 +637,16 @@ export default function FunctionalFitheidstestPage() {
             </div>
           )}
 
-          {/* Tests grid */}
           <section style={{ marginTop: 14 }}>
             <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 950, color: ui.text }}>Onderdelen</div>
 
-            <div className="grid">
+            <div className="functional-grid" style={styles.gridWrap}>
               {TESTS.map((t) => (
                 <TestCard key={t.key} def={t} value={scores[t.key]} points={computed.pts[t.key]} onChange={(raw) => setOne(t.key, raw)} />
               ))}
             </div>
-
-            <style jsx>{`
-              .grid {
-                display: grid;
-                grid-template-columns: repeat(1, minmax(0, 1fr));
-                gap: 14px;
-              }
-              @media (min-width: 900px) {
-                .grid {
-                  grid-template-columns: repeat(2, minmax(0, 1fr));
-                }
-              }
-            `}</style>
           </section>
 
-          {/* Summary */}
           <SummaryCard
             total={computed.totalPoints}
             max={computed.maxPoints}
@@ -730,192 +762,6 @@ export default function FunctionalFitheidstestPage() {
 }
 
 /* ---------------------------
-   Hero
---------------------------- */
-function HeroFunctional({ greetingName, klasNaam }: { greetingName: string; klasNaam?: string | null }) {
-  return (
-    <section className="hero" style={hero.wrap}>
-      <div style={hero.bgGlow1} />
-      <div style={hero.bgGlow2} />
-
-      <div className="heroInner" style={hero.inner}>
-        <div style={hero.content}>
-          <div style={hero.kicker}>FUNCTIONAL</div>
-
-          <h1
-            style={{
-              ...hero.title,
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            Fitheidstest <span style={hero.accent}>Beast</span> {greetingName}
-            <Image src="/hero/beast.png" alt="Beast icoon" width={60} height={60} priority style={{ display: "block", objectFit: "contain" }} />
-          </h1>
-
-          <div style={hero.sub}>
-            Vul je scores in en bewaak je progressie.
-            {klasNaam ? <span style={{ opacity: 0.85 }}> • {klasNaam}</span> : null}
-          </div>
-
-          <div style={hero.actions}>
-            <Link href="/challenges" style={hero.secondary}>
-              Challenges
-            </Link>
-            <Link href="/eurofittest" style={hero.secondary}>
-              Eurofit
-            </Link>
-            <Link href="/dashboard" style={hero.primary}>
-              Dashboard →
-            </Link>
-          </div>
-
-          <div style={hero.quoteCard}>
-            <div style={hero.quoteLabel}>Focus</div>
-            <div style={hero.quoteText}>“Meet. Train. Repeat.”</div>
-            <div style={hero.quoteAuthor}>— Beast protocol</div>
-          </div>
-        </div>
-
-        <div className="heroArt" style={hero.artCol}>
-          <div style={hero.illuBox}>
-            <Image
-              src="/hero/sports-transparent.png"
-              alt="LO illustratie"
-              fill
-              priority
-              sizes="(max-width: 700px) 100vw, 40vw"
-              style={{
-                objectFit: "contain",
-                objectPosition: "center",
-                padding: 14,
-                opacity: 0.96,
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      <style jsx>{`
-        .heroInner {
-          display: grid;
-          grid-template-columns: 1.1fr 0.9fr;
-          gap: 14px;
-          align-items: start;
-          position: relative;
-          z-index: 1;
-        }
-        @media (max-width: 700px) {
-          .heroInner {
-            grid-template-columns: 1fr;
-          }
-          .heroArt {
-            margin-top: 8px;
-          }
-        }
-        @media (max-width: 420px) {
-          .hero :global(h1) {
-            font-size: 26px !important;
-          }
-        }
-      `}</style>
-    </section>
-  );
-}
-
-const hero: Record<string, React.CSSProperties> = {
-  wrap: {
-    position: "relative",
-    overflow: "hidden",
-    padding: 16,
-    borderRadius: 26,
-    border: `1px solid ${ui.border}`,
-    background:
-      "radial-gradient(900px 520px at 0% 0%, rgba(104,180,255,0.22) 0%, rgba(0,0,0,0) 60%), radial-gradient(900px 520px at 100% 0%, rgba(255,104,180,0.18) 0%, rgba(0,0,0,0) 60%), rgba(255,255,255,0.06)",
-  },
-  inner: { position: "relative" },
-  bgGlow1: {
-    position: "absolute",
-    width: 260,
-    height: 260,
-    borderRadius: 999,
-    left: -120,
-    top: -140,
-    background: "rgba(104,180,255,0.22)",
-    filter: "blur(24px)",
-  },
-  bgGlow2: {
-    position: "absolute",
-    width: 320,
-    height: 320,
-    borderRadius: 999,
-    right: -160,
-    top: -170,
-    background: "rgba(255,104,180,0.18)",
-    filter: "blur(26px)",
-  },
-  content: { position: "relative", maxWidth: 620, zIndex: 1 },
-  kicker: { fontSize: 12, fontWeight: 950, letterSpacing: 1.2, color: ui.muted },
-  title: { margin: "8px 0 0 0", fontSize: 30, lineHeight: 1.05, fontWeight: 980, color: ui.text },
-  accent: {
-    background: "linear-gradient(90deg, rgba(104,180,255,1), rgba(255,104,180,1))",
-    WebkitBackgroundClip: "text",
-    WebkitTextFillColor: "transparent",
-  },
-  sub: { marginTop: 10, fontSize: 13.5, color: ui.muted, maxWidth: 520 },
-  actions: { marginTop: 14, display: "flex", gap: 10, flexWrap: "wrap" },
-  primary: {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 46,
-    padding: "0 14px",
-    borderRadius: 16,
-    textDecoration: "none",
-    color: ui.text,
-    fontWeight: 950,
-    border: `1px solid ${ui.border2}`,
-    background: "rgba(0,0,0,0.55)",
-    boxShadow: "0 12px 30px rgba(0,0,0,0.28)",
-  },
-  secondary: {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 46,
-    padding: "0 14px",
-    borderRadius: 16,
-    textDecoration: "none",
-    color: ui.text,
-    fontWeight: 950,
-    border: `1px solid ${ui.border}`,
-    background: "rgba(0,0,0,0.35)",
-  },
-  quoteCard: {
-    marginTop: 14,
-    borderRadius: 20,
-    padding: 14,
-    border: `1px solid ${ui.border}`,
-    background: "rgba(0,0,0,0.35)",
-    backdropFilter: "blur(8px)",
-    maxWidth: 520,
-  },
-  quoteLabel: { fontSize: 12, fontWeight: 950, color: ui.muted },
-  quoteText: { marginTop: 8, fontSize: 16, fontWeight: 950, color: ui.text, lineHeight: 1.25 },
-  quoteAuthor: { marginTop: 8, fontSize: 12.5, color: ui.muted },
-  artCol: { position: "relative", zIndex: 1 },
-  illuBox: {
-    position: "relative",
-    width: "100%",
-    height: 250,
-    borderRadius: 22,
-    overflow: "hidden",
-    border: `1px solid ${ui.border}`,
-    background: "rgba(0,0,0,0.18)",
-  },
-};
-
-/* ---------------------------
    Components
 --------------------------- */
 function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
@@ -924,7 +770,9 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
       onClick={onClick}
       style={{
         ...styles.tabBtn,
-        background: active ? "rgba(0,0,0,0.55)" : "rgba(0,0,0,0.25)",
+        background: active
+          ? "linear-gradient(90deg, rgba(37,89,113,0.35), rgba(75,142,141,0.22)), rgba(0,0,0,0.55)"
+          : "rgba(0,0,0,0.25)",
         borderColor: active ? ui.border2 : ui.border,
       }}
     >
@@ -1116,7 +964,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "0 18px",
     borderRadius: 16,
     border: `1px solid ${ui.border2}`,
-    background: "linear-gradient(90deg, rgba(104,180,255,0.28), rgba(255,104,180,0.22)), rgba(0,0,0,0.70)",
+    background: "linear-gradient(90deg, rgba(37,89,113,0.45), rgba(75,142,141,0.35)), rgba(0,0,0,0.70)",
     color: ui.text,
     fontWeight: 980,
     cursor: "pointer",
@@ -1228,6 +1076,11 @@ const styles: Record<string, React.CSSProperties> = {
     background: ui.panel,
     border: `1px solid ${ui.border}`,
   },
+  gridWrap: {
+    display: "grid",
+    gridTemplateColumns: "repeat(1, minmax(0, 1fr))",
+    gap: 14,
+  },
 
   testCard: {
     padding: 14,
@@ -1276,7 +1129,7 @@ const styles: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     border: `1px solid ${ui.border}`,
     background:
-      "radial-gradient(700px 220px at 10% 20%, rgba(104,180,255,0.12), rgba(0,0,0,0) 60%), radial-gradient(700px 220px at 90% 80%, rgba(255,104,180,0.10), rgba(0,0,0,0) 60%), rgba(0,0,0,0.22)",
+      "radial-gradient(700px 220px at 10% 20%, rgba(37,89,113,0.18), rgba(0,0,0,0) 60%), radial-gradient(700px 220px at 90% 80%, rgba(137,194,170,0.16), rgba(0,0,0,0) 60%), rgba(0,0,0,0.22)",
   },
   imgPad: {
     position: "absolute",
@@ -1329,7 +1182,7 @@ const styles: Record<string, React.CSSProperties> = {
   barFill: {
     height: "100%",
     borderRadius: 999,
-    background: "linear-gradient(90deg, rgba(104,180,255,1), rgba(255,104,180,1))",
+    background: "linear-gradient(90deg, #255971, #4B8E8D, #89C2AA)",
   },
   miniBarWrap: {
     height: 10,
@@ -1341,7 +1194,7 @@ const styles: Record<string, React.CSSProperties> = {
   miniBarFill: {
     height: "100%",
     borderRadius: 999,
-    background: "linear-gradient(90deg, rgba(104,180,255,1), rgba(255,104,180,1))",
+    background: "linear-gradient(90deg, #255971, #4B8E8D, #89C2AA)",
   },
   kvRow: {
     display: "flex",
@@ -1354,13 +1207,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
 };
 
-/**
- * ✅ Desktop: metaRow 2 kolommen
- */
-(function injectMetaMedia() {
+function injectFunctionalResponsiveCSS() {
   if (typeof window === "undefined") return;
-  const id = "functional-fit-meta-media";
+
+  const id = "functional-fit-responsive-css";
   if (document.getElementById(id)) return;
+
   const style = document.createElement("style");
   style.id = id;
   style.innerHTML = `
@@ -1368,7 +1220,10 @@ const styles: Record<string, React.CSSProperties> = {
       .meta-grid-2 {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       }
+      .functional-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      }
     }
   `;
   document.head.appendChild(style);
-})();
+}

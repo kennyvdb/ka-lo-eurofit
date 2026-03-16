@@ -24,7 +24,7 @@ const ui = {
   errorBorder: "rgba(255,85,112,0.28)",
 };
 
-export default function WorkoutsPage() {
+export default function ReservatiesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,10 +34,18 @@ export default function WorkoutsPage() {
 
   const tiles = useMemo(
     () => [
-      { href: "/workouts/abs", icon: "🧱", title: "Ab Workouts", desc: "Core & buikspieren" },
-      { href: "/workouts/home", icon: "🏠", title: "Bodyweight / DB @ Home", desc: "Thuis trainen" },
-      { href: "/workouts/fitness", icon: "🏋️", title: "Fitness Workout", desc: "Gym sessies" },
-      { href: "/workouts/running", icon: "🏃‍♂️", title: "Running Workouts", desc: "Intervals & endurance" },
+      {
+        href: "/reservaties/fitness",
+        icon: "🏋️",
+        title: "Fitness",
+        desc: "Reserveer een fitnessmoment",
+      },
+      {
+        href: "/reservaties/pingpongtafels",
+        icon: "🏓",
+        title: "Pingpongtafels",
+        desc: "Reserveer een pingpongtafel",
+      },
     ],
     []
   );
@@ -93,7 +101,7 @@ export default function WorkoutsPage() {
   if (loading) {
     return (
       <main className="grid min-h-dvh place-items-center px-6">
-        <div style={{ color: ui.text }}>Workouts laden…</div>
+        <div style={{ color: ui.text }}>Reservaties laden…</div>
       </main>
     );
   }
@@ -110,7 +118,7 @@ export default function WorkoutsPage() {
       subtitle="GO! Atheneum Avelgem"
       userName={profiel?.volledige_naam ?? null}
     >
-      <WorkoutsHero
+      <ReservatiesHero
         greetingName={greetingName}
         shownRoleLabel={shownRoleLabel}
         klasNaam={profiel?.klas_naam}
@@ -147,7 +155,7 @@ export default function WorkoutsPage() {
 
       <section style={{ marginTop: 18 }}>
         <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 950, color: ui.text }}>
-          Workouts
+          Reservaties
         </div>
 
         <div className="hub-grid">
@@ -157,19 +165,19 @@ export default function WorkoutsPage() {
         </div>
 
         <div style={{ marginTop: 12, color: "rgba(234,240,255,0.55)", fontSize: 13 }}>
-          Tip: tik op een tegel om meteen te starten.
+          Tip: tik op een tegel om een reservatie te starten.
         </div>
 
         <style jsx>{`
           .hub-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(1, minmax(0, 1fr));
             gap: 14px;
           }
 
-          @media (min-width: 900px) {
+          @media (min-width: 760px) {
             .hub-grid {
-              grid-template-columns: repeat(4, minmax(0, 1fr));
+              grid-template-columns: repeat(2, minmax(0, 1fr));
             }
           }
         `}</style>
@@ -178,7 +186,7 @@ export default function WorkoutsPage() {
   );
 }
 
-function WorkoutsHero({
+function ReservatiesHero({
   greetingName,
   shownRoleLabel,
   klasNaam,
@@ -189,33 +197,29 @@ function WorkoutsHero({
 }) {
   return (
     <BaseHero
-      label="WORKOUTS HUB"
+      label="RESERVATIES"
       title={
         <>
-          Let’s go,
+          Reserveer je moment,
           <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
+            {" "}
             {greetingName}
           </span>
-          💪
-          <img
-            src="/hero/beast.png"
-            alt="Beast icoon"
-            className="h-14 w-14 object-contain sm:h-16 sm:w-16"
-          />
+          🎯
         </>
       }
       description={
         <>
           {shownRoleLabel}
           {klasNaam ? <span className="opacity-85"> • {klasNaam}</span> : null}
-          <span className="opacity-85"> •</span> Kies een categorie en start meteen.
+          <span className="opacity-85"> •</span> Kies wat je wil reserveren en plan je activiteit.
         </>
       }
-      imageSrc="/workouts/workouts.png"
-      imageAlt="LO illustratie"
-      quoteTitle="Workout reminder"
-      quote="Consistency is a superpower."
-      quoteAuthor="Beast HQ"
+      imageSrc="/reservaties/reservaties.png"
+      imageAlt="Reservaties illustratie"
+      quoteTitle="Reservatie reminder"
+      quote="Plan slim, sport met plezier."
+      quoteAuthor="LO Team"
       imageClassName="scale-110 md:scale-[1.14] transition-transform duration-500"
       actions={
         <>
@@ -227,10 +231,10 @@ function WorkoutsHero({
           </Link>
 
           <Link
-            href="/challenges"
+            href="/reservaties/fitness"
             className="inline-flex h-11 items-center rounded-2xl border border-slate-300/25 bg-[linear-gradient(180deg,rgba(12,18,24,0.72),rgba(0,0,0,0.58))] px-4 font-black text-[rgba(234,240,255,0.92)] shadow-[0_12px_30px_rgba(0,0,0,0.28)] transition duration-200 hover:-translate-y-0.5 hover:border-teal-200/25 hover:shadow-[0_16px_34px_rgba(0,0,0,0.32),0_0_0_1px_rgba(75,142,141,0.10)]"
           >
-            Challenges →
+            Start reservatie →
           </Link>
         </>
       }

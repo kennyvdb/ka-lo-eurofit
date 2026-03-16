@@ -1,44 +1,85 @@
+"use client";
+
 import AppShell from "@/components/AppShell";
 import Image from "next/image";
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 import GradeBoard from "./GradeBoard";
 import ResponsiveThreeCol from "./ResponsiveThreeCol";
 import { ui } from "./theme";
 import { getSuggestedSchooljaar, mkDiscipline, withTriatlonInMiddle } from "./utils";
 import type { Discipline } from "./types";
 
+type Profiel = {
+  id: string;
+  volledige_naam: string | null;
+};
+
 export default function HallOfFamePage() {
+  const [profiel, setProfiel] = useState<Profiel | null>(null);
   const schooljaar = getSuggestedSchooljaar();
+
+  useEffect(() => {
+    const loadProfiel = async () => {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error("Fout bij ophalen sessie:", error.message);
+        return;
+      }
+
+      const userId = data.session?.user?.id;
+      if (!userId) return;
+
+      const { data: profielData, error: profielError } = await supabase
+        .from("profielen")
+        .select("id, volledige_naam")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (profielError) {
+        console.error("Fout bij ophalen profiel:", profielError.message);
+        return;
+      }
+
+      setProfiel(profielData as Profiel);
+    };
+
+    loadProfiel();
+  }, []);
 
   // Placeholder data — later vervangbaar door Supabase
   const graad1: Discipline[] = withTriatlonInMiddle([
     mkDiscipline("hoogspringen", "HOOGSPRINGEN"),
     mkDiscipline("verspringen", "VERSPRINGEN"),
     mkDiscipline("sprint", "SPRINT"),
-    mkDiscipline("mas-test", "MAS-TEST"), 
+    mkDiscipline("mas-test", "MAS-TEST"),
     mkDiscipline("triatlon", "TRIATLON", true),
   ]);
 
   const graad2: Discipline[] = withTriatlonInMiddle([
-     mkDiscipline("hoogspringen", "HOOGSPRINGEN"),
+    mkDiscipline("hoogspringen", "HOOGSPRINGEN"),
     mkDiscipline("verspringen", "VERSPRINGEN"),
     mkDiscipline("sprint", "SPRINT"),
-    mkDiscipline("mas-test", "MAS-TEST"), 
+    mkDiscipline("mas-test", "MAS-TEST"),
     mkDiscipline("triatlon", "TRIATLON", true),
   ]);
 
   const graad3: Discipline[] = withTriatlonInMiddle([
-     mkDiscipline("hoogspringen", "HOOGSPRINGEN"),
+    mkDiscipline("hoogspringen", "HOOGSPRINGEN"),
     mkDiscipline("verspringen", "VERSPRINGEN"),
     mkDiscipline("sprint", "SPRINT"),
-    mkDiscipline("mas-test", "MAS-TEST"), 
+    mkDiscipline("mas-test", "MAS-TEST"),
     mkDiscipline("triatlon", "TRIATLON", true),
   ]);
 
   return (
-    <AppShell title="LO App" subtitle="Hall of Fame" userName={null}>
+    <AppShell
+      title="LO App"
+      subtitle="Hall of Fame"
+      userName={profiel?.volledige_naam ?? null}
+    >
       <main style={{ marginTop: 12 }}>
-        {/* Header afbeelding */}
         <section style={{ width: "100%" }}>
           <div
             style={{
@@ -79,12 +120,26 @@ export default function HallOfFamePage() {
           </div>
         </section>
 
-        {/* 3 graden */}
         <section style={{ marginTop: 14 }}>
           <ResponsiveThreeCol>
-            <GradeBoard gradeTitle="1e GRAAD" theme="blue" schooljaar={schooljaar} disciplines={graad1} />
-            <GradeBoard gradeTitle="2e GRAAD" theme="green" schooljaar={schooljaar} disciplines={graad2} />
-            <GradeBoard gradeTitle="3e GRAAD" theme="greenDark" schooljaar={schooljaar} disciplines={graad3} />
+            <GradeBoard
+              gradeTitle="1e GRAAD"
+              theme="blue"
+              schooljaar={schooljaar}
+              disciplines={graad1}
+            />
+            <GradeBoard
+              gradeTitle="2e GRAAD"
+              theme="green"
+              schooljaar={schooljaar}
+              disciplines={graad2}
+            />
+            <GradeBoard
+              gradeTitle="3e GRAAD"
+              theme="greenDark"
+              schooljaar={schooljaar}
+              disciplines={graad3}
+            />
           </ResponsiveThreeCol>
         </section>
       </main>

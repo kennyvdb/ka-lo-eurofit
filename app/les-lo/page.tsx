@@ -1,96 +1,113 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
-import Link from "next/link";
-import React from "react";
-import { PageHero, SquareTile, ui } from "./_ui";
+import BaseHero from "@/components/heroes/BaseHero";
+import { DashboardTile } from "@/components/tiles/BaseTile";
+import React, { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+
+type Profiel = {
+  id: string;
+  volledige_naam: string | null;
+};
 
 export default function LesLOHubPage() {
-  // 👉 Later kan dit uit Supabase profiel komen
-  const userName: string | null = null;
+  const [profiel, setProfiel] = useState<Profiel | null>(null);
+
+  useEffect(() => {
+    const loadProfiel = async () => {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error("Fout bij ophalen sessie:", error.message);
+        return;
+      }
+
+      const userId = data.session?.user?.id;
+      if (!userId) return;
+
+      const { data: profielData, error: profielError } = await supabase
+        .from("profielen")
+        .select("id, volledige_naam")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (profielError) {
+        console.error("Fout bij ophalen profiel:", profielError.message);
+        return;
+      }
+
+      setProfiel(profielData as Profiel);
+    };
+
+    loadProfiel();
+  }, []);
 
   return (
-    <AppShell title="LO App" subtitle="GO! Atheneum Avelgem" userName={userName}>
-      <PageHero
-        kicker="LES LO"
+    <AppShell
+      title="LO App"
+      subtitle="GO! Atheneum Avelgem"
+      userName={profiel?.volledige_naam ?? null}
+    >
+      <BaseHero
+        label="LES LO"
         title={
           <>
-            Les LO hub <span style={{ opacity: 0.85 }}>🏃‍♂️</span>
+            Les LO hub <span className="opacity-85">🏃‍♂️</span>
           </>
         }
-        subtitle={
+        description={
           <>
-            Alles voor de les: <b style={{ color: ui.text }}>kijkwijzers</b>,{" "}
-            <b style={{ color: ui.text }}>rollen</b>, <b style={{ color: ui.text }}>jaarplanning</b>,{" "}
-            <b style={{ color: ui.text }}>evaluaties</b> en <b style={{ color: ui.text }}>afspraken</b>.
+            Alles voor de les: <strong className="text-white">kijkwijzers</strong>,{" "}
+            <strong className="text-white">rollen</strong>,{" "}
+            <strong className="text-white">jaarplanning</strong>,{" "}
+            <strong className="text-white">evaluaties</strong> en{" "}
+            <strong className="text-white">afspraken</strong>.
           </>
         }
-        right={
-          <>
-            <div style={{ fontWeight: 950, color: ui.text, fontSize: 13 }}>Snelkoppelingen</div>
-            <div style={{ marginTop: 10, display: "grid", gap: 10 }}>
-              <MiniLink href="/les-lo/kijkwijzers" label="Kijkwijzers →" />
-              <MiniLink href="/les-lo/rollen" label="Rollenkaarten →" />
-              <MiniLink href="/les-lo/jaarplanning" label="Jaarplanning →" />
-              <MiniLink href="/les-lo/evaluaties" label="Evaluaties →" />
-              <MiniLink href="/les-lo/afspraken" label="Afspraken LO →" />
-            </div>
-          </>
-        }
+        imageSrc="/lo/LO.png"
+        imageAlt="Les LO illustratie"
+        quoteTitle="Samen sterk in LO"
+        quote="Iedere rol telt mee in een goede les."
+        quoteAuthor="LO team"
       />
 
-      {/* HUB tiles */}
-      <section style={{ marginTop: 16 }}>
-        <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 950, color: ui.text }}>Les LO</div>
+      <section className="mt-4">
+        <div className="mb-3 text-[13px] font-black text-white/85">Les LO</div>
 
-        <div className="hub-grid">
-          <SquareTile href="/les-lo/kijkwijzers" icon="👀" title="Kijkwijzers" desc="Waarop letten tijdens de les" />
-          <SquareTile href="/les-lo/rollen" icon="🎭" title="Rollenkaarten" desc="Scheidsrechter, coach, timekeeper…" />
-          <SquareTile href="/les-lo/jaarplanning" icon="🗓️" title="Jaarplanning" desc="Kies je leerkracht & planning" />
-          <SquareTile href="/les-lo/evaluaties" icon="✅" title="Evaluaties" desc="Rubrics (SAM) & feedback" />
-
-          <SquareTile href="/les-lo/afspraken" icon="📌" title="Afspraken LO" desc="Regels, veiligheid & afspraken" />
-          <SquareTile href="/links" icon="🔗" title="Links" desc="Handige bronnen" />
-          <SquareTile href="/dashboard" icon="🏠" title="Dashboard" desc="Terug naar start" />
-          <SquareTile href="/ideeenbus" icon="💡" title="Ideeënbus" desc="Geef ideeën / feedback" />
+        <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
+          <DashboardTile
+            href="/les-lo/kijkwijzers"
+            icon="👀"
+            title="Kijkwijzers"
+            desc="Waarop letten tijdens de les"
+          />
+          <DashboardTile
+            href="/les-lo/rollen"
+            icon="🎭"
+            title="Rollenkaarten"
+            desc="Scheidsrechter, coach, timekeeper…"
+          />
+          <DashboardTile
+            href="/les-lo/jaarplanning"
+            icon="🗓️"
+            title="Jaarplanning"
+            desc="Kies je leerkracht & planning"
+          />
+          <DashboardTile
+            href="/les-lo/evaluaties"
+            icon="✅"
+            title="Evaluaties"
+            desc="Rubrics (SAM) & feedback"
+          />
+          <DashboardTile
+            href="/les-lo/afspraken"
+            icon="📌"
+            title="Afspraken LO"
+            desc="Regels, veiligheid & afspraken"
+          />
         </div>
-
-        <style jsx>{`
-          .hub-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 14px;
-          }
-          @media (min-width: 900px) {
-            .hub-grid {
-              grid-template-columns: repeat(4, minmax(0, 1fr));
-            }
-          }
-        `}</style>
       </section>
     </AppShell>
   );
 }
-
-function MiniLink({ href, label }: { href: string; label: string }) {
-  return (
-    <Link href={href} style={miniLink}>
-      <span>{label}</span>
-      <span style={{ opacity: 0.9 }}>↗</span>
-    </Link>
-  );
-}
-
-const miniLink: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "10px 12px",
-  borderRadius: 14,
-  border: `1px solid ${ui.border}`,
-  background: "rgba(0,0,0,0.35)",
-  color: ui.text,
-  textDecoration: "none",
-  fontWeight: 900,
-  fontSize: 13,
-};
