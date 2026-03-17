@@ -198,8 +198,22 @@ function DashboardTile({ href, icon, title, desc }: DashboardTileProps) {
 
       <div className="relative z-10">
         <div className="text-xs leading-5 text-white/70">{desc}</div>
-        <div className="mt-2.5 text-xs font-black text-white/90">Openen →</div>
+        <div className="tile-action mt-2.5 text-xs font-black text-white/90">
+         Openen →
+        </div>
       </div>
+      
+      <style jsx>{`
+        .tile-action {
+          display: block;
+        }
+
+        @media (max-width: 699px) {
+          .tile-action {
+            display: none;
+          }
+        }
+      `}</style>
     </Link>
   );
 }
@@ -409,13 +423,13 @@ export default function DashboardPage() {
           <DashboardTile
             href="/eurofittest"
             icon="🧪"
-            title="Eurofit"
+            title="Eurofittest"
             desc="Test & resultaten"
           />
           <DashboardTile
             href="/functional-fitheidstest"
             icon="🏋️"
-            title="Functional"
+            title="Functional fitheidstest"
             desc="Fitheid & progressie"
           />
           <DashboardTile
@@ -457,7 +471,7 @@ export default function DashboardPage() {
           <DashboardTile
             href="/extramurale-sportactiviteiten"
             icon="🚴"
-            title="Extramurale sportactiviteiten"
+            title="Extramuros activiteiten"
             desc="Activiteiten buiten de school"
           />
           <DashboardTile
@@ -618,8 +632,9 @@ function Hero({
 
           .illuBox {
             width: 100%;
-            min-height: 260px;
-            max-height: 320px;
+            aspect-ratio: 1 / 1;
+            min-height: unset;
+            max-height: unset;
           }
         }
 
@@ -629,8 +644,7 @@ function Hero({
           }
 
           .illuBox {
-            min-height: 220px;
-            max-height: 280px;
+            aspect-ratio: 1 / 1;
           }
         }
       `}</style>
@@ -752,15 +766,14 @@ const hero: Record<string, React.CSSProperties> = {
   },
   illuBox: {
     position: "relative",
-    height: "100%",
-    width: "100%",
-    minHeight: 320,
+    minHeight: 0,
     borderRadius: 22,
     overflow: "hidden",
     border: `1px solid ${ui.border}`,
     background: "rgba(0,0,0,0.18)",
     padding: 10,
     boxSizing: "border-box",
+    aspectRatio: "1 / 1",
   },
 };
 

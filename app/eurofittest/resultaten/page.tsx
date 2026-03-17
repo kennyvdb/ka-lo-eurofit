@@ -402,7 +402,7 @@ export default function EurofitResultatenPage() {
   return (
     <AppShell title="LO App" subtitle="Eurofit resultaten" userName={volledigeNaam ?? undefined}>
       <BaseHero
-        label="EUROFIT"
+        label="Fysieke fitheid"
         title={
           <>
             Eurofittest{" "}
@@ -438,12 +438,11 @@ export default function EurofitResultatenPage() {
               Invullen
             </Link>
 
-
             <Link
               href="/dashboard"
               className="inline-flex h-11 items-center rounded-2xl border border-slate-300/25 bg-[linear-gradient(180deg,rgba(12,18,24,0.72),rgba(0,0,0,0.58))] px-4 font-black text-[rgba(234,240,255,0.92)] shadow-[0_12px_30px_rgba(0,0,0,0.28)] transition duration-200 hover:-translate-y-0.5 hover:border-teal-200/25 hover:shadow-[0_16px_34px_rgba(0,0,0,0.32),0_0_0_1px_rgba(75,142,141,0.10)]"
             >
-              Dashboard →
+              Home →
             </Link>
           </>
         }
@@ -451,7 +450,7 @@ export default function EurofitResultatenPage() {
 
       <div style={{ display: "grid", gap: 12 }}>
         <div style={styles.panel}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between">
             <div>
               <div style={{ fontWeight: 980, color: ui.text }}>📌 Mijn Eurofitresultaten</div>
               <div style={{ marginTop: 8, color: ui.muted, fontSize: 13.5 }}>
@@ -500,22 +499,10 @@ export default function EurofitResultatenPage() {
                 return (
                   <div
                     key={testType}
-                    style={{
-                      padding: 14,
-                      borderRadius: 18,
-                      background: "rgba(0,0,0,0.22)",
-                      border: "1px solid rgba(255,255,255,0.10)",
-                    }}
+                    className="rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4"
                   >
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "minmax(180px, 1.3fr) repeat(4, minmax(90px, 1fr))",
-                        gap: 12,
-                        alignItems: "center",
-                      }}
-                    >
-                      <div style={{ minWidth: 0 }}>
+                    <div className="grid gap-3 md:grid-cols-[minmax(180px,1.3fr)_repeat(4,minmax(90px,1fr))] md:items-center">
+                      <div className="min-w-0">
                         <div style={{ fontWeight: 950, color: ui.text }}>
                           {meta.icon} {meta.label}
                         </div>
@@ -524,21 +511,21 @@ export default function EurofitResultatenPage() {
                         </div>
                       </div>
 
-                      <div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-3 md:rounded-none md:border-0 md:bg-transparent md:p-0">
                         <div style={{ color: ui.muted2, fontSize: 12 }}>Nieuwste</div>
                         <div style={{ fontWeight: 950, color: ui.text }}>
                           {current.waarde} {current.eenheid}
                         </div>
                       </div>
 
-                      <div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-3 md:rounded-none md:border-0 md:bg-transparent md:p-0">
                         <div style={{ color: ui.muted2, fontSize: 12 }}>Vorige</div>
                         <div style={{ fontWeight: 950, color: ui.text }}>
                           {previous ? `${previous.waarde} ${previous.eenheid}` : "—"}
                         </div>
                       </div>
 
-                      <div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-3 md:rounded-none md:border-0 md:bg-transparent md:p-0">
                         <div style={{ color: ui.muted2, fontSize: 12 }}>Verschil</div>
                         <div
                           style={{
@@ -555,7 +542,7 @@ export default function EurofitResultatenPage() {
                         </div>
                       </div>
 
-                      <div>
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-3 md:rounded-none md:border-0 md:bg-transparent md:p-0">
                         <div style={{ color: ui.muted2, fontSize: 12 }}>Beoordeling</div>
                         {beoordeling ? (
                           <span style={{ ...styles.badge, background: beoordeling.kleur }}>

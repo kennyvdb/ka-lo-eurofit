@@ -107,7 +107,7 @@ export default function WorkoutsPage() {
   return (
     <AppShell
       title="LO App"
-      subtitle="Running"
+      subtitle="Workouts"
       userName={profiel?.volledige_naam ?? null}
     >
       <WorkoutsHero
@@ -260,7 +260,7 @@ function DashboardTile({ href, icon, title, desc }: TileProps) {
 
       <div className="relative z-10">
         <div className="text-xs leading-5 text-white/70">{desc}</div>
-        <div className="mt-2.5 text-xs font-black text-white/90 transition duration-200 group-hover:translate-x-0.5">
+        <div className="tile-action mt-2.5 text-xs font-black text-white/90 transition duration-200 group-hover:translate-x-0.5">
           Openen →
         </div>
       </div>
@@ -274,6 +274,14 @@ function DashboardTile({ href, icon, title, desc }: TileProps) {
             transform: translateX(55%) rotate(10deg);
           }
         }
+        .tile-action {
+        display: block;
+        }  
+        @media (max-width: 699px) {
+          .tile-action {
+            display: none;
+          }
+        }    
       `}</style>
     </Link>
   );
