@@ -199,10 +199,10 @@ function DashboardTile({ href, icon, title, desc }: DashboardTileProps) {
       <div className="relative z-10">
         <div className="text-xs leading-5 text-white/70">{desc}</div>
         <div className="tile-action mt-2.5 text-xs font-black text-white/90">
-         Openen →
+          Openen →
         </div>
       </div>
-      
+
       <style jsx>{`
         .tile-action {
           display: block;
@@ -294,18 +294,21 @@ export default function DashboardPage() {
 
   const handleConfirmSchooljaar = async () => {
     if (!uid) return;
+    if (!profiel) {
+      setError("Profiel niet gevonden.");
+      return;
+    }
 
     setConfirmingYear(true);
     setError(null);
 
-    const { error } = await supabase.from("profielen").upsert(
-      {
-        id: uid,
+    const { error } = await supabase
+      .from("profielen")
+      .update({
         schooljaar: suggestedSchooljaar,
-        schooljaar_bevestigd_op: new Date().toISOString(),
-      },
-      { onConflict: "id" }
-    );
+        schooljaar_bevestigd_op: new Date().toISOString().slice(0, 10),
+      })
+      .eq("id", uid);
 
     if (error) {
       setError(error.message);
@@ -584,16 +587,13 @@ function Hero({
             <Image
               src="/hero/sportapp.png"
               alt="LO illustratie"
-              width={1200}
-              height={1200}
+              fill
               priority
+              sizes="(max-width: 767px) 100vw, 440px"
               style={{
-                width: "100%",
-                height: "100%",
                 objectFit: "contain",
                 objectPosition: "center",
                 opacity: 0.94,
-                display: "block",
               }}
             />
           </div>
@@ -612,6 +612,8 @@ function Hero({
         .heroArt {
           display: flex;
           justify-content: flex-end;
+          align-items: stretch;
+          height: 100%;
         }
 
         @media (min-width: 768px) {
@@ -632,9 +634,7 @@ function Hero({
 
           .illuBox {
             width: 100%;
-            aspect-ratio: 1 / 1;
-            min-height: unset;
-            max-height: unset;
+            min-height: 320px;
           }
         }
 
@@ -644,7 +644,7 @@ function Hero({
           }
 
           .illuBox {
-            aspect-ratio: 1 / 1;
+            min-height: 280px;
           }
         }
       `}</style>
@@ -766,14 +766,15 @@ const hero: Record<string, React.CSSProperties> = {
   },
   illuBox: {
     position: "relative",
-    minHeight: 0,
+    width: "100%",
+    height: "100%",
+    minHeight: 360,
     borderRadius: 22,
     overflow: "hidden",
     border: `1px solid ${ui.border}`,
     background: "rgba(0,0,0,0.18)",
     padding: 10,
     boxSizing: "border-box",
-    aspectRatio: "1 / 1",
   },
 };
 

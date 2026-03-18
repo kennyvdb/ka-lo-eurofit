@@ -5,35 +5,34 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { KLASSEN, Finaliteit, getKlasMeta } from "@/shared/klassen/klassen";
 
-type Geslacht = "M" | "V";
+type Geslacht = "jongen" | "meisje";
 type Role = "student" | "teacher";
 
 export default function RegisterPage() {
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const [voornaam, setVoornaam] = useState("");
   const [naam, setNaam] = useState("");
+
   const [role, setRole] = useState<Role>("student");
+  const [geslacht, setGeslacht] = useState<Geslacht>("jongen");
+  const [geboortedatum, setGeboortedatum] = useState("");
 
-  const [geslacht, setGeslacht] = useState<Geslacht>("M");
-  const [geboortedatum, setGeboortedatum] = useState<string>("");
-
+  const [klasNaam, setKlasNaam] = useState("");
   const [graad, setGraad] = useState<number>(1);
   const [leerjaar, setLeerjaar] = useState<number>(1);
   const [finaliteit, setFinaliteit] = useState<Finaliteit>("A-stroom");
 
-  const [klasNaam, setKlasNaam] = useState<string>("");
-
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
   useEffect(() => {
-    const run = async () => {
+    const checkSession = async () => {
       setLoading(true);
       setError(null);
 
@@ -41,11 +40,16 @@ export default function RegisterPage() {
 
       if (error) {
         const msg = String(error.message ?? "").toLowerCase();
-        if (msg.includes("invalid refresh token") || msg.includes("refresh token not found")) {
+
+        if (
+          msg.includes("invalid refresh token") ||
+          msg.includes("refresh token not found")
+        ) {
           await supabase.auth.signOut({ scope: "local" });
           setLoading(false);
           return;
         }
+
         setError(error.message);
         setLoading(false);
         return;
@@ -60,7 +64,7 @@ export default function RegisterPage() {
       setLoading(false);
     };
 
-    run();
+    checkSession();
   }, []);
 
   const onKlasChange = (newKlas: string) => {
@@ -82,95 +86,121 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
 
-    if (!email || !password) return setError("Vul e-mail en wachtwoord in.");
-    if (!voornaam.trim() || !naam.trim()) return setError("Vul je voornaam en naam in.");
-    if (!geboortedatum) return setError("Vul je geboortedatum in.");
+    const trimmedVoornaam = voornaam.trim();
+    const trimmedNaam = naam.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedEmail || !password) {
+      setError("Vul e-mail en wachtwoord in.");
+      return;
+    }
+
+    if (!trimmedVoornaam || !trimmedNaam) {
+      setError("Vul je voornaam en naam in.");
+      return;
+    }
+
+    if (!geboortedatum) {
+      setError("Kies je geboortedatum.");
+      return;
+    }
 
     if (role === "student") {
-      if (!klasNaam) return setError("Kies je klas.");
-      if (!getKlasMeta(klasNaam)) return setError("Onbekende klas geselecteerd.");
+      if (!klasNaam) {
+        setError("Kies je klas.");
+        return;
+      }
+
+      if (!getKlasMeta(klasNaam)) {
+        setError("Onbekende klas geselecteerd.");
+        return;
+      }
     }
 
     setSubmitting(true);
 
-    const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-    });
+    try {
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: trimmedEmail,
+        password,
+      });
 
-    if (signUpError) {
+      if (signUpError) {
+        throw new Error(signUpError.message);
+      }
+
+      let uid = signUpData.user?.id ?? null;
+
+      if (!uid) {
+        const { data: sessionData } = await supabase.auth.getSession();
+        uid = sessionData.session?.user?.id ?? null;
+      }
+
+      if (!uid) {
+        throw new Error(
+          "Registratie gelukt, maar ik vind geen user id. Probeer opnieuw in te loggen."
+        );
+      }
+
+      const volledigeNaam = `${trimmedVoornaam} ${trimmedNaam}`.trim();
+      const rolNL = role === "teacher" ? "leerkracht" : "leerling";
+      const meta = role === "student" ? getKlasMeta(klasNaam) : undefined;
+
+      const payload: Record<string, unknown> = {
+        id: uid,
+        volledige_naam: volledigeNaam,
+        geslacht, // 'jongen' of 'meisje'
+        geboortedatum, // YYYY-MM-DD
+        role, // 'student' of 'teacher'
+        rol: rolNL, // 'leerling' of 'leerkracht'
+      };
+
+      if (role === "student" && meta) {
+        payload.graad = String(meta.graad);
+        payload.leerjaar = String(meta.leerjaar);
+        payload.finaliteit = meta.finaliteit;
+        payload.klas_naam = meta.klas;
+        payload.klas_id = null;
+      } else {
+        payload.graad = null;
+        payload.leerjaar = null;
+        payload.finaliteit = null;
+        payload.klas_naam = null;
+        payload.klas_id = null;
+      }
+
+      const { error: profError } = await supabase
+        .from("profielen")
+        .upsert(payload, { onConflict: "id" });
+
+      if (profError) {
+        throw new Error(profError.message);
+      }
+
+      window.location.replace("/dashboard");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Er is een onbekende fout opgetreden.";
+      setError(message);
+    } finally {
       setSubmitting(false);
-      setError(signUpError.message);
-      return;
     }
-
-    let uid = signUpData.user?.id ?? null;
-
-    if (!uid) {
-      const { data: sessData } = await supabase.auth.getSession();
-      uid = sessData.session?.user?.id ?? null;
-    }
-
-    if (!uid) {
-      setSubmitting(false);
-      setError("Registratie gelukt, maar ik vind geen user id. Probeer opnieuw in te loggen.");
-      return;
-    }
-
-    const meta = klasNaam ? getKlasMeta(klasNaam) : undefined;
-    const volledigeNaam = `${voornaam.trim()} ${naam.trim()}`.trim();
-    const rolNL = role === "teacher" ? "leerkracht" : "leerling";
-
-    const payload: any = {
-      id: uid,
-      volledige_naam: volledigeNaam,
-      geslacht,
-      geboortedatum,
-      role,
-      rol: rolNL,
-    };
-
-    if (role === "student" && meta) {
-      payload.graad = meta.graad;
-      payload.leerjaar = meta.leerjaar;
-      payload.finaliteit = meta.finaliteit;
-      payload.klas_naam = meta.klas;
-    } else {
-      payload.graad = null;
-      payload.leerjaar = null;
-      payload.finaliteit = null;
-      payload.klas_naam = null;
-      payload.klas_id = null;
-    }
-
-    const { error: profError } = await supabase.from("profielen").upsert(payload, { onConflict: "id" });
-
-    if (profError) {
-      setSubmitting(false);
-      setError(profError.message);
-      return;
-    }
-
-    window.location.replace("/dashboard");
   };
 
   if (loading) {
     return (
       <main className="min-h-dvh grid place-items-center px-6">
-        <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 shadow-2xl">
+        <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-white/10 grid place-items-center">
-              <div className="h-5 w-5 rounded-full border-2 border-white/40 border-t-transparent animate-spin" />
+            <div className="grid h-10 w-10 place-items-center rounded-2xl bg-white/10">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-white/40 border-t-transparent" />
             </div>
             <div>
-              <div className="text-base font-semibold tracking-tight text-white">Even laden…</div>
+              <div className="text-base font-semibold tracking-tight text-white">
+                Even laden…
+              </div>
               <div className="text-sm text-white/60">Sessie controleren</div>
             </div>
-          </div>
-          <div className="mt-5 space-y-3 animate-pulse">
-            <div className="h-4 w-2/3 rounded bg-white/10" />
-            <div className="h-12 w-full rounded-xl bg-white/10" />
-            <div className="h-12 w-full rounded-xl bg-white/10" />
           </div>
         </div>
       </main>
@@ -178,11 +208,13 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="min-h-dvh grid place-items-center px-6 py-8">
+    <main className="min-h-dvh grid place-items-center px-6 py-8 bg-neutral-950">
       <div className="w-full max-w-md">
-        <div className="rounded-3xl border border-white/10 bg-white/5 backdrop-blur-xl p-6 shadow-2xl">
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl backdrop-blur-xl">
           <div className="text-center">
-            <h1 className="text-2xl font-bold tracking-tight text-white">Registreren</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white">
+              Registreren
+            </h1>
             <p className="mt-1 text-sm text-white/60">Maak je account aan</p>
           </div>
 
@@ -194,7 +226,9 @@ export default function RegisterPage() {
 
           <form onSubmit={handleRegister} className="mt-5 space-y-4">
             <div>
-              <label className="mb-1 block text-xs font-medium text-white/60">E-mail</label>
+              <label className="mb-1 block text-xs font-medium text-white/60">
+                E-mail
+              </label>
               <input
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -202,21 +236,21 @@ export default function RegisterPage() {
                 autoComplete="email"
                 inputMode="email"
                 placeholder="naam@school.be"
-                className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white
-                           placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
               />
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-white/60">Wachtwoord</label>
+              <label className="mb-1 block text-xs font-medium text-white/60">
+                Wachtwoord
+              </label>
               <input
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 type="password"
                 autoComplete="new-password"
                 placeholder="••••••••"
-                className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white
-                           placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
               />
             </div>
 
@@ -224,28 +258,32 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium text-white/60">Voornaam</label>
+                <label className="mb-1 block text-xs font-medium text-white/60">
+                  Voornaam
+                </label>
                 <input
                   value={voornaam}
                   onChange={(e) => setVoornaam(e.target.value)}
-                  className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white
-                             focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                  className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-white/60">Naam</label>
+                <label className="mb-1 block text-xs font-medium text-white/60">
+                  Naam
+                </label>
                 <input
                   value={naam}
                   onChange={(e) => setNaam(e.target.value)}
-                  className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white
-                             focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                  className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                 />
               </div>
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-white/60">Rol</label>
+              <label className="mb-1 block text-xs font-medium text-white/60">
+                Rol
+              </label>
               <select
                 value={role}
                 onChange={(e) => {
@@ -259,8 +297,7 @@ export default function RegisterPage() {
                     setFinaliteit("A-stroom");
                   }
                 }}
-                className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white
-                           focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
               >
                 <option value="student">Leerling</option>
                 <option value="teacher">Leerkracht</option>
@@ -272,33 +309,37 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium text-white/60">Geslacht</label>
+                <label className="mb-1 block text-xs font-medium text-white/60">
+                  Geslacht
+                </label>
                 <select
                   value={geslacht}
                   onChange={(e) => setGeslacht(e.target.value as Geslacht)}
-                  className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white
-                             focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                  className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                 >
-                  <option value="M">M</option>
-                  <option value="V">V</option>
+                  <option value="jongen">Jongen</option>
+                  <option value="meisje">Meisje</option>
                 </select>
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-white/60">Geboortedatum</label>
+                <label className="mb-1 block text-xs font-medium text-white/60">
+                  Geboortedatum
+                </label>
                 <input
                   type="date"
                   value={geboortedatum}
                   max={today}
                   onChange={(e) => setGeboortedatum(e.target.value)}
-                  className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white
-                             focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
+                  className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                 />
               </div>
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-white/60">Klas</label>
+              <label className="mb-1 block text-xs font-medium text-white/60">
+                Klas
+              </label>
               <select
                 value={klasNaam}
                 onChange={(e) => onKlasChange(e.target.value)}
@@ -342,7 +383,9 @@ export default function RegisterPage() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <label className="mb-1 block text-xs font-medium text-white/60">Graad</label>
+                <label className="mb-1 block text-xs font-medium text-white/60">
+                  Graad
+                </label>
                 <input
                   value={`${graad}e graad`}
                   disabled
@@ -351,7 +394,9 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-medium text-white/60">Leerjaar</label>
+                <label className="mb-1 block text-xs font-medium text-white/60">
+                  Leerjaar
+                </label>
                 <input
                   value={String(leerjaar)}
                   disabled
@@ -361,7 +406,9 @@ export default function RegisterPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-xs font-medium text-white/60">Finaliteit</label>
+              <label className="mb-1 block text-xs font-medium text-white/60">
+                Finaliteit
+              </label>
               <input
                 value={finaliteit}
                 disabled
@@ -372,9 +419,7 @@ export default function RegisterPage() {
             <button
               type="submit"
               disabled={submitting}
-              className="w-full h-12 rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-300
-                         text-neutral-950 font-semibold active:scale-[0.98] transition
-                         disabled:opacity-60 disabled:cursor-not-allowed"
+              className="h-12 w-full rounded-xl bg-gradient-to-r from-indigo-500 to-cyan-300 font-semibold text-neutral-950 transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
               {submitting ? "Bezig..." : "Account maken"}
             </button>
@@ -383,7 +428,10 @@ export default function RegisterPage() {
 
         <p className="mt-5 text-center text-sm text-white/70">
           Al een account?{" "}
-          <Link href="/login" className="font-semibold text-cyan-200 underline underline-offset-4">
+          <Link
+            href="/login"
+            className="font-semibold text-cyan-200 underline underline-offset-4"
+          >
             Inloggen
           </Link>
         </p>

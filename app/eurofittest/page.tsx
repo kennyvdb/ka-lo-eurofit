@@ -61,8 +61,8 @@ const TESTS = [
   { value: "handgrip", label: "Handknijpkracht", eenheid: "kg", icon: "✊", desc: "Kracht (kg)." },
   { value: "sit_ups", label: "Sit-ups (30s)", eenheid: "aantal", icon: "💪", desc: "Herhalingen in 30 sec." },
   { value: "bent_arm_hang", label: "Bent-arm hang", eenheid: "sec", icon: "🪝", desc: "Tijd (sec)." },
-  { value: "shuttle_10x5", label: "10×5 shuttle run", eenheid: "sec", icon: "⚡", desc: "Tijd (sec)." },
-  { value: "shuttle_20m", label: "20m shuttle run", eenheid: "stages", icon: "🏃", desc: "Stages/min." },
+  { value: "agility_shuttle_run_10x5", label: "10×5 shuttle run", eenheid: "sec", icon: "⚡", desc: "Tijd (sec)." },
+  { value: "shuttle_run_20m", label: "20m shuttle run", eenheid: "stages", icon: "🏃", desc: "Stages/min." },
 ] as const;
 
 type TestType = (typeof TESTS)[number]["value"];
@@ -87,11 +87,20 @@ function getTestMeta(testType: string): TestMeta {
 /* ---------------------------
    Lower is better
 --------------------------- */
-const LOWER_IS_BETTER = new Set<string>(["flamingo", "plate_tapping", "shuttle_10x5"]);
+const LOWER_IS_BETTER = new Set<string>(["flamingo", "plate_tapping", "agility_shuttle_run_10x5"]);
 
 /* ---------------------------
    Helpers
 --------------------------- */
+function normalizeGeslacht(value: unknown): Geslacht | null {
+  const v = String(value ?? "").trim().toLowerCase();
+
+  if (["m", "man", "jongen", "boy"].includes(v)) return "jongen";
+  if (["v", "vrouw", "meisje", "girl"].includes(v)) return "meisje";
+
+  return null;
+}
+
 function bepaalSchooljaar(testDatum: string) {
   const d = new Date(testDatum);
   const jaar = d.getFullYear();
@@ -651,7 +660,9 @@ export default function EurofittestPage() {
       if (prof.error) {
         setError("Kon profiel niet laden (geslacht/geboortedatum ontbreekt?).");
       } else {
-        setGeslacht((prof.data?.geslacht as Geslacht) ?? null);
+        const g = normalizeGeslacht(prof.data?.geslacht);
+
+        setGeslacht(g);
         setGeboortedatum(prof.data?.geboortedatum ?? null);
         setVolledigeNaam(prof.data?.volledige_naam ?? null);
       }
