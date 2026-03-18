@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { KLASSEN, Finaliteit, getKlasMeta } from "@/shared/klassen/klassen";
 
-type Geslacht = "jongen" | "meisje";
+type GeslachtDb = "M" | "V";
 type Role = "student" | "teacher";
 
 export default function RegisterPage() {
@@ -19,7 +19,7 @@ export default function RegisterPage() {
   const [naam, setNaam] = useState("");
 
   const [role, setRole] = useState<Role>("student");
-  const [geslacht, setGeslacht] = useState<Geslacht>("jongen");
+  const [geslacht, setGeslacht] = useState<GeslachtDb>("M");
   const [geboortedatum, setGeboortedatum] = useState("");
 
   const [klasNaam, setKlasNaam] = useState("");
@@ -149,7 +149,7 @@ export default function RegisterPage() {
       const payload: Record<string, unknown> = {
         id: uid,
         volledige_naam: volledigeNaam,
-        geslacht, // 'jongen' of 'meisje'
+        geslacht, // 'M' of 'V'
         geboortedatum, // YYYY-MM-DD
         role, // 'student' of 'teacher'
         rol: rolNL, // 'leerling' of 'leerkracht'
@@ -314,11 +314,11 @@ export default function RegisterPage() {
                 </label>
                 <select
                   value={geslacht}
-                  onChange={(e) => setGeslacht(e.target.value as Geslacht)}
+                  onChange={(e) => setGeslacht(e.target.value as GeslachtDb)}
                   className="h-12 w-full rounded-xl border border-white/10 bg-white/10 px-4 text-base text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 transition"
                 >
-                  <option value="jongen">Jongen</option>
-                  <option value="meisje">Meisje</option>
+                  <option value="M">Jongen</option>
+                  <option value="V">Meisje</option>
                 </select>
               </div>
 
