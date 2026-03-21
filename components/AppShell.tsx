@@ -217,10 +217,6 @@ export default function AppShell({
                   ))}
                   <NavLink href="/dashboard/profiel" label="Profiel" icon="👤" />
                 </nav>
-
-                <div className="menuTip">
-                  Tip: voeg later “Leerkracht” items toe op basis van role.
-                </div>
               </div>
             )}
           </div>

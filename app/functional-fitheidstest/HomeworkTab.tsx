@@ -17,8 +17,16 @@ type RubricItem = {
   title: string;
   level: RubricLevel;
   color: string;
-  description: string; // uitgelegd volgens level
-  autoFeedback: string; // korte zin voor leerling
+  description: string;
+  autoFeedback: string;
+};
+
+type GradeMode = "2e" | "3e";
+
+type Props = {
+  uid: string;
+  profiel: ProfielLite | null;
+  defaultMas?: number | null;
 };
 
 function toYMD(d = new Date()) {
@@ -26,6 +34,56 @@ function toYMD(d = new Date()) {
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function mkId() {
+  return Math.random().toString(16).slice(2) + Date.now().toString(16);
+}
+
+function toNum(v: string) {
+  const n = Number(String(v).replace(",", "."));
+  return Number.isFinite(n) ? n : NaN;
+}
+
+function countSentencesApprox(s: string) {
+  const t = (s || "").trim();
+  if (!t) return 0;
+  return t
+    .split(/[.!?]+/)
+    .map((x) => x.trim())
+    .filter(Boolean).length;
+}
+
+function hasAnyWord(s: string, words: string[]) {
+  const t = (s || "").toLowerCase();
+  return words.some((w) => t.includes(w.toLowerCase()));
+}
+
+function hasActionKeyword(s: string) {
+  const t = (s || "").toLowerCase();
+  return (
+    t.includes("volgende") ||
+    t.includes("aanpassen") ||
+    t.includes("plan") ||
+    t.includes("ik ga") ||
+    t.includes("extra") ||
+    t.includes("zodat") ||
+    t.includes("omdat") ||
+    t.includes("daarom")
+  );
+}
+
+function levelText(
+  level: RubricLevel,
+  minus: string,
+  pm: string,
+  plus: string,
+  pp: string
+) {
+  if (level === "-") return minus;
+  if (level === "+/-") return pm;
+  if (level === "+") return plus;
+  return pp;
 }
 
 const ui = {
@@ -40,13 +98,15 @@ const ui = {
   okBorder: "rgba(104,180,255,0.24)",
   warnBg: "rgba(255,193,102,0.10)",
   warnBorder: "rgba(255,193,102,0.28)",
+  infoBg: "rgba(123, 213, 255, 0.10)",
+  infoBorder: "rgba(123, 213, 255, 0.26)",
 };
 
 const rubricColors: Record<RubricLevel, string> = {
-  "-": "rgba(255,85,112,0.25)", // rood
-  "+/-": "rgba(255,193,102,0.22)", // oranje
-  "+": "rgba(140,255,140,0.16)", // lichtgroen
-  "++": "rgba(80,220,120,0.22)", // donkergroen
+  "-": "rgba(255,85,112,0.25)",
+  "+/-": "rgba(255,193,102,0.22)",
+  "+": "rgba(140,255,140,0.16)",
+  "++": "rgba(80,220,120,0.22)",
 };
 
 const styles: Record<string, React.CSSProperties> = {
@@ -57,7 +117,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: `1px solid ${ui.border}`,
   },
   sectionTitle: { fontSize: 13, fontWeight: 950, color: ui.text },
-  small: { fontSize: 12.5, color: ui.muted, lineHeight: 1.35 },
+  small: { fontSize: 12.5, color: ui.muted, lineHeight: 1.38 },
   input: {
     marginTop: 10,
     width: "100%",
@@ -73,7 +133,7 @@ const styles: Record<string, React.CSSProperties> = {
   textarea: {
     marginTop: 10,
     width: "100%",
-    minHeight: 90,
+    minHeight: 96,
     borderRadius: 16,
     border: `1px solid ${ui.border}`,
     background: "rgba(0,0,0,0.35)",
@@ -94,7 +154,12 @@ const styles: Record<string, React.CSSProperties> = {
     gridTemplateColumns: "repeat(1, minmax(0, 1fr))",
     gap: 12,
   },
-  label: { fontSize: 12, fontWeight: 950, color: ui.muted, letterSpacing: 0.6 },
+  label: {
+    fontSize: 12,
+    fontWeight: 950,
+    color: ui.muted,
+    letterSpacing: 0.6,
+  },
   actionRow: {
     marginTop: 14,
     display: "flex",
@@ -144,6 +209,24 @@ const styles: Record<string, React.CSSProperties> = {
     color: ui.text,
     fontSize: 14,
   },
+  warnBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 18,
+    background: ui.warnBg,
+    border: `1px solid ${ui.warnBorder}`,
+    color: ui.text,
+    fontSize: 14,
+  },
+  infoBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 18,
+    background: ui.infoBg,
+    border: `1px solid ${ui.infoBorder}`,
+    color: ui.text,
+    fontSize: 14,
+  },
   pill: {
     height: 34,
     padding: "0 12px",
@@ -179,28 +262,33 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(0,0,0,0.35)",
     color: ui.text,
   },
+  linkBtn: {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    height: 42,
+    padding: "0 14px",
+    borderRadius: 14,
+    border: `1px solid ${ui.border}`,
+    background: "rgba(0,0,0,0.30)",
+    color: ui.text,
+    fontWeight: 950,
+    textDecoration: "none",
+  },
 };
 
-type Props = {
-  uid: string;
-  profiel: ProfielLite | null;
-  // optioneel: MAS uit test (km/u)
-  defaultMas?: number | null;
-};
+/* =========================
+   2E GRAAD
+========================= */
 
-type GradeMode = "2e" | "3e";
-
-// -------------------------
-// 2e graad state
-// -------------------------
 type TalkTest = "Groen" | "Oranje" | "Rood" | "";
 
 type SecondGradeForm = {
   date: string;
-  mas: string; // km/u
+  mas: string;
   trainingType: "Duur" | "Interval" | "";
   warmupMin: string;
-  coreText: string; // kern (tekstveld)
+  coreText: string;
   cooldownMin: string;
 
   hrRest: string;
@@ -210,10 +298,9 @@ type SecondGradeForm = {
   talk: TalkTest;
   talkExplain: string;
 
-  rpe: string; // 1-10
-  reflection: string; // min 2 zinnen
+  rpe: string;
+  reflection: string;
 
-  // optioneel krachtcircuit (niet in rubric)
   didStrength: boolean;
   strengthCircuitName: string;
   strengthRpe: string;
@@ -240,122 +327,7 @@ function initSecond(defaultMas?: number | null): SecondGradeForm {
   };
 }
 
-// -------------------------
-// 3e graad state
-// -------------------------
-type ActivityRow = {
-  id: string;
-  activity: string;
-  minutes: string;
-  met: string;
-};
-
-type PalChoice = "Laag actief" | "Matig actief" | "Actief" | "";
-
-type ThirdGradeForm = {
-  date: string;
-  weightKg: string; // optioneel
-
-  activities: ActivityRow[]; // min 5
-  pal: PalChoice;
-  palExplain: string;
-
-  preFood: string;
-  postFood: string;
-  proteinAfter: "ja" | "nee" | "";
-  proteinExample: string;
-};
-
-const MET_OPTIONS: { label: string; value: number }[] = [
-  { label: "Zitten/schoolwerk (1.3)", value: 1.3 },
-  { label: "Wandelen rustig (2.8)", value: 2.8 },
-  { label: "Fietsen rustig (4.0)", value: 4.0 },
-  { label: "Fietsen stevig (6.0)", value: 6.0 },
-  { label: "Lopen rustig (7.0)", value: 7.0 },
-  { label: "Sporttraining gematigd (5.0)", value: 5.0 },
-  { label: "Krachttraining (6.0)", value: 6.0 },
-  { label: "Traplopen (8.0)", value: 8.0 },
-];
-
-function mkId() {
-  return Math.random().toString(16).slice(2) + Date.now().toString(16);
-}
-
-function initThird(): ThirdGradeForm {
-  return {
-    date: toYMD(),
-    weightKg: "",
-    activities: Array.from({ length: 5 }).map(() => ({
-      id: mkId(),
-      activity: "",
-      minutes: "",
-      met: "",
-    })),
-    pal: "",
-    palExplain: "",
-    preFood: "",
-    postFood: "",
-    proteinAfter: "",
-    proteinExample: "",
-  };
-}
-
-// -------------------------
-// Helpers
-// -------------------------
-function toNum(s: string) {
-  const n = Number(s);
-  return Number.isFinite(n) ? n : NaN;
-}
-
-function countSentencesApprox(s: string) {
-  const t = (s || "").trim();
-  if (!t) return 0;
-  // simpele schatting op . ! ?
-  const parts = t.split(/[.!?]+/).map((x) => x.trim()).filter(Boolean);
-  return parts.length;
-}
-
-function hasActionKeyword(s: string) {
-  const t = (s || "").toLowerCase();
-  return (
-    t.includes("volgende") ||
-    t.includes("aanpassen") ||
-    t.includes("plan") ||
-    t.includes("tempo") ||
-    t.includes("ik ga") ||
-    t.includes("extra") ||
-    t.includes("zodat") ||
-    t.includes("daarom") ||
-    t.includes("omdat")
-  );
-}
-
-function isRowComplete(r: ActivityRow) {
-  const min = toNum(r.minutes);
-  const met = toNum(r.met);
-  return r.activity.trim() && Number.isFinite(min) && min > 0 && Number.isFinite(met) && met > 0;
-}
-
-function calcMetMinutes(r: ActivityRow) {
-  const min = toNum(r.minutes);
-  const met = toNum(r.met);
-  if (!Number.isFinite(min) || !Number.isFinite(met)) return 0;
-  return met * min;
-}
-
-function levelText(level: RubricLevel, minus: string, pm: string, plus: string, pp: string) {
-  if (level === "-") return minus;
-  if (level === "+/-") return pm;
-  if (level === "+") return plus;
-  return pp;
-}
-
-// -------------------------
-// Rubrics 2e graad
-// -------------------------
 function rubricsSecond(f: SecondGradeForm): RubricItem[] {
-  // C1 Training plan
   const hasType = Boolean(f.trainingType);
   const hasWarm = Boolean(f.warmupMin.trim());
   const hasCore = Boolean(f.coreText.trim());
@@ -366,11 +338,15 @@ function rubricsSecond(f: SecondGradeForm): RubricItem[] {
   if (filled <= 2) lvl1 = "-";
   else if (filled === 3) lvl1 = "+/-";
   else {
-    // 4/4
     const coreSpecific =
       f.trainingType === "Duur"
-        ? f.coreText.toLowerCase().includes("%") || f.coreText.toLowerCase().includes("mas") || f.coreText.toLowerCase().includes("min")
-        : f.coreText.includes("x") || f.coreText.includes("×") || f.coreText.includes("'") || f.coreText.toLowerCase().includes("rust");
+        ? f.coreText.toLowerCase().includes("%") ||
+          f.coreText.toLowerCase().includes("mas") ||
+          f.coreText.toLowerCase().includes("min")
+        : f.coreText.includes("x") ||
+          f.coreText.includes("×") ||
+          f.coreText.includes("'") ||
+          f.coreText.toLowerCase().includes("rust");
     lvl1 = coreSpecific ? "++" : "+";
   }
 
@@ -396,11 +372,9 @@ function rubricsSecond(f: SecondGradeForm): RubricItem[] {
         : "Vul je training volledig in (type, opwarming, kern, cooling-down).",
   };
 
-  // C2 Hartslag correct
   const rest = toNum(f.hrRest);
   const peak = toNum(f.hrPeak);
   const rec = toNum(f.hrRec1);
-
   const hrCount = [rest, peak, rec].filter((n) => Number.isFinite(n)).length;
 
   let lvl2: RubricLevel = "-";
@@ -437,7 +411,6 @@ function rubricsSecond(f: SecondGradeForm): RubricItem[] {
         : "Vul rust, piek en herstelhartslag (na 1 min) in.",
   };
 
-  // C3 Praattest
   const hasTalk = Boolean(f.talk);
   const hasExplain = (f.talkExplain || "").trim().length > 0;
 
@@ -446,7 +419,11 @@ function rubricsSecond(f: SecondGradeForm): RubricItem[] {
   else if (hasTalk && !hasExplain) lvl3 = "+/-";
   else {
     const refl = (f.reflection || "").toLowerCase();
-    const adaptive = refl.includes("volgende") || refl.includes("aanpassen") || refl.includes("trager") || refl.includes("sneller");
+    const adaptive =
+      refl.includes("volgende") ||
+      refl.includes("aanpassen") ||
+      refl.includes("trager") ||
+      refl.includes("sneller");
     lvl3 = adaptive ? "++" : "+";
   }
 
@@ -472,7 +449,6 @@ function rubricsSecond(f: SecondGradeForm): RubricItem[] {
         : "Kies Groen/Oranje/Rood en schrijf 1 zin uitleg.",
   };
 
-  // C4 Reflectie & RPE
   const rpe = toNum(f.rpe);
   const hasRpe = Number.isFinite(rpe) && rpe >= 1 && rpe <= 10;
   const refl = (f.reflection || "").trim();
@@ -510,166 +486,349 @@ function rubricsSecond(f: SecondGradeForm): RubricItem[] {
   return [item1, item2, item3, item4];
 }
 
-// -------------------------
-// Rubrics 3e graad
-// -------------------------
-function rubricsThird(f: ThirdGradeForm): { items: RubricItem[]; totals: { metMinutesTotal: number } } {
+/* =========================
+   3E GRAAD
+========================= */
+
+type ActivityRow = {
+  id: string;
+  activity: string;
+  minutes: string;
+  met: string;
+};
+
+type PalChoice = "Laag actief" | "Matig actief" | "Actief" | "";
+
+type ThirdGradeForm = {
+  date: string;
+  weightKg: string;
+
+  activities: ActivityRow[];
+
+  pal: PalChoice;
+  palExplain: string;
+
+  kcalIntake: string;
+  kcalIntakeSource: string;
+
+  kcalTotalBurn: string;
+  burnSource: "Automatisch via activiteiten" | "Externe calculator / app" | "Eigen schatting" | "";
+
+  balanceExplain: string;
+  conceptExplain: string;
+};
+
+const MET_OPTIONS: { label: string; value: number }[] = [
+  { label: "Slapen (0.9)", value: 0.9 },
+  { label: "Zitten / schoolwerk (1.3)", value: 1.3 },
+  { label: "Staan rustig (1.8)", value: 1.8 },
+  { label: "Wandelen rustig (2.8)", value: 2.8 },
+  { label: "Wandelen stevig (3.5)", value: 3.5 },
+  { label: "Huishoudelijk werk licht (2.5)", value: 2.5 },
+  { label: "Fietsen rustig (4.0)", value: 4.0 },
+  { label: "Fietsen stevig (6.0)", value: 6.0 },
+  { label: "Sporttraining gematigd (5.0)", value: 5.0 },
+  { label: "Krachttraining (6.0)", value: 6.0 },
+  { label: "Lopen rustig (7.0)", value: 7.0 },
+  { label: "Traplopen (8.0)", value: 8.0 },
+  { label: "Intensieve sport (8.5)", value: 8.5 },
+];
+
+function initThird(): ThirdGradeForm {
+  return {
+    date: toYMD(),
+    weightKg: "",
+    activities: Array.from({ length: 6 }).map(() => ({
+      id: mkId(),
+      activity: "",
+      minutes: "",
+      met: "",
+    })),
+    pal: "",
+    palExplain: "",
+    kcalIntake: "",
+    kcalIntakeSource: "",
+    kcalTotalBurn: "",
+    burnSource: "",
+    balanceExplain: "",
+    conceptExplain: "",
+  };
+}
+
+function isRowComplete(r: ActivityRow) {
+  const min = toNum(r.minutes);
+  const met = toNum(r.met);
+  return r.activity.trim() && Number.isFinite(min) && min > 0 && Number.isFinite(met) && met > 0;
+}
+
+function calcMetMinutes(r: ActivityRow) {
+  const min = toNum(r.minutes);
+  const met = toNum(r.met);
+  if (!Number.isFinite(min) || !Number.isFinite(met)) return 0;
+  return met * min;
+}
+
+function calcActivityKcal(r: ActivityRow, weightKg: string) {
+  const min = toNum(r.minutes);
+  const met = toNum(r.met);
+  const kg = toNum(weightKg);
+  if (!Number.isFinite(min) || !Number.isFinite(met) || !Number.isFinite(kg) || kg <= 0) return 0;
+  return met * kg * (min / 60);
+}
+
+function inferPalFromActivities(rows: ActivityRow[]): PalChoice | "" {
+  const complete = rows.filter(isRowComplete);
+  const totalMinutes = complete.reduce((sum, r) => sum + Math.max(0, toNum(r.minutes)), 0);
+  const lowMinutes = complete.reduce((sum, r) => {
+    const met = toNum(r.met);
+    return sum + (Number.isFinite(met) && met <= 1.8 ? Math.max(0, toNum(r.minutes)) : 0);
+  }, 0);
+  const modHighMinutes = complete.reduce((sum, r) => {
+    const met = toNum(r.met);
+    return sum + (Number.isFinite(met) && met >= 3 ? Math.max(0, toNum(r.minutes)) : 0);
+  }, 0);
+
+  if (totalMinutes <= 0) return "";
+
+  const ratioModHigh = modHighMinutes / totalMinutes;
+  const ratioLow = lowMinutes / totalMinutes;
+
+  if (ratioModHigh >= 0.3) return "Actief";
+  if (ratioModHigh >= 0.14 || (ratioLow < 0.7 && modHighMinutes >= 60)) return "Matig actief";
+  return "Laag actief";
+}
+
+function textExplainsPalVsMet(s: string) {
+  const t = (s || "").toLowerCase();
+  const hasMet = t.includes("met");
+  const hasPal = t.includes("pal");
+  const hasActivity = t.includes("activiteit") || t.includes("een activiteit") || t.includes("één activiteit");
+  const hasDay = t.includes("dag") || t.includes("hele dag") || t.includes("volledige dag");
+  return hasMet && hasPal && hasActivity && hasDay;
+}
+
+function rubricsThird(f: ThirdGradeForm): {
+  items: RubricItem[];
+  totals: {
+    metMinutesTotal: number;
+    activityKcalTotal: number;
+    kcalBalance: number | null;
+    inferredPal: PalChoice | "";
+  };
+  flags: string[];
+} {
   const rows = f.activities || [];
-  const count = rows.filter((r) => r.activity.trim() || r.minutes.trim() || r.met.trim()).length;
-  const completeCount = rows.filter(isRowComplete).length;
+  const completeRows = rows.filter(isRowComplete);
+  const completeCount = completeRows.length;
 
   const hasLow = rows.some((r) => {
     const met = toNum(r.met);
-    return Number.isFinite(met) && met <= 1.5;
+    return Number.isFinite(met) && met <= 1.8;
   });
-  const hasHigh = rows.some((r) => {
+
+  const hasModerateOrHigh = rows.some((r) => {
     const met = toNum(r.met);
-    return Number.isFinite(met) && met >= 4;
+    return Number.isFinite(met) && met >= 3;
   });
 
   const metTotal = rows.reduce((sum, r) => sum + calcMetMinutes(r), 0);
+  const activityKcalTotal = rows.reduce((sum, r) => sum + calcActivityKcal(r, f.weightKg), 0);
 
-  // C1 log
+  const intake = toNum(f.kcalIntake);
+  const totalBurn = toNum(f.kcalTotalBurn);
+  const kcalBalance =
+    Number.isFinite(intake) && Number.isFinite(totalBurn) ? intake - totalBurn : null;
+
+  const inferredPal = completeCount >= 3 ? inferPalFromActivities(rows) : "";
+
+  const flags: string[] = [];
+  if (f.pal && inferredPal && f.pal !== inferredPal) {
+    flags.push(
+      `Je gekozen PAL (${f.pal}) lijkt niet helemaal te passen bij je activiteiten. De app schat eerder: ${inferredPal}.`
+    );
+  }
+  if (
+    Number.isFinite(totalBurn) &&
+    Number.isFinite(activityKcalTotal) &&
+    Math.abs(totalBurn - activityKcalTotal) > 1200
+  ) {
+    flags.push(
+      "Je totaal kcal-verbruik wijkt sterk af van het automatisch berekende verbruik uit je activiteiten. Controleer je getallen."
+    );
+  }
+
   let lvl1: RubricLevel = "-";
-  if (completeCount < 3) lvl1 = "-";
-  else if (completeCount <= 4) lvl1 = "+/-";
-  else if (completeCount >= 6 && hasLow && hasHigh) lvl1 = "++";
+  if (completeCount < 4) lvl1 = "-";
+  else if (completeCount < 6) lvl1 = "+/-";
+  else if (completeCount >= 7 && hasLow && hasModerateOrHigh) lvl1 = "++";
   else lvl1 = "+";
 
   const item1: RubricItem = {
-    key: "log",
-    title: "Activiteitenlog voldoende en correct ingevuld",
+    key: "log_met",
+    title: "Activiteitenlog en MET correct ingevuld",
     level: lvl1,
     color: rubricColors[lvl1],
     description: levelText(
       lvl1,
-      "Minder dan 3 activiteiten of meerdere velden leeg.",
-      "3–4 activiteiten, grotendeels ingevuld maar niet volledig/consistent.",
-      "Minstens 5 activiteiten, alle regels hebben duur + MET.",
-      "6+ activiteiten én realistische spreiding (ook laag actief/zitten + matig/hoog actief)."
+      "Te weinig activiteiten volledig ingevuld of meerdere activiteiten missen duur/MET.",
+      "Er is al een bruikbaar logboek, maar het is nog niet volledig genoeg.",
+      "Minstens 6 activiteiten zijn volledig ingevuld met passende duur en MET.",
+      "Sterk dagoverzicht: voldoende activiteiten én duidelijke spreiding tussen laag en matig/hoog actief."
     ),
     autoFeedback:
       lvl1 === "++"
-        ? "Sterk logboek: veel en realistische variatie."
+        ? "Sterk: je daglog is volledig en realistisch opgebouwd."
         : lvl1 === "+"
-        ? "Goed: je hebt voldoende activiteiten volledig ingevuld."
+        ? "Goed: je hebt voldoende activiteiten correct ingevuld."
         : lvl1 === "+/-"
-        ? "Vul aan tot minstens 5 volledig ingevulde activiteiten."
-        : "Je hebt te weinig volledige activiteiten: voeg er toe en vul duur + MET in.",
+        ? "Vul nog meer activiteiten volledig in tot je dag duidelijker in beeld komt."
+        : "Je activiteitenlog is nog te onvolledig. Vul activiteit, duur en MET correct in.",
   };
 
-  // C2 met totaal
-  const hasAnyTotal = metTotal > 0.01;
-  const anyIncomplete = rows.some((r) => (r.activity.trim() || r.minutes.trim() || r.met.trim()) && !isRowComplete(r));
+  const hasPal = Boolean(f.pal);
+  const palText = (f.palExplain || "").trim();
+  const palLen = palText.length;
+  const palMentionsDay = hasAnyWord(palText, ["dag", "hele dag", "volledige dag"]);
+  const palMentionsExamples = hasAnyWord(palText, [
+    "zitten",
+    "school",
+    "wandelen",
+    "fietsen",
+    "training",
+    "sport",
+    "bewegen",
+  ]);
+  const palLogicOk = !f.pal || !inferredPal || f.pal === inferredPal;
 
   let lvl2: RubricLevel = "-";
-  if (!hasAnyTotal) lvl2 = "-";
-  else if (hasAnyTotal && anyIncomplete) lvl2 = "+/-";
-  else {
-    const explainLen = (f.palExplain || "").trim().length;
-    lvl2 = explainLen >= 120 ? "++" : "+";
-  }
+  if (!hasPal) lvl2 = "-";
+  else if (palLen < 60) lvl2 = "+/-";
+  else if (palLen >= 120 && palMentionsDay && palMentionsExamples && palLogicOk) lvl2 = "++";
+  else lvl2 = "+";
 
   const item2: RubricItem = {
-    key: "met",
-    title: "MET-minuten en totaal",
+    key: "pal",
+    title: "PAL correct gekozen en uitgelegd",
     level: lvl2,
     color: rubricColors[lvl2],
     description: levelText(
       lvl2,
-      "MET-minuten/totaal ontbreekt (of alles is 0).",
-      "Totaal is er, maar er zijn activiteiten zonder duur/MET.",
-      "Totaal correct en alle activiteiten zijn volledig.",
-      "Totaal correct én je maakt een korte conclusie/interpretatie."
+      "PAL ontbreekt.",
+      "PAL is gekozen, maar de uitleg is te kort of te vaag.",
+      "PAL is gekozen en duidelijk gekoppeld aan de volledige dag.",
+      "PAL is sterk uitgelegd met concrete voorbeelden uit de dag én past logisch bij het activiteitenprofiel."
     ),
     autoFeedback:
       lvl2 === "++"
-        ? "Mooi: je MET-totaal klopt én je interpreteert het."
+        ? "Heel goed: je PAL-keuze is logisch en goed beargumenteerd."
         : lvl2 === "+"
-        ? "Goed: je MET-log is volledig."
+        ? "Goed: je PAL-uitleg is duidelijk."
         : lvl2 === "+/-"
-        ? "Maak alle rijen volledig (activiteit + duur + MET)."
-        : "Vul activiteiten in zodat je MET-totaal niet 0 is.",
+        ? "Schrijf duidelijker waarom jouw volledige dag laag, matig of actief was."
+        : "Kies een PAL-niveau en leg het uit op basis van je volledige dag.",
   };
 
-  // C3 PAL + uitleg
-  const hasPal = Boolean(f.pal);
-  const palLen = (f.palExplain || "").trim().length;
+  const hasIntake = Number.isFinite(intake) && intake > 0;
+  const hasBurn = Number.isFinite(totalBurn) && totalBurn > 0;
+  const explain = (f.balanceExplain || "").trim();
+  const explainLen = explain.length;
+  const saysGain = hasAnyWord(explain, ["toename", "aankomen", "meer", "overschot"]);
+  const saysLoss = hasAnyWord(explain, ["afname", "afvallen", "minder", "tekort"]);
+  const saysStable = hasAnyWord(explain, ["stabiel", "behoud", "gelijk", "ongeveer hetzelfde"]);
+  const saysLongTerm = hasAnyWord(explain, [
+    "lange termijn",
+    "op termijn",
+    "als dit vaker gebeurt",
+    "als dit vaak zo is",
+  ]);
+
+  let balanceLogicOk = false;
+  if (kcalBalance !== null) {
+    if (kcalBalance > 100) balanceLogicOk = saysGain;
+    else if (kcalBalance < -100) balanceLogicOk = saysLoss;
+    else balanceLogicOk = saysStable;
+  }
 
   let lvl3: RubricLevel = "-";
-  if (!hasPal) lvl3 = "-";
-  else if (palLen < 60) lvl3 = "+/-";
-  else if (palLen >= 120 && hasActionKeyword(f.palExplain)) lvl3 = "++";
+  if (!hasIntake || !hasBurn) lvl3 = "-";
+  else if (explainLen < 70) lvl3 = "+/-";
+  else if (balanceLogicOk && saysLongTerm) lvl3 = "++";
   else lvl3 = "+";
 
   const item3: RubricItem = {
-    key: "pal",
-    title: "PAL-inschatting + uitleg",
+    key: "kcal_balance",
+    title: "kcal-inname, verbruik en energiebalans",
     level: lvl3,
     color: rubricColors[lvl3],
     description: levelText(
       lvl3,
-      "PAL niet gekozen.",
-      "PAL gekozen maar uitleg ontbreekt of is te vaag.",
-      "PAL gekozen + duidelijke uitlegzin gekoppeld aan de dag.",
-      "PAL gekozen + uitleg én 1 concrete aanpassing/actie."
+      "kcal-inname of kcal-verbruik ontbreekt.",
+      "De berekeningen zijn ingevuld, maar de conclusie is nog te beperkt.",
+      "Inname en verbruik zijn ingevuld en correct vergeleken.",
+      "Sterk: de leerling legt correct uit wat het kcal-verschil betekent voor lichaamsgewicht op langere termijn."
     ),
     autoFeedback:
       lvl3 === "++"
-        ? "Sterk: je verklaart PAL én formuleert een actie."
+        ? "Top: je energiebalans klopt én je conclusie is juist geformuleerd."
         : lvl3 === "+"
-        ? "Goed: je PAL-uitleg is duidelijk."
+        ? "Goed: je vergelijkt inname en verbruik correct."
         : lvl3 === "+/-"
-        ? "Schrijf een duidelijkere uitlegzin (waarom laag/matig/actief?)."
-        : "Kies laag/matig/actief en schrijf waarom.",
+        ? "Leg duidelijker uit wat het verschil tussen inname en verbruik betekent."
+        : "Vul kcal-inname en totaal kcal-verbruik in.",
   };
 
-  // C4 voeding
-  const pre = (f.preFood || "").trim();
-  const post = (f.postFood || "").trim();
-  const protein = f.proteinAfter;
-  const example = (f.proteinExample || "").trim();
+  const concept = (f.conceptExplain || "").trim();
+  const conceptLen = concept.length;
+  const conceptSentences = countSentencesApprox(concept);
+
+  const mentionsMET = hasAnyWord(concept, ["met"]);
+  const mentionsPAL = hasAnyWord(concept, ["pal"]);
+  const mentionsKcal = hasAnyWord(concept, ["kcal", "calorie", "energie"]);
 
   let lvl4: RubricLevel = "-";
-  const prepostLen = (pre + " " + post).trim().length;
-
-  if (!pre || !post) lvl4 = "-";
-  else if (prepostLen < 80 || !protein) lvl4 = "+/-";
-  else if (protein === "ja" && example) {
-    const hasWhy = (pre + " " + post).toLowerCase().includes("omdat") || (pre + " " + post).toLowerCase().includes("zodat") || (pre + " " + post).toLowerCase().includes("daarom");
-    lvl4 = hasWhy ? "++" : "+";
-  } else {
-    lvl4 = "+/-";
-  }
+  if (conceptLen < 70 || conceptSentences < 2) lvl4 = "-";
+  else if (!(mentionsMET && mentionsPAL && mentionsKcal)) lvl4 = "+/-";
+  else if (textExplainsPalVsMet(concept) && conceptLen >= 150) lvl4 = "++";
+  else lvl4 = "+";
 
   const item4: RubricItem = {
-    key: "voeding",
-    title: "Voeding (pre/post + eiwitcheck)",
+    key: "concept",
+    title: "Begrip van MET, PAL en kcal",
     level: lvl4,
     color: rubricColors[lvl4],
     description: levelText(
       lvl4,
-      "Pre/post niet ingevuld.",
-      "Pre/post te beperkt of eiwitcheck ontbreekt.",
-      "Pre + post ingevuld én eiwitcheck ja/nee + voorbeeld.",
-      "Alles ingevuld én je motiveert je keuze (omdat/zodat/daarom)."
+      "De uitleg is te kort of toont nog te weinig begrip van de begrippen.",
+      "De begrippen komen terug, maar het onderscheid is nog niet helemaal duidelijk.",
+      "De leerling legt PAL, MET en kcal in eenvoudige correcte taal uit.",
+      "Sterke uitleg: MET wordt gekoppeld aan één activiteit, PAL aan de hele dag en kcal aan energiebalans."
     ),
     autoFeedback:
       lvl4 === "++"
-        ? "Heel goed: voeding ingevuld én gemotiveerd."
+        ? "Uitstekend: je maakt het verschil tussen MET en PAL duidelijk."
         : lvl4 === "+"
-        ? "Goed: voeding + eiwitcheck zijn in orde."
+        ? "Goed: de basisbegrippen zijn correct uitgelegd."
         : lvl4 === "+/-"
-        ? "Vul pre + post concreter in en zet eiwit ja/nee + voorbeeld."
-        : "Vul zowel pre als post in.",
+        ? "Leg duidelijker uit dat MET bij een activiteit hoort en PAL bij je hele dag."
+        : "Schrijf minstens 2 duidelijke zinnen over MET, PAL en kcal.",
   };
 
-  return { items: [item1, item2, item3, item4], totals: { metMinutesTotal: metTotal } };
+  return {
+    items: [item1, item2, item3, item4],
+    totals: {
+      metMinutesTotal: metTotal,
+      activityKcalTotal,
+      kcalBalance,
+      inferredPal,
+    },
+    flags,
+  };
 }
 
-// -------------------------
-// Component
-// -------------------------
+/* =========================
+   HOOFDCOMPONENT
+========================= */
+
 export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
   const [mode, setMode] = useState<GradeMode>("2e");
 
@@ -708,10 +867,8 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
               form: f3,
               rubrics: rub3.items,
               totals: rub3.totals,
+              flags: rub3.flags,
             };
-
-      // ✅ Pas tabelnaam aan indien nodig
-      const tableName = "functional_huiswerk_submissions";
 
       const row = {
         user_id: uid,
@@ -723,7 +880,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
         created_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase.from(tableName).insert(row);
+      const { error } = await supabase.from("functional_huiswerk_submissions").insert(row);
       if (error) throw new Error(error.message);
 
       setInfo("✅ Huiswerk opgeslagen!");
@@ -736,13 +893,12 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
 
   return (
     <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
-      {/* Mode selector */}
       <div style={styles.panel}>
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
           <div>
             <div style={styles.sectionTitle}>📚 Huiswerk</div>
             <div style={{ ...styles.small, marginTop: 6 }}>
-              Kies je graad en vul de opdracht in. Rubrics worden automatisch berekend.
+              Kies je graad en vul de opdracht in. De app berekent automatisch rubrics.
             </div>
           </div>
 
@@ -769,6 +925,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
           <b>Oeps:</b> {error}
         </div>
       )}
+
       {info && (
         <div style={styles.okBox}>
           <b>Info:</b> {info}
@@ -782,8 +939,14 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
         </>
       ) : (
         <>
-          <ThirdGradePanel value={f3} onChange={setF3} metTotal={rub3.totals.metMinutesTotal} />
-          <RubricPanel title="Rubrics (3e graad)" items={rub3.items} extraRight={`Totaal MET-minuten: ${Math.round(rub3.totals.metMinutesTotal)}`} />
+          <ThirdGradePanel value={f3} onChange={setF3} derived={rub3.totals} flags={rub3.flags} />
+          <RubricPanel
+            title="Rubrics (3e graad)"
+            items={rub3.items}
+            extraRight={`MET-minuten: ${Math.round(rub3.totals.metMinutesTotal)} | kcal-saldo: ${
+              rub3.totals.kcalBalance === null ? "—" : Math.round(rub3.totals.kcalBalance)
+            }`}
+          />
         </>
       )}
 
@@ -791,7 +954,11 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
         <button onClick={reset} style={styles.ghostBtn}>
           Alles leegmaken
         </button>
-        <button onClick={handleSave} disabled={saving} style={{ ...styles.primaryBtn, opacity: saving ? 0.7 : 1 }}>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{ ...styles.primaryBtn, opacity: saving ? 0.7 : 1 }}
+        >
           {saving ? "Opslaan..." : "Opslaan"}
         </button>
       </div>
@@ -810,10 +977,30 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
   );
 }
 
-function RubricPanel({ title, items, extraRight }: { title: string; items: RubricItem[]; extraRight?: string }) {
+/* =========================
+   RUBRIC PANEL
+========================= */
+
+function RubricPanel({
+  title,
+  items,
+  extraRight,
+}: {
+  title: string;
+  items: RubricItem[];
+  extraRight?: string;
+}) {
   return (
     <div style={styles.panel}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "flex-start",
+          flexWrap: "wrap",
+        }}
+      >
         <div>
           <div style={styles.sectionTitle}>🎯 {title}</div>
           <div style={{ ...styles.small, marginTop: 6 }}>
@@ -825,7 +1012,10 @@ function RubricPanel({ title, items, extraRight }: { title: string; items: Rubri
 
       <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
         {items.map((it) => (
-          <div key={it.key} style={{ ...styles.rubricCard, borderColor: ui.border, background: it.color }}>
+          <div
+            key={it.key}
+            style={{ ...styles.rubricCard, borderColor: ui.border, background: it.color }}
+          >
             <div style={styles.rubricTop}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontWeight: 980, color: ui.text }}>{it.title}</div>
@@ -844,9 +1034,10 @@ function RubricPanel({ title, items, extraRight }: { title: string; items: Rubri
   );
 }
 
-// -------------------------
-// 2e graad UI
-// -------------------------
+/* =========================
+   2E GRAAD UI
+========================= */
+
 function SecondGradePanel({
   value,
   onChange,
@@ -861,8 +1052,9 @@ function SecondGradePanel({
       <div style={styles.panel}>
         <div style={styles.sectionTitle}>🏃‍♂️ Huiswerk 2e graad — MAS + hartslag + praattest</div>
         <div style={{ ...styles.small, marginTop: 8 }}>
-          Kies <b style={{ color: ui.text }}>Duur</b> of <b style={{ color: ui.text }}>Interval</b>. Meet <b style={{ color: ui.text }}>rust</b>,{" "}
-          <b style={{ color: ui.text }}>piek</b> en <b style={{ color: ui.text }}>herstel (na 1 min)</b>. Gebruik de praattest tijdens de kern.
+          Kies <b style={{ color: ui.text }}>Duur</b> of <b style={{ color: ui.text }}>Interval</b>.
+          Meet <b style={{ color: ui.text }}>rust</b>, <b style={{ color: ui.text }}>piek</b> en{" "}
+          <b style={{ color: ui.text }}>herstel (na 1 min)</b>. Gebruik de praattest tijdens de kern.
         </div>
       </div>
 
@@ -872,7 +1064,12 @@ function SecondGradePanel({
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.label}>Datum</div>
-            <input value={value.date} onChange={(e) => set({ date: e.target.value })} style={styles.input} placeholder="YYYY-MM-DD" />
+            <input
+              value={value.date}
+              onChange={(e) => set({ date: e.target.value })}
+              style={styles.input}
+              placeholder="YYYY-MM-DD"
+            />
           </div>
 
           <div style={{ marginTop: 12 }}>
@@ -950,21 +1147,39 @@ function SecondGradePanel({
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.label}>Rusthartslag (bpm)</div>
-            <input value={value.hrRest} onChange={(e) => set({ hrRest: e.target.value })} style={styles.input} inputMode="numeric" placeholder="bv. 62" />
+            <input
+              value={value.hrRest}
+              onChange={(e) => set({ hrRest: e.target.value })}
+              style={styles.input}
+              inputMode="numeric"
+              placeholder="bv. 62"
+            />
           </div>
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.label}>Hoogste hartslag (bpm)</div>
-            <input value={value.hrPeak} onChange={(e) => set({ hrPeak: e.target.value })} style={styles.input} inputMode="numeric" placeholder="bv. 178" />
+            <input
+              value={value.hrPeak}
+              onChange={(e) => set({ hrPeak: e.target.value })}
+              style={styles.input}
+              inputMode="numeric"
+              placeholder="bv. 178"
+            />
           </div>
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.label}>Herstel na 1 min (bpm)</div>
-            <input value={value.hrRec1} onChange={(e) => set({ hrRec1: e.target.value })} style={styles.input} inputMode="numeric" placeholder="bv. 155" />
+            <input
+              value={value.hrRec1}
+              onChange={(e) => set({ hrRec1: e.target.value })}
+              style={styles.input}
+              inputMode="numeric"
+              placeholder="bv. 155"
+            />
           </div>
 
           <div style={{ ...styles.small, marginTop: 10 }}>
-            Meet rustig, noteer eerlijk. De app checkt enkel logica (piek hoger dan rust, herstel lager dan piek).
+            Meet rustig, noteer eerlijk. De app checkt enkel logica: piek hoger dan rust, herstel lager dan piek.
           </div>
         </div>
 
@@ -1001,7 +1216,13 @@ function SecondGradePanel({
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.label}>RPE (1–10)</div>
-            <input value={value.rpe} onChange={(e) => set({ rpe: e.target.value })} style={styles.input} inputMode="numeric" placeholder="bv. 7" />
+            <input
+              value={value.rpe}
+              onChange={(e) => set({ rpe: e.target.value })}
+              style={styles.input}
+              inputMode="numeric"
+              placeholder="bv. 7"
+            />
           </div>
 
           <div style={{ marginTop: 12 }}>
@@ -1017,16 +1238,33 @@ function SecondGradePanel({
       </div>
 
       <div style={styles.panel}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
           <div>
-            <div style={styles.sectionTitle}>7) Optioneel — krachtcircuit</div>
-            <div style={{ ...styles.small, marginTop: 6 }}>Alleen invullen als je het effectief gedaan hebt (niet beoordeeld in rubrics).</div>
+            <div style={styles.sectionTitle}>6) Optioneel — krachtcircuit</div>
+            <div style={{ ...styles.small, marginTop: 6 }}>
+              Alleen invullen als je het effectief gedaan hebt (niet beoordeeld in rubrics).
+            </div>
           </div>
           <div style={styles.pill}>OPTIONEEL</div>
         </div>
 
         <div style={{ marginTop: 12 }}>
-          <label style={{ display: "flex", gap: 10, alignItems: "center", color: ui.text, fontWeight: 950 }}>
+          <label
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              color: ui.text,
+              fontWeight: 950,
+            }}
+          >
             <input
               type="checkbox"
               checked={value.didStrength}
@@ -1065,17 +1303,25 @@ function SecondGradePanel({
   );
 }
 
-// -------------------------
-// 3e graad UI
-// -------------------------
+/* =========================
+   3E GRAAD UI
+========================= */
+
 function ThirdGradePanel({
   value,
   onChange,
-  metTotal,
+  derived,
+  flags,
 }: {
   value: ThirdGradeForm;
   onChange: (next: ThirdGradeForm) => void;
-  metTotal: number;
+  derived: {
+    metMinutesTotal: number;
+    activityKcalTotal: number;
+    kcalBalance: number | null;
+    inferredPal: PalChoice | "";
+  };
+  flags: string[];
 }) {
   const set = (patch: Partial<ThirdGradeForm>) => onChange({ ...value, ...patch });
 
@@ -1086,49 +1332,179 @@ function ThirdGradePanel({
 
   const addRow = () => {
     set({
-      activities: [
-        ...value.activities,
-        { id: mkId(), activity: "", minutes: "", met: "" },
-      ],
+      activities: [...value.activities, { id: mkId(), activity: "", minutes: "", met: "" }],
     });
   };
 
   const removeRow = (id: string) => {
-    // laat minstens 5 staan
-    if (value.activities.length <= 5) return;
+    if (value.activities.length <= 6) return;
     set({ activities: value.activities.filter((r) => r.id !== id) });
+  };
+
+  const autoFillBurnFromActivities = () => {
+    set({
+      kcalTotalBurn: String(Math.round(derived.activityKcalTotal)),
+      burnSource: "Automatisch via activiteiten",
+    });
   };
 
   return (
     <>
       <div style={styles.panel}>
-        <div style={styles.sectionTitle}>🚴 Huiswerk 3e graad — PAL + MET + voeding</div>
+        <div style={styles.sectionTitle}>🚴 Huiswerk 3e graad — PAL + MET + kcal</div>
         <div style={{ ...styles.small, marginTop: 8 }}>
-          Log 1 dag met minstens <b style={{ color: ui.text }}>5 activiteiten</b>. Kies MET per activiteit. De app telt je MET-minuten op. Vul PAL + voeding in.
+          Dit huiswerk mag je invullen <b style={{ color: ui.text }}>zonder voorkennis</b>. Lees eerst de uitleg hieronder en vul daarna alles stap voor stap in.
         </div>
       </div>
+
+      <div style={styles.infoBox}>
+        <div style={{ fontWeight: 980, color: ui.text }}>Wat moet je hier doen?</div>
+        <div style={{ ...styles.small, marginTop: 8 }}>
+          Je kiest <b style={{ color: ui.text }}>één echte dag</b>, bijvoorbeeld gisteren. Daarna vul je in:
+        </div>
+        <div style={{ ...styles.small, marginTop: 8, display: "grid", gap: 6 }}>
+          <div>1. je activiteiten van die dag</div>
+          <div>2. hoe lang die activiteiten duurden</div>
+          <div>3. de MET-waarde van elke activiteit</div>
+          <div>4. je PAL-inschatting voor je volledige dag</div>
+          <div>5. hoeveel kcal je ongeveer at en hoeveel kcal je ongeveer verbruikte</div>
+          <div>6. wat dit betekent voor gewicht op langere termijn</div>
+        </div>
+      </div>
+
+      <div className="row2" style={styles.row2}>
+        <div style={styles.panel}>
+          <div style={styles.sectionTitle}>Korte uitleg voor je begint</div>
+
+          <div style={{ ...styles.small, marginTop: 10 }}>
+            <b style={{ color: ui.text }}>MET</b> zegt hoe zwaar <b style={{ color: ui.text }}>één activiteit</b> is.
+            Rust is ongeveer 1 MET. Hoe hoger de MET, hoe intensiever de activiteit.
+          </div>
+
+          <div style={{ ...styles.small, marginTop: 10 }}>
+            <b style={{ color: ui.text }}>PAL</b> zegt hoe actief je <b style={{ color: ui.text }}>hele dag</b> was.
+            Het gaat dus niet over één moment, maar over het totaal van je dag.
+          </div>
+
+          <div style={{ ...styles.small, marginTop: 10 }}>
+            <b style={{ color: ui.text }}>kcal</b> zijn een maat voor energie.
+            Eten en drinken leveren energie op. Bewegen en leven verbruiken energie.
+          </div>
+
+          <div style={{ ...styles.small, marginTop: 10 }}>
+            Als je op langere termijn <b style={{ color: ui.text }}>meer kcal inneemt dan verbruikt</b>, is er meer kans op gewichtstoename.
+            Als je op langere termijn <b style={{ color: ui.text }}>minder kcal inneemt dan verbruikt</b>, is er meer kans op gewichtsafname.
+          </div>
+        </div>
+
+        <div style={styles.panel}>
+          <div style={styles.sectionTitle}>Belangrijk verschil</div>
+
+          <div style={{ ...styles.small, marginTop: 10 }}>
+            <b style={{ color: ui.text }}>MET = één activiteit</b>
+          </div>
+          <div style={{ ...styles.small, marginTop: 6 }}>
+            Bijvoorbeeld: fietsen, wandelen, zitten, trainen…
+          </div>
+
+          <div style={{ ...styles.small, marginTop: 10 }}>
+            <b style={{ color: ui.text }}>PAL = je volledige dag</b>
+          </div>
+          <div style={{ ...styles.small, marginTop: 6 }}>
+            Bijvoorbeeld: “Mijn dag was laag actief / matig actief / actief.”
+          </div>
+
+          <div style={{ ...styles.small, marginTop: 10 }}>
+            Daarna leg jij alles nog eens uit <b style={{ color: ui.text }}>in je eigen woorden</b>. Zo toont de app of je het begrijpt.
+          </div>
+        </div>
+      </div>
+
+      <div style={styles.panel}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            alignItems: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          <div>
+            <div style={styles.sectionTitle}>Handige link voor kcal-berekening</div>
+            <div style={{ ...styles.small, marginTop: 6 }}>
+              Gebruik een externe site of app om je kcal-inname of totale kcal-verbruik te schatten.
+            </div>
+          </div>
+
+          <a
+            href="https://www.calculator.net/tdee-calculator.html"
+            target="_blank"
+            rel="noreferrer"
+            style={styles.linkBtn}
+          >
+            Open kcal / TDEE calculator
+          </a>
+        </div>
+
+        <div style={{ ...styles.small, marginTop: 10 }}>
+          Let op: dit zijn altijd <b style={{ color: ui.text }}>schattingen</b>. Je hoeft dus niet exact te zijn, maar wel eerlijk en logisch.
+        </div>
+      </div>
+
+      {flags.length > 0 && (
+        <div style={styles.warnBox}>
+          <b>Controlepunten:</b>
+          <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+            {flags.map((f, i) => (
+              <div key={i}>• {f}</div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="row2" style={styles.row2}>
         <div style={styles.panel}>
           <div style={styles.sectionTitle}>1) Basis</div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Datum</div>
-            <input value={value.date} onChange={(e) => set({ date: e.target.value })} style={styles.input} placeholder="YYYY-MM-DD" />
+            <div style={styles.label}>Datum van de dag die je analyseert</div>
+            <input
+              value={value.date}
+              onChange={(e) => set({ date: e.target.value })}
+              style={styles.input}
+              placeholder="YYYY-MM-DD"
+            />
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Gewicht (kg) (optioneel)</div>
-            <input value={value.weightKg} onChange={(e) => set({ weightKg: e.target.value })} style={styles.input} inputMode="decimal" placeholder="bv. 68" />
+            <div style={styles.label}>Gewicht (kg)</div>
+            <input
+              value={value.weightKg}
+              onChange={(e) => set({ weightKg: e.target.value })}
+              style={styles.input}
+              inputMode="decimal"
+              placeholder="bv. 68"
+            />
           </div>
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.label}>Totaal MET-minuten (auto)</div>
-            <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
               <div style={{ ...styles.pill, height: 46, borderRadius: 16, padding: "0 14px" }}>
-                {Math.round(metTotal)}
+                {Math.round(derived.metMinutesTotal)}
               </div>
-              <div style={styles.small}>Som van MET × minuten over alle activiteiten.</div>
+              <div style={styles.small}>Dit is de som van MET × minuten.</div>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>kcal verbruikt via je activiteiten (auto)</div>
+            <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ ...styles.pill, height: 46, borderRadius: 16, padding: "0 14px" }}>
+                {value.weightKg ? Math.round(derived.activityKcalTotal) : "Vul gewicht in"}
+              </div>
+              <div style={styles.small}>Schoolschatting op basis van MET × gewicht × uren.</div>
             </div>
           </div>
         </div>
@@ -1137,7 +1513,7 @@ function ThirdGradePanel({
           <div style={styles.sectionTitle}>2) PAL-inschatting</div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>PAL</div>
+            <div style={styles.label}>Kies je PAL voor je volledige dag</div>
             <select
               value={value.pal}
               onChange={(e) => set({ pal: e.target.value as any })}
@@ -1151,23 +1527,38 @@ function ThirdGradePanel({
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Waarom? (min. 1 zin)</div>
+            <div style={styles.label}>Automatische inschatting van de app</div>
+            <div style={{ marginTop: 10 }}>
+              <span style={styles.pill}>{derived.inferredPal || "Nog te weinig gegevens"}</span>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Leg uit waarom (in je eigen woorden)</div>
             <textarea
               value={value.palExplain}
               onChange={(e) => set({ palExplain: e.target.value })}
               style={styles.textarea}
-              placeholder="bv. Ik fietste heen/terug en had training, daarom schat ik mezelf matig/actief."
+              placeholder="bv. Ik zat lang op school, maar ik fietste ook heen en terug en had training. Daarom schat ik mijn hele dag als matig actief."
             />
           </div>
         </div>
       </div>
 
       <div style={styles.panel}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+          }}
+        >
           <div>
-            <div style={styles.sectionTitle}>3) Activiteitenlog (min. 5)</div>
+            <div style={styles.sectionTitle}>3) Activiteitenlog (min. 6 activiteiten)</div>
             <div style={{ ...styles.small, marginTop: 6 }}>
-              Kies activiteit + duur + MET. MET-minuten worden automatisch berekend.
+              Vul je dag zo volledig mogelijk in. Ook rustige activiteiten zoals slapen of zitten tellen mee.
             </div>
           </div>
           <button onClick={addRow} style={{ ...styles.ghostBtn, height: 46 }}>
@@ -1178,19 +1569,26 @@ function ThirdGradePanel({
         <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
           {value.activities.map((r, idx) => {
             const metMin = calcMetMinutes(r);
-            const canRemove = value.activities.length > 5;
+            const kcal = calcActivityKcal(r, value.weightKg);
+            const canRemove = value.activities.length > 6;
+
             return (
               <div key={r.id} style={{ ...styles.rubricCard, background: "rgba(0,0,0,0.22)" }}>
                 <div style={{ display: "grid", gap: 10 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center" }}>
-                    <div style={{ fontWeight: 980, color: ui.text }}>
-                      Activiteit {idx + 1}
-                    </div>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 10,
+                      alignItems: "center",
+                    }}
+                  >
+                    <div style={{ fontWeight: 980, color: ui.text }}>Activiteit {idx + 1}</div>
                     <button
                       onClick={() => removeRow(r.id)}
                       disabled={!canRemove}
                       style={{ ...styles.ghostBtn, height: 38, opacity: canRemove ? 1 : 0.5 }}
-                      title={canRemove ? "Verwijderen" : "Minstens 5 activiteiten verplicht"}
+                      title={canRemove ? "Verwijderen" : "Minstens 6 activiteiten verplicht"}
                     >
                       Verwijder
                     </button>
@@ -1235,12 +1633,21 @@ function ThirdGradePanel({
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 10,
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <div style={styles.small}>
                       MET-minuten (auto): <b style={{ color: ui.text }}>{Math.round(metMin)}</b>
                     </div>
                     <div style={styles.small}>
-                      Tip: neem ook een “laag actief” blok mee (zitten/schoolwerk).
+                      kcal activiteit (auto):{" "}
+                      <b style={{ color: ui.text }}>{value.weightKg ? Math.round(kcal) : "vul gewicht in"}</b>
                     </div>
                   </div>
                 </div>
@@ -1250,58 +1657,109 @@ function ThirdGradePanel({
         </div>
       </div>
 
-      <div style={styles.panel}>
-        <div style={styles.sectionTitle}>4) Voeding</div>
+      <div className="row2" style={styles.row2}>
+        <div style={styles.panel}>
+          <div style={styles.sectionTitle}>4) kcal-inname</div>
 
-        <div className="row2" style={{ ...styles.row2, marginTop: 12 }}>
-          <div>
-            <div style={styles.label}>Voor activiteit (pre)</div>
-            <textarea
-              value={value.preFood}
-              onChange={(e) => set({ preFood: e.target.value })}
-              style={styles.textarea}
-              placeholder="bv. banaan + water"
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Totale kcal-inname van die dag</div>
+            <input
+              value={value.kcalIntake}
+              onChange={(e) => set({ kcalIntake: e.target.value })}
+              style={styles.input}
+              inputMode="numeric"
+              placeholder="bv. 2250"
             />
           </div>
 
-          <div>
-            <div style={styles.label}>Na activiteit (post)</div>
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Hoe heb je dit berekend?</div>
             <textarea
-              value={value.postFood}
-              onChange={(e) => set({ postFood: e.target.value })}
+              value={value.kcalIntakeSource}
+              onChange={(e) => set({ kcalIntakeSource: e.target.value })}
               style={styles.textarea}
-              placeholder="bv. brood + kip / yoghurt"
+              placeholder="bv. Ik heb alles van gisteren ingevoerd in een app / site en zo mijn kcal-inname geschat."
             />
           </div>
         </div>
 
-        <div className="row3" style={{ ...styles.row3, marginTop: 12 }}>
-          <div>
-            <div style={styles.label}>Eiwit na activiteit?</div>
+        <div style={styles.panel}>
+          <div style={styles.sectionTitle}>5) kcal-verbruik</div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Totaal kcal-verbruik van die dag</div>
+            <input
+              value={value.kcalTotalBurn}
+              onChange={(e) => set({ kcalTotalBurn: e.target.value })}
+              style={styles.input}
+              inputMode="numeric"
+              placeholder="bv. 2400"
+            />
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Bron</div>
             <select
-              value={value.proteinAfter}
-              onChange={(e) => set({ proteinAfter: e.target.value as any })}
+              value={value.burnSource}
+              onChange={(e) => set({ burnSource: e.target.value as any })}
               style={{ ...styles.input, marginTop: 10 }}
             >
               <option value="">Kies…</option>
-              <option value="ja">Ja</option>
-              <option value="nee">Nee</option>
+              <option value="Automatisch via activiteiten">Automatisch via activiteiten</option>
+              <option value="Externe calculator / app">Externe calculator / app</option>
+              <option value="Eigen schatting">Eigen schatting</option>
             </select>
           </div>
 
-          <div style={{ gridColumn: "span 2" as any }}>
-            <div style={styles.label}>Voorbeeld eiwitbron (indien ja)</div>
-            <input
-              value={value.proteinExample}
-              onChange={(e) => set({ proteinExample: e.target.value })}
-              style={styles.input}
-              placeholder="bv. yoghurt, kip, eieren, melk, tofu…"
+          <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <button onClick={autoFillBurnFromActivities} style={{ ...styles.ghostBtn, height: 46 }}>
+              Gebruik automatisch berekend verbruik
+            </button>
+            <div style={styles.small}>Handig om te vergelijken met je externe calculator of app.</div>
+          </div>
+        </div>
+      </div>
+
+      <div className="row2" style={styles.row2}>
+        <div style={styles.panel}>
+          <div style={styles.sectionTitle}>6) Energiebalans</div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>kcal-saldo (auto = inname - verbruik)</div>
+            <div style={{ marginTop: 10 }}>
+              <span style={{ ...styles.pill, height: 46, borderRadius: 16, padding: "0 14px" }}>
+                {derived.kcalBalance === null ? "—" : Math.round(derived.kcalBalance)}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Wat betekent dit? (in je eigen woorden)</div>
+            <textarea
+              value={value.balanceExplain}
+              onChange={(e) => set({ balanceExplain: e.target.value })}
+              style={styles.textarea}
+              placeholder="bv. Mijn inname ligt lager dan mijn verbruik. Als dit vaker zo is, kan dat op langere termijn leiden tot gewichtsafname."
             />
           </div>
         </div>
 
-        <div style={{ ...styles.small, marginTop: 10 }}>
-          Hou het simpel: pre = energie/vocht, post = herstel + (liefst) eiwitbron.
+        <div style={styles.panel}>
+          <div style={styles.sectionTitle}>7) Leg het uit in je eigen woorden</div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Wat is MET? Wat is PAL? Wat is het verschil? Hoe hangen kcal hiermee samen?</div>
+            <textarea
+              value={value.conceptExplain}
+              onChange={(e) => set({ conceptExplain: e.target.value })}
+              style={styles.textarea}
+              placeholder="Schrijf minstens 2 duidelijke zinnen. Leg uit dat MET over één activiteit gaat en PAL over je volledige dag."
+            />
+          </div>
+
+          <div style={{ ...styles.small, marginTop: 10 }}>
+            Tip: schrijf niet gewoon de woorden over. Probeer het echt uit te leggen alsof je het aan een klasgenoot vertelt.
+          </div>
         </div>
       </div>
     </>
