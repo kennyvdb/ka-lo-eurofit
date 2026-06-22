@@ -1,11 +1,12 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 const supabase = createClient();
 
 type RubricLevel = "-" | "+/-" | "+" | "++";
+type GradeMode = "2e" | "3e";
 
 type ProfielLite = {
   id: string;
@@ -28,7 +29,16 @@ type Props = {
 
 type Aspect = "Kracht" | "Lenigheid" | "Snelheid" | "Uithouding" | "Evenwicht" | "";
 
-type Form = {
+type SecondGradeForm = {
+  date: string;
+  strength1: string;
+  strength2: string;
+  weakness1: string;
+  weakness2: string;
+  conclusion: string;
+};
+
+type ThirdGradeForm = {
   date: string;
   strength: Aspect;
   weakness: Aspect;
@@ -52,6 +62,25 @@ type RubricItem = {
 };
 
 const ASPECTS: Aspect[] = ["Kracht", "Lenigheid", "Snelheid", "Uithouding", "Evenwicht"];
+
+const OLD_SECOND_GRADE_CONCLUSION =
+  "Mijn Eurofitresultaten tonen waar ik sterker en minder sterk in ben. Ik probeer mijn scores te verklaren door te kijken naar mijn sport, inzet, ervaring, lichaamsbouw, techniek en wat ik vaak of minder vaak oefen.";
+
+const EUROFIT_TEST_LABELS: Record<string, string> = {
+  flamingo: "Flamingo balans",
+  plate_tapping: "Plate tapping",
+  sit_and_reach: "Sit & reach",
+  standing_broad_jump: "Verspringen uit stand",
+  handgrip: "Handknijpkracht",
+  sit_ups: "Sit-ups (30s)",
+  bent_arm_hang: "Bent-arm hang",
+  agility_shuttle_run_10x5: "10×5 shuttle run",
+  shuttle_run_20m: "20m shuttle run",
+};
+
+function eurofitTestLabel(key: string) {
+  return EUROFIT_TEST_LABELS[key] ?? key;
+}
 
 function toYMD(d = new Date()) {
   return d.toISOString().slice(0, 10);
@@ -92,7 +121,49 @@ function levelText(level: RubricLevel, a: string, b: string, c: string, d: strin
   return d;
 }
 
-function initForm(): Form {
+function scoreFromLabel(label: string) {
+  const t = label.toLowerCase();
+  if (t.includes("zeer goed")) return 6;
+  if (t === "goed" || t.includes(" goed")) return 5;
+  if (t.includes("gemiddeld goed")) return 4;
+  if (t.includes("gemiddeld zwak")) return 3;
+  if (t === "zwak" || t.includes(" zwak")) return 2;
+  if (t.includes("zeer zwak")) return 1;
+  return 0;
+}
+
+function eurofitEntries(scores: Record<string, string>, beoordelingen: Record<string, Beoordeling>) {
+  const fixedKeys = Object.keys(EUROFIT_TEST_LABELS);
+  const extraKeys = Array.from(new Set([...Object.keys(scores || {}), ...Object.keys(beoordelingen || {})]))
+    .filter((key) => !fixedKeys.includes(key));
+  const keys = [...fixedKeys, ...extraKeys];
+
+  return keys.map((key) => ({
+    key,
+    label: eurofitTestLabel(key),
+    score: scores?.[key] ?? "",
+    beoordeling: beoordelingen?.[key]?.label ?? "",
+    kleur: beoordelingen?.[key]?.kleur ?? "",
+    orderScore: scoreFromLabel(beoordelingen?.[key]?.label ?? ""),
+  }));
+}
+
+function initSecond(scores: Record<string, string>, beoordelingen: Record<string, Beoordeling>): SecondGradeForm {
+  const entries = eurofitEntries(scores, beoordelingen);
+  const sorted = [...entries].sort((a, b) => b.orderScore - a.orderScore);
+  const weak = [...entries].sort((a, b) => a.orderScore - b.orderScore);
+
+  return {
+    date: toYMD(),
+    strength1: sorted[0]?.key ?? "",
+    strength2: sorted[1]?.key ?? "",
+    weakness1: weak[0]?.key ?? "",
+    weakness2: weak[1]?.key ?? "",
+    conclusion: "",
+  };
+}
+
+function initThird(): ThirdGradeForm {
   return {
     date: toYMD(),
     strength: "",
@@ -108,7 +179,7 @@ function initForm(): Form {
   };
 }
 
-function buildPrompt(f: Form) {
+function buildPrompt(f: ThirdGradeForm) {
   const sport = f.sportContext.trim() || "geen specifieke sport";
   return `Ik ben een leerling van de derde graad secundair onderwijs. Mijn Eurofit-werkpunt is ${f.chosenAspect || "[kies aspect]"}. Mijn sport/context is: ${sport}. Mijn doel is: ${f.smartGoal || "[vul SMART-doel in]"}.
 
@@ -124,181 +195,140 @@ Gebruik deze voorwaarden:
 - formuleer alles duidelijk in een tabel`;
 }
 
-function rubrics(f: Form): RubricItem[] {
-  let lvl1: RubricLevel = "-";
-  if (!f.strength || !f.weakness) lvl1 = "-";
-  else if (f.strength === f.weakness) lvl1 = "+/-";
-  else if (countWords(f.reason) >= 35 && hasAny(f.reason, ["score", "norm", "percentiel", "resultaat", "eurofit", "meting"])) lvl1 = "++";
-  else lvl1 = "+";
+function rubricSecond(f: SecondGradeForm): RubricItem {
+  const selected = [f.strength1, f.strength2, f.weakness1, f.weakness2].filter(Boolean);
+  const uniqueSelected = new Set(selected).size;
+  const allChosen = selected.length === 4;
+  const hasDuplicates = allChosen && uniqueSelected < 4;
+  const words = countWords(f.conclusion);
+  const explainsScores = hasAny(f.conclusion, [
+    "omdat",
+    "daardoor",
+    "verklaren",
+    "score",
+    "resultaat",
+    "sport",
+    "training",
+    "oefen",
+    "techniek",
+    "lichaam",
+    "inzet",
+    "ervaring",
+    "leeftijdsgenoten",
+    "verbeteren",
+  ]);
 
-  let lvl2: RubricLevel = "-";
-  const smart = f.smartGoal;
+  let level: RubricLevel = "-";
+  if (!allChosen || !f.conclusion.trim()) level = "-";
+  else if (hasDuplicates || words < 35) level = "+/-";
+  else if (words >= 80 && explainsScores && hasAny(f.conclusion, ["sterkte", "werkpunt", "verbeter", "volgende", "train"])) level = "++";
+  else level = "+";
+
+  return {
+    key: "huiswerk_2e_eurofit",
+    title: "Evaluatie huiswerk 2e graad",
+    level,
+    color: rubricColors[level],
+    description: levelText(
+      level,
+      "Onvoldoende: niet alle sterktes/werkpunten zijn gekozen of het besluit ontbreekt.",
+      "Bijna in orde: de keuzes zijn aanwezig, maar het besluit is te kort, dubbel gekozen of nog weinig verklarend.",
+      "In orde: de leerling kiest sterktes en werkpunten en schrijft een duidelijk besluit.",
+      "Zeer goed: de leerling kiest logisch, verklaart de scores en koppelt het besluit aan persoonlijke fitheid en verbetering.",
+    ),
+    autoFeedback: levelText(
+      level,
+      "Kies 2 sterktes en 2 werkpunten en schrijf een besluit.",
+      "Controleer of je 4 verschillende testen koos en leg je resultaten uitgebreider uit.",
+      "Goed besluit. Probeer nog concreter te verklaren waarom sommige scores sterker of zwakker zijn.",
+      "Sterk besluit: je verklaart je scores en toont inzicht in je eigen fitheid.",
+    ),
+  };
+}
+
+function rubricThird(f: ThirdGradeForm): RubricItem {
+  const analyseOk = Boolean(f.strength && f.weakness && f.strength !== f.weakness) && countWords(f.reason) >= 25;
   const smartHits = [
-    hasAny(smart, ["verbeter", "verhogen", "verlagen", "sneller", "langer", "meer"]),
-    hasAny(smart, ["cm", "sec", "kg", "aantal", "stage", "%", "minuten"]),
-    hasAny(smart, ["4 weken", "weken", "tegen", "datum"]),
-    countWords(smart) >= 20,
+    hasAny(f.smartGoal, ["verbeter", "verhogen", "verlagen", "sneller", "langer", "meer"]),
+    hasAny(f.smartGoal, ["cm", "sec", "kg", "aantal", "stage", "%", "minuten"]),
+    hasAny(f.smartGoal, ["4 weken", "weken", "tegen", "datum"]),
+    countWords(f.smartGoal) >= 20,
   ].filter(Boolean).length;
-
-  if (!f.chosenAspect || !smart.trim()) lvl2 = "-";
-  else if (smartHits <= 1) lvl2 = "+/-";
-  else if (smartHits >= 4) lvl2 = "++";
-  else lvl2 = "+";
-
-  let lvl3: RubricLevel = "-";
-  const prompt = f.aiPrompt;
   const promptHits = [
-    hasAny(prompt, ["4 weken", "schema", "trainingsschema"]),
-    hasAny(prompt, ["opwarming", "cooling-down", "kern"]),
-    hasAny(prompt, ["overload", "progressief", "specificiteit", "herstel", "individualisatie"]),
-    hasAny(prompt, ["intensiteit", "rust", "duur", "frequentie"]),
+    hasAny(f.aiPrompt, ["4 weken", "schema", "trainingsschema"]),
+    hasAny(f.aiPrompt, ["opwarming", "cooling-down", "kern"]),
+    hasAny(f.aiPrompt, ["overload", "progressief", "specificiteit", "herstel", "individualisatie"]),
+    hasAny(f.aiPrompt, ["intensiteit", "rust", "duur", "frequentie"]),
   ].filter(Boolean).length;
-
-  if (!prompt.trim()) lvl3 = "-";
-  else if (promptHits <= 1) lvl3 = "+/-";
-  else if (promptHits >= 4 && countWords(prompt) >= 60) lvl3 = "++";
-  else lvl3 = "+";
-
-  let lvl4: RubricLevel = "-";
-  const schema = f.aiSchema + " " + f.trainingPrinciples;
+  const schemaText = f.aiSchema + " " + f.trainingPrinciples;
   const schemaHits = [
-    hasAny(schema, ["week 1", "week 2", "week 3", "week 4"]),
-    hasAny(schema, ["opwarming", "kern", "cooling"]),
-    hasAny(schema, ["rust", "herstel"]),
-    hasAny(schema, ["progress", "opbouw", "zwaarder", "meer"]),
-    hasAny(schema, ["specificiteit", "overload", "individualisatie"]),
+    hasAny(schemaText, ["week 1", "week 2", "week 3", "week 4"]),
+    hasAny(schemaText, ["opwarming", "kern", "cooling"]),
+    hasAny(schemaText, ["rust", "herstel"]),
+    hasAny(schemaText, ["progress", "opbouw", "zwaarder", "meer"]),
+    hasAny(schemaText, ["specificiteit", "overload", "individualisatie"]),
+  ].filter(Boolean).length;
+  const reflectionOk = countWords(f.reflection) >= 40 && hasAny(f.reflection, ["haalbaar", "aanpassen", "meten", "volhouden", "blessure", "planning"]);
+
+  const totalChecks = [
+    analyseOk,
+    Boolean(f.chosenAspect),
+    smartHits >= 3,
+    promptHits >= 3,
+    schemaHits >= 4,
+    countWords(f.trainingPrinciples) >= 30,
+    reflectionOk,
   ].filter(Boolean).length;
 
-  if (!f.aiSchema.trim()) lvl4 = "-";
-  else if (schemaHits <= 2) lvl4 = "+/-";
-  else if (schemaHits >= 5 && countWords(f.trainingPrinciples) >= 35) lvl4 = "++";
-  else lvl4 = "+";
+  let level: RubricLevel = "-";
+  if (totalChecks <= 2) level = "-";
+  else if (totalChecks <= 4) level = "+/-";
+  else if (totalChecks === 7) level = "++";
+  else level = "+";
 
-  let lvl5: RubricLevel = "-";
-  const refl = f.reflection;
-  if (!refl.trim()) lvl5 = "-";
-  else if (countWords(refl) < 30) lvl5 = "+/-";
-  else if (countWords(refl) >= 70 && hasAny(refl, ["haalbaar", "aanpassen", "meten", "volhouden", "blessure", "planning"])) lvl5 = "++";
-  else lvl5 = "+";
-
-  return [
-    {
-      key: "analyse",
-      title: "Eigen fitheidsanalyse",
-      level: lvl1,
-      color: rubricColors[lvl1],
-      description: levelText(
-        lvl1,
-        "Sterkte en/of zwakte ontbreken.",
-        "Sterkte en zwakte zijn ingevuld, maar niet logisch onderscheiden.",
-        "Sterkte en zwakte zijn duidelijk gekozen.",
-        "Sterkte en zwakte zijn duidelijk gekozen én gekoppeld aan Eurofit-resultaten of normen."
-      ),
-      autoFeedback: levelText(
-        lvl1,
-        "Kies één sterkte en één zwakte.",
-        "Kies twee verschillende aspecten en leg kort uit waarom.",
-        "Goed: je analyse is duidelijk.",
-        "Sterk: je koppelt je keuzes aan je eigen metingen."
-      ),
-    },
-    {
-      key: "smart",
-      title: "SMART-doel",
-      level: lvl2,
-      color: rubricColors[lvl2],
-      description: levelText(
-        lvl2,
-        "Het doel ontbreekt of is niet concreet.",
-        "Het doel is aanwezig, maar nog te vaag.",
-        "Het doel is duidelijk en grotendeels SMART.",
-        "Het doel is specifiek, meetbaar, haalbaar, relevant en tijdsgebonden."
-      ),
-      autoFeedback: levelText(
-        lvl2,
-        "Formuleer een concreet doel.",
-        "Maak je doel meetbaar en zet er een termijn op.",
-        "Goed doel. Maak het eventueel nog meetbaarder.",
-        "Uitstekend SMART-doel."
-      ),
-    },
-    {
-      key: "prompt",
-      title: "AI-promptkwaliteit",
-      level: lvl3,
-      color: rubricColors[lvl3],
-      description: levelText(
-        lvl3,
-        "De prompt ontbreekt.",
-        "De prompt is te algemeen.",
-        "De prompt bevat voldoende informatie om een bruikbaar schema te krijgen.",
-        "De prompt is zeer volledig en vraagt expliciet naar trainingsprincipes, opbouw en evaluatie."
-      ),
-      autoFeedback: levelText(
-        lvl3,
-        "Maak eerst een prompt voor ChatGPT.",
-        "Voeg meer voorwaarden toe: weken, intensiteit, rust, opwarming en doel.",
-        "Goede prompt.",
-        "Zeer sterke prompt."
-      ),
-    },
-    {
-      key: "schema",
-      title: "Trainingsschema en trainingsleer",
-      level: lvl4,
-      color: rubricColors[lvl4],
-      description: levelText(
-        lvl4,
-        "Het schema ontbreekt.",
-        "Het schema is aanwezig, maar mist structuur of trainingsprincipes.",
-        "Het schema is bruikbaar en bevat een duidelijke opbouw.",
-        "Het schema is goed opgebouwd en past meerdere trainingsprincipes correct toe."
-      ),
-      autoFeedback: levelText(
-        lvl4,
-        "Plak je AI-schema in het vak.",
-        "Controleer of weekopbouw, rust en intensiteit duidelijk zijn.",
-        "Goed schema. Voeg nog explicieter trainingsprincipes toe.",
-        "Sterk schema met goede trainingsleer."
-      ),
-    },
-    {
-      key: "reflectie",
-      title: "Reflectie op haalbaarheid",
-      level: lvl5,
-      color: rubricColors[lvl5],
-      description: levelText(
-        lvl5,
-        "Reflectie ontbreekt.",
-        "Reflectie is te kort.",
-        "Reflectie toont dat je nadenkt over haalbaarheid.",
-        "Sterke reflectie: haalbaarheid, meten, planning en bijsturen komen aan bod."
-      ),
-      autoFeedback: levelText(
-        lvl5,
-        "Schrijf een korte reflectie.",
-        "Schrijf uitgebreider: wat is haalbaar en wat kan moeilijk zijn?",
-        "Goede reflectie.",
-        "Uitstekende reflectie."
-      ),
-    },
-  ];
+  return {
+    key: "huiswerk_3e_eurofit",
+    title: "Evaluatie huiswerk 3e graad",
+    level,
+    color: rubricColors[level],
+    description: levelText(
+      level,
+      "Onvoldoende: de opdracht mist meerdere kernonderdelen.",
+      "Bijna in orde: de basis is aanwezig, maar analyse, SMART-doel, schema of reflectie zijn nog onvoldoende uitgewerkt.",
+      "In orde: de opdracht is volledig genoeg en toont inzicht in fitheid, doelstelling en training.",
+      "Zeer goed: de opdracht is volledig, concreet, goed opgebouwd en toont sterk inzicht in trainingsprincipes en haalbaarheid.",
+    ),
+    autoFeedback: levelText(
+      level,
+      "Werk de analyse, het SMART-doel, het schema en de reflectie verder uit.",
+      "Je bent goed gestart. Maak je doel meetbaar en zorg dat je schema duidelijk weekopbouw, rust en intensiteit bevat.",
+      "Goed werk. Voeg nog meer diepgang toe aan trainingsprincipes of reflectie voor ++.",
+      "Uitstekend: je koppelt resultaten, doel, schema, trainingsleer en reflectie sterk aan elkaar.",
+    ),
+  };
 }
 
 export default function HomeworkTab({ uid, profiel, scores, beoordelingen }: Props) {
-  const [form, setForm] = useState<Form>(() => initForm());
+  const [mode, setMode] = useState<GradeMode>("2e");
+  const [f2, setF2] = useState<SecondGradeForm>(() => initSecond(scores, beoordelingen));
+  const [f3, setF3] = useState<ThirdGradeForm>(() => initThird());
   const [saving, setSaving] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const items = useMemo(() => rubrics(form), [form]);
-  const suggestedPrompt = useMemo(() => buildPrompt(form), [form]);
+  useEffect(() => {
+    setF2((prev) =>
+      prev.conclusion === OLD_SECOND_GRADE_CONCLUSION ? { ...prev, conclusion: "" } : prev,
+    );
+  }, []);
 
-  const set = (patch: Partial<Form>) => setForm((prev) => ({ ...prev, ...patch }));
+  const entries = useMemo(() => eurofitEntries(scores, beoordelingen), [scores, beoordelingen]);
+  const item2 = useMemo(() => rubricSecond(f2), [f2]);
+  const item3 = useMemo(() => rubricThird(f3), [f3]);
+  const suggestedPrompt = useMemo(() => buildPrompt(f3), [f3]);
 
-  const handleUsePrompt = () => {
-    set({ aiPrompt: suggestedPrompt });
-  };
+  const set2 = (patch: Partial<SecondGradeForm>) => setF2((prev) => ({ ...prev, ...patch }));
+  const set3 = (patch: Partial<ThirdGradeForm>) => setF3((prev) => ({ ...prev, ...patch }));
 
   const handleSave = async () => {
     setSaving(true);
@@ -306,18 +336,28 @@ export default function HomeworkTab({ uid, profiel, scores, beoordelingen }: Pro
     setError(null);
 
     try {
+      const isSecond = mode === "2e";
       const row = {
         user_id: uid,
         schooljaar: profiel?.schooljaar ?? null,
         klas_naam: profiel?.klas_naam ?? null,
-        date: form.date,
-        grade: "3e",
-        payload: {
-          form,
-          rubrics: items,
-          eurofit_scores: scores,
-          eurofit_beoordelingen: beoordelingen,
-        },
+        date: isSecond ? f2.date : f3.date,
+        grade: mode,
+        payload: isSecond
+          ? {
+              grade: "2e",
+              form: f2,
+              rubric: item2,
+              eurofit_scores: scores,
+              eurofit_beoordelingen: beoordelingen,
+            }
+          : {
+              grade: "3e",
+              form: f3,
+              rubric: item3,
+              eurofit_scores: scores,
+              eurofit_beoordelingen: beoordelingen,
+            },
         created_at: new Date().toISOString(),
       };
 
@@ -335,15 +375,211 @@ export default function HomeworkTab({ uid, profiel, scores, beoordelingen }: Pro
   return (
     <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
       <div style={styles.panel}>
-        <div style={styles.title}>📚 Huiswerk Eurofit — 3e graad</div>
-        <div style={styles.small}>
-          Doel: je herkent je eigen wijzigingen in fitheid, kiest één sterkte en één werkpunt, en maakt met AI een haalbaar trainingsschema.
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          <div>
+            <div style={styles.title}>📚 Huiswerk</div>
+            <div style={styles.small}>
+              Kies je graad en vul de opdracht in. De app berekent automatisch één rubric.
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <span style={styles.pill}>Graad</span>
+            <select
+              value={mode}
+              onChange={(e) => {
+                setInfo(null);
+                setError(null);
+                setMode(e.target.value as GradeMode);
+              }}
+              style={{ ...styles.input, marginTop: 0, height: 46, width: 180 }}
+            >
+              <option value="2e">2e graad</option>
+              <option value="3e">3e graad</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {error && <div style={styles.errorBox}><b>Oeps:</b> {error}</div>}
-      {info && <div style={styles.okBox}><b>Info:</b> {info}</div>}
+      {error && (
+        <div style={styles.errorBox}>
+          <b>Oeps:</b> {error}
+        </div>
+      )}
+      {info && (
+        <div style={styles.okBox}>
+          <b>Info:</b> {info}
+        </div>
+      )}
 
+      {mode === "2e" ? (
+        <>
+          <SecondGradePanel form={f2} set={set2} entries={entries} />
+          <RubricPanel item={item2} />
+        </>
+      ) : (
+        <>
+          <ThirdGradePanel
+            form={f3}
+            set={set3}
+            suggestedPrompt={suggestedPrompt}
+            onUsePrompt={() => set3({ aiPrompt: suggestedPrompt })}
+          />
+          <RubricPanel item={item3} />
+        </>
+      )}
+
+      <div style={styles.actionRow}>
+        <button
+          onClick={() => {
+            if (mode === "2e") setF2(initSecond(scores, beoordelingen));
+            else setF3(initThird());
+          }}
+          style={styles.ghostBtn}
+        >
+          Alles leegmaken
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          style={{ ...styles.primaryBtn, opacity: saving ? 0.7 : 1 }}
+        >
+          {saving ? "Opslaan..." : "Opslaan"}
+        </button>
+      </div>
+
+      <style jsx>{`
+        @media (min-width: 900px) {
+          .row2 {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+        }
+      `}</style>
+    </div>
+  );
+}
+
+function TestSelect({
+  value,
+  onChange,
+  entries,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  entries: ReturnType<typeof eurofitEntries>;
+}) {
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} style={styles.input}>
+      <option value="">Kies een Eurofittest…</option>
+      {entries.map((e) => (
+        <option key={e.key} value={e.key}>
+          {e.label}
+          {e.score ? ` — ${e.score}` : ""}
+          {e.beoordeling ? ` — ${e.beoordeling}` : ""}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function SecondGradePanel({
+  form,
+  set,
+  entries,
+}: {
+  form: SecondGradeForm;
+  set: (patch: Partial<SecondGradeForm>) => void;
+  entries: ReturnType<typeof eurofitEntries>;
+}) {
+  return (
+    <>
+      <div style={styles.panel}>
+        <div style={styles.title}>📊 Mijn Eurofitresultaten</div>
+        <div style={styles.small}>Deze lijst toont de testen die je kan kiezen als sterkte of werkpunt.</div>
+
+        <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+          {entries.length === 0 ? (
+            <div style={styles.small}>Nog geen Eurofitresultaten gevonden.</div>
+          ) : (
+            entries.map((e) => (
+              <div key={e.key} style={styles.resultRow}>
+                <div style={{ fontWeight: 950, color: ui.text }}>{e.label}</div>
+                <div style={styles.small}>Score: {e.score || "—"}</div>
+                <div style={styles.badge}>{e.beoordeling || "Geen norm"}</div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <div className="row2" style={styles.row2}>
+        <div style={styles.panel}>
+          <div style={styles.title}>1) Kies je sterktes en werkpunten</div>
+
+          <Field label="Datum">
+            <input value={form.date} onChange={(e) => set({ date: e.target.value })} style={styles.input} />
+          </Field>
+
+          <Field label="Sterkte 1">
+            <TestSelect value={form.strength1} onChange={(v) => set({ strength1: v })} entries={entries} />
+          </Field>
+
+          <Field label="Sterkte 2">
+            <TestSelect value={form.strength2} onChange={(v) => set({ strength2: v })} entries={entries} />
+          </Field>
+
+          <Field label="Werkpunt 1">
+            <TestSelect value={form.weakness1} onChange={(v) => set({ weakness1: v })} entries={entries} />
+          </Field>
+
+          <Field label="Werkpunt 2">
+            <TestSelect value={form.weakness2} onChange={(v) => set({ weakness2: v })} entries={entries} />
+          </Field>
+        </div>
+
+        <div style={styles.panel}>
+          <div style={styles.title}>2) Besluit</div>
+          <div style={styles.small}>
+            Schrijf een besluit over je gekozen sterktes en werkpunten. Kan je je scores verklaren?
+            Denk aan je sport, training, techniek, inzet, ervaring, lichaamsbouw of wat je vaak/minder vaak oefent.
+            Eindig met wat je hieruit leert over je eigen fitheid.
+          </div>
+
+          <Field label="Mijn besluit">
+            <textarea
+              value={form.conclusion}
+              onChange={(e) => set({ conclusion: e.target.value })}
+              style={{ ...styles.textarea, minHeight: 240 }}
+              placeholder="Schrijf hier zelf je besluit. Verklaar je scores: waarom zijn dit jouw sterktes en werkpunten? Wat leer je over je eigen fitheid?"
+            />
+          </Field>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ThirdGradePanel({
+  form,
+  set,
+  suggestedPrompt,
+  onUsePrompt,
+}: {
+  form: ThirdGradeForm;
+  set: (patch: Partial<ThirdGradeForm>) => void;
+  suggestedPrompt: string;
+  onUsePrompt: () => void;
+}) {
+  return (
+    <>
       <div className="row2" style={styles.row2}>
         <div style={styles.panel}>
           <div style={styles.title}>1) Analyseer je fitheid</div>
@@ -355,14 +591,22 @@ export default function HomeworkTab({ uid, profiel, scores, beoordelingen }: Pro
           <Field label="Mijn sterkte">
             <select value={form.strength} onChange={(e) => set({ strength: e.target.value as Aspect })} style={styles.input}>
               <option value="">Kies…</option>
-              {ASPECTS.map((a) => <option key={a} value={a}>{a}</option>)}
+              {ASPECTS.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
             </select>
           </Field>
 
           <Field label="Mijn zwakte / werkpunt">
             <select value={form.weakness} onChange={(e) => set({ weakness: e.target.value as Aspect })} style={styles.input}>
               <option value="">Kies…</option>
-              {ASPECTS.map((a) => <option key={a} value={a}>{a}</option>)}
+              {ASPECTS.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
             </select>
           </Field>
 
@@ -377,7 +621,11 @@ export default function HomeworkTab({ uid, profiel, scores, beoordelingen }: Pro
           <Field label="Welk aspect wil je verbeteren?">
             <select value={form.chosenAspect} onChange={(e) => set({ chosenAspect: e.target.value as Aspect })} style={styles.input}>
               <option value="">Kies…</option>
-              {ASPECTS.map((a) => <option key={a} value={a}>{a}</option>)}
+              {ASPECTS.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
             </select>
           </Field>
 
@@ -403,14 +651,20 @@ export default function HomeworkTab({ uid, profiel, scores, beoordelingen }: Pro
 
       <div style={styles.panel}>
         <div style={styles.title}>3) Prompt voor AI</div>
-        <div style={styles.small}>Gebruik deze knop als hulp. Kopieer de prompt naar ChatGPT en plak daarna je trainingsschema hieronder.</div>
+        <div style={styles.small}>
+          Gebruik deze knop als hulp. Kopieer de prompt naar ChatGPT en plak daarna je trainingsschema hieronder.
+        </div>
 
-        <button onClick={handleUsePrompt} style={{ ...styles.ghostBtn, marginTop: 12 }}>
+        <button onClick={onUsePrompt} style={{ ...styles.ghostBtn, marginTop: 12 }}>
           Genereer voorbeeldprompt
         </button>
 
         <Field label="Mijn AI-prompt">
-          <textarea value={form.aiPrompt} onChange={(e) => set({ aiPrompt: e.target.value })} style={{ ...styles.textarea, minHeight: 180 }} />
+          <textarea
+            value={form.aiPrompt}
+            onChange={(e) => set({ aiPrompt: e.target.value })}
+            style={{ ...styles.textarea, minHeight: 180 }}
+          />
         </Field>
       </div>
 
@@ -418,14 +672,22 @@ export default function HomeworkTab({ uid, profiel, scores, beoordelingen }: Pro
         <div style={styles.panel}>
           <div style={styles.title}>4) Trainingsschema</div>
           <Field label="Plak hier je AI-trainingsschema">
-            <textarea value={form.aiSchema} onChange={(e) => set({ aiSchema: e.target.value })} style={{ ...styles.textarea, minHeight: 220 }} />
+            <textarea
+              value={form.aiSchema}
+              onChange={(e) => set({ aiSchema: e.target.value })}
+              style={{ ...styles.textarea, minHeight: 220 }}
+            />
           </Field>
         </div>
 
         <div style={styles.panel}>
           <div style={styles.title}>5) Trainingsprincipes</div>
           <Field label="Leg uit hoe je schema deze principes gebruikt: overload, progressieve opbouw, specificiteit, herstel en individualisatie.">
-            <textarea value={form.trainingPrinciples} onChange={(e) => set({ trainingPrinciples: e.target.value })} style={{ ...styles.textarea, minHeight: 220 }} />
+            <textarea
+              value={form.trainingPrinciples}
+              onChange={(e) => set({ trainingPrinciples: e.target.value })}
+              style={{ ...styles.textarea, minHeight: 220 }}
+            />
           </Field>
         </div>
       </div>
@@ -436,24 +698,7 @@ export default function HomeworkTab({ uid, profiel, scores, beoordelingen }: Pro
           <textarea value={form.reflection} onChange={(e) => set({ reflection: e.target.value })} style={styles.textarea} />
         </Field>
       </div>
-
-      <RubricPanel items={items} />
-
-      <div style={styles.actionRow}>
-        <button onClick={() => setForm(initForm())} style={styles.ghostBtn}>Alles leegmaken</button>
-        <button onClick={handleSave} disabled={saving} style={{ ...styles.primaryBtn, opacity: saving ? 0.7 : 1 }}>
-          {saving ? "Opslaan..." : "Opslaan"}
-        </button>
-      </div>
-
-      <style jsx>{`
-        @media (min-width: 900px) {
-          .row2 {
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-          }
-        }
-      `}</style>
-    </div>
+    </>
   );
 }
 
@@ -466,27 +711,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function RubricPanel({ items }: { items: RubricItem[] }) {
+function RubricPanel({ item }: { item: RubricItem }) {
   return (
     <div style={styles.panel}>
-      <div style={styles.title}>🎯 Automatische rubrics</div>
-      <div style={styles.small}>Score: - / +/- / + / ++</div>
+      <div style={styles.title}>🎯 Automatische evaluatie</div>
+      <div style={styles.small}>Eén rubric-score: - / +/- / + / ++</div>
 
-      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-        {items.map((it) => (
-          <div key={it.key} style={{ ...styles.rubricCard, background: it.color }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-              <div>
-                <div style={{ fontWeight: 980, color: ui.text }}>{it.title}</div>
-                <div style={{ ...styles.small, marginTop: 6 }}>{it.description}</div>
-                <div style={{ ...styles.small, marginTop: 8 }}>
-                  <b style={{ color: ui.text }}>Auto-feedback:</b> {it.autoFeedback}
-                </div>
-              </div>
-              <div style={styles.badge}>{it.level}</div>
+      <div style={{ ...styles.rubricCard, background: item.color, marginTop: 12 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+          <div>
+            <div style={{ fontWeight: 980, color: ui.text }}>{item.title}</div>
+            <div style={{ ...styles.small, marginTop: 6 }}>{item.description}</div>
+            <div style={{ ...styles.small, marginTop: 8 }}>
+              <b style={{ color: ui.text }}>Auto-feedback:</b> {item.autoFeedback}
             </div>
           </div>
-        ))}
+          <div style={styles.badge}>{item.level}</div>
+        </div>
       </div>
     </div>
   );
@@ -587,6 +828,27 @@ const styles: Record<string, React.CSSProperties> = {
     color: ui.text,
     background: "rgba(0,0,0,0.35)",
     border: `1px solid ${ui.border}`,
+  },
+  pill: {
+    minWidth: 88,
+    height: 42,
+    borderRadius: 14,
+    display: "grid",
+    placeItems: "center",
+    fontWeight: 980,
+    color: ui.text,
+    background: "rgba(0,0,0,0.35)",
+    border: `1px solid ${ui.border}`,
+  },
+  resultRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(120px, 1fr) minmax(100px, 0.7fr) auto",
+    gap: 10,
+    alignItems: "center",
+    padding: 12,
+    borderRadius: 16,
+    border: `1px solid ${ui.border}`,
+    background: "rgba(0,0,0,0.22)",
   },
   okBox: {
     padding: 12,
