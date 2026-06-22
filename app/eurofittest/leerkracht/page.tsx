@@ -143,6 +143,7 @@ export default function EurofitLeerkrachtPage() {
   const [resultatenRows, setResultatenRows] = useState<RawRow[]>([]);
   const [normen, setNormen] = useState<NormRow[]>([]);
   const [profielen, setProfielen] = useState<RawRow[]>([]);
+  const [huiswerkRows, setHuiswerkRows] = useState<RawRow[]>([]);
 
   const [schooljaar, setSchooljaar] = useState("Alle");
   const [klasFilter, setKlasFilter] = useState("Alle");
@@ -150,8 +151,9 @@ export default function EurofitLeerkrachtPage() {
   const [zoekterm, setZoekterm] = useState("");
 
   const [openKlas, setOpenKlas] = useState<string | null>(null);
-  const [openType, setOpenType] = useState<"ingevuld" | "ontbreekt" | null>(null);
+  const [openType, setOpenType] = useState<"ingevuld" | "ontbreekt" | "huiswerkIngevuld" | "huiswerkOntbreekt" | null>(null);
   const [selectedLeerling, setSelectedLeerling] = useState<Leerling | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<"resultaten" | "huiswerk">("resultaten");
 
   useEffect(() => {
     injectResponsiveCSS();
@@ -185,23 +187,26 @@ export default function EurofitLeerkrachtPage() {
 
       setAllowed(true);
 
-      const [leerlingenRes, resultatenRes, normenRes, profielenRes] =
+      const [leerlingenRes, resultatenRes, huiswerkRes, normenRes, profielenRes] =
         await Promise.all([
           supabase.from("eurofit_class_students_view").select("*"),
           supabase.from("eurofit_admin_view").select("*"),
+          supabase.from("eurofit_huiswerk_submissions").select("user_id, schooljaar, klas_naam, grade, date, created_at, payload"),
           supabase
             .from("eurofit_normen")
             .select("test_type, geslacht, leeftijd, p5, p20, p50, p80, p95"),
-          supabase.from("profielen").select("id, geslacht, geboortedatum"),
+          supabase.from("profielen").select("id, volledige_naam, klas_naam, geslacht, geboortedatum"),
         ]);
 
       if (leerlingenRes.error) setError(leerlingenRes.error.message);
       if (resultatenRes.error) setError(resultatenRes.error.message);
+      if (huiswerkRes.error) setError(huiswerkRes.error.message);
       if (normenRes.error) setError(normenRes.error.message);
       if (profielenRes.error) setError(profielenRes.error.message);
 
       setLeerlingenRows(leerlingenRes.data ?? []);
       setResultatenRows(resultatenRes.data ?? []);
+      setHuiswerkRows(huiswerkRes.data ?? []);
       setNormen((normenRes.data ?? []) as NormRow[]);
       setProfielen(profielenRes.data ?? []);
 
@@ -253,6 +258,42 @@ export default function EurofitLeerkrachtPage() {
     return set;
   }, [resultatenRows, schooljaar]);
 
+  const huiswerkKeys = useMemo(() => {
+    const set = new Set<string>();
+    const profielMap = new Map<string, RawRow>();
+
+    profielen.forEach((p) => {
+      if (p.id) profielMap.set(String(p.id), p);
+    });
+
+    huiswerkRows.forEach((r) => {
+      const rowSchooljaar = r.schooljaar ? String(r.schooljaar) : "";
+      if (schooljaar !== "Alle" && rowSchooljaar !== schooljaar) return;
+
+      const profiel = profielMap.get(String(r.user_id ?? ""));
+      const payload = r.payload && typeof r.payload === "object" ? r.payload : {};
+
+      const naam = String(
+        profiel?.volledige_naam ??
+          payload.leerling ??
+          payload.form?.leerling ??
+          ""
+      ).trim();
+
+      const klas = String(
+        r.klas_naam ??
+          profiel?.klas_naam ??
+          payload.klasNaam ??
+          payload.klas_naam ??
+          ""
+      ).trim();
+
+      if (naam && klas) set.add(leerlingKey(naam, klas));
+    });
+
+    return set;
+  }, [huiswerkRows, profielen, schooljaar]);
+
   const gefilterdeLeerlingen = useMemo(() => {
     return leerlingen.filter((l) => {
       if (klasFilter !== "Alle" && l.klas !== klasFilter) return false;
@@ -291,12 +332,52 @@ export default function EurofitLeerkrachtPage() {
       .sort((a, b) => String(a.test_type ?? "").localeCompare(String(b.test_type ?? "")));
   }, [resultatenRows, selectedLeerling, schooljaar]);
 
+  const geselecteerdHuiswerk = useMemo(() => {
+    if (!selectedLeerling) return [];
+
+    const profielMap = new Map<string, RawRow>();
+    profielen.forEach((p) => {
+      if (p.id) profielMap.set(String(p.id), p);
+    });
+
+    return huiswerkRows
+      .filter((r) => {
+        const rowSchooljaar = r.schooljaar ? String(r.schooljaar) : "";
+        if (schooljaar !== "Alle" && rowSchooljaar !== schooljaar) return false;
+
+        const profiel = profielMap.get(String(r.user_id ?? ""));
+        const payload = r.payload && typeof r.payload === "object" ? r.payload : {};
+
+        const naam = String(
+          profiel?.volledige_naam ??
+            payload.leerling ??
+            payload.form?.leerling ??
+            ""
+        ).trim();
+
+        const klas = String(
+          r.klas_naam ??
+            profiel?.klas_naam ??
+            payload.klasNaam ??
+            payload.klas_naam ??
+            ""
+        ).trim();
+
+        return leerlingKey(naam, klas) === leerlingKey(selectedLeerling.naam, selectedLeerling.klas);
+      })
+      .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+  }, [huiswerkRows, profielen, selectedLeerling, schooljaar]);
+
   const totaalLeerlingen = gefilterdeLeerlingen.length;
   const totaalKlassen = klassenOverzicht.length;
   const totaalIngevuld = gefilterdeLeerlingen.filter((l) =>
     ingevuldKeys.has(leerlingKey(l.naam, l.klas))
   ).length;
   const totaalOntbreekt = totaalLeerlingen - totaalIngevuld;
+  const totaalHuiswerkIngevuld = gefilterdeLeerlingen.filter((l) =>
+    huiswerkKeys.has(leerlingKey(l.naam, l.klas))
+  ).length;
+  const totaalHuiswerkOntbreekt = totaalLeerlingen - totaalHuiswerkIngevuld;
 
   function getEvaluatie(row: RawRow) {
     if (!row.test_type || row.waarde === null || !row.test_datum) return null;
@@ -321,7 +402,7 @@ export default function EurofitLeerkrachtPage() {
     return beoordeelWaarde(Number(row.waarde), norm);
   }
 
-  function toggleKlas(klas: string, type: "ingevuld" | "ontbreekt") {
+  function toggleKlas(klas: string, type: "ingevuld" | "ontbreekt" | "huiswerkIngevuld" | "huiswerkOntbreekt") {
     if (openKlas === klas && openType === type) {
       setOpenKlas(null);
       setOpenType(null);
@@ -331,6 +412,27 @@ export default function EurofitLeerkrachtPage() {
     setOpenKlas(klas);
     setOpenType(type);
   }
+  function leerlingenVoorOpenType(
+    type: "ingevuld" | "ontbreekt" | "huiswerkIngevuld" | "huiswerkOntbreekt" | null,
+    ingevuld: Leerling[],
+    ontbreekt: Leerling[],
+    huiswerkIngevuld: Leerling[],
+    huiswerkOntbreekt: Leerling[]
+  ) {
+    if (type === "ingevuld") return ingevuld;
+    if (type === "ontbreekt") return ontbreekt;
+    if (type === "huiswerkIngevuld") return huiswerkIngevuld;
+    return huiswerkOntbreekt;
+  }
+
+  function openTypeTitel(type: typeof openType) {
+    if (type === "ingevuld") return "Leerlingen met Eurofit ingevuld";
+    if (type === "ontbreekt") return "Leerlingen zonder Eurofit";
+    if (type === "huiswerkIngevuld") return "Leerlingen met huiswerk ingevuld";
+    return "Leerlingen zonder huiswerk";
+  }
+
+
 
   if (loading) {
     return (
@@ -368,7 +470,7 @@ export default function EurofitLeerkrachtPage() {
             </span>
           </>
         }
-        description="Volg per klas op wie Eurofit heeft ingevuld. Leerlingen en klassen komen uit eurofit_class_students_view."
+        description="Volg per klas op wie Eurofit en het huiswerk heeft ingevuld. Leerlingen en klassen komen uit eurofit_class_students_view."
         imageSrc="/eurofit/eurofittest.png"
         imageAlt="Eurofit dashboard"
         quoteTitle="Overzicht"
@@ -395,6 +497,8 @@ export default function EurofitLeerkrachtPage() {
         <StatCard label="Totaal klassen" value={totaalKlassen} />
         <StatCard label="Eurofit ingevuld" value={totaalIngevuld} />
         <StatCard label="Eurofit ontbreekt" value={totaalOntbreekt} />
+        <StatCard label="Huiswerk ingevuld" value={totaalHuiswerkIngevuld} />
+        <StatCard label="Huiswerk ontbreekt" value={totaalHuiswerkOntbreekt} />
       </section>
 
       <section className="filter-grid" style={styles.filterGrid}>
@@ -408,73 +512,6 @@ export default function EurofitLeerkrachtPage() {
         </div>
       </section>
 
-      {selectedLeerling ? (
-        <section style={{ ...styles.panel, marginTop: 16 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-            <div>
-              <h2 style={{ margin: 0, color: ui.text }}>{selectedLeerling.naam}</h2>
-              <p style={{ margin: "8px 0 0", color: ui.muted }}>
-                {selectedLeerling.klas} · {selectedLeerling.loGroep}
-              </p>
-            </div>
-
-            <button onClick={() => setSelectedLeerling(null)} style={styles.closeButton}>
-              Sluiten
-            </button>
-          </div>
-
-          <div style={{ marginTop: 16, overflowX: "auto" }}>
-            <table style={styles.table}>
-              <thead>
-                <tr>
-                  <th style={styles.th}>Test</th>
-                  <th style={styles.th}>Waarde</th>
-                  <th style={styles.th}>Evaluatie</th>
-                  <th style={styles.th}>Datum</th>
-                  <th style={styles.th}>Schooljaar</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {geselecteerdeResultaten.map((r) => {
-                  const evaluatie = getEvaluatie(r);
-
-                  return (
-                    <tr key={r.id}>
-                      <td style={styles.td}>
-                        {TEST_LABELS[String(r.test_type)] ?? r.test_type ?? "—"}
-                      </td>
-                      <td style={styles.td}>
-                        {r.waarde ?? "—"} {r.eenheid ?? ""}
-                      </td>
-                      <td style={styles.td}>
-                        {evaluatie ? (
-                          <span style={{ ...styles.badge, background: evaluatie.kleur }}>
-                            {evaluatie.label}
-                          </span>
-                        ) : (
-                          "—"
-                        )}
-                      </td>
-                      <td style={styles.td}>{r.test_datum ?? "—"}</td>
-                      <td style={styles.td}>{r.schooljaar ?? "—"}</td>
-                    </tr>
-                  );
-                })}
-
-                {geselecteerdeResultaten.length === 0 ? (
-                  <tr>
-                    <td style={styles.td} colSpan={5}>
-                      Geen Eurofitresultaten gevonden voor deze leerling.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      ) : null}
-
       <section style={{ marginTop: 16, display: "grid", gap: 14 }}>
         {klassenOverzicht.map(([klas, leerlingenInKlas]) => {
           const ingevuld = leerlingenInKlas.filter((l) =>
@@ -483,6 +520,14 @@ export default function EurofitLeerkrachtPage() {
 
           const ontbreekt = leerlingenInKlas.filter(
             (l) => !ingevuldKeys.has(leerlingKey(l.naam, l.klas))
+          );
+
+          const huiswerkIngevuld = leerlingenInKlas.filter((l) =>
+            huiswerkKeys.has(leerlingKey(l.naam, l.klas))
+          );
+
+          const huiswerkOntbreekt = leerlingenInKlas.filter(
+            (l) => !huiswerkKeys.has(leerlingKey(l.naam, l.klas))
           );
 
           return (
@@ -501,32 +546,130 @@ export default function EurofitLeerkrachtPage() {
                 <button onClick={() => toggleKlas(klas, "ontbreekt")} style={styles.redButton}>
                   🔴 {ontbreekt.length} ontbreken
                 </button>
+
+                <button onClick={() => toggleKlas(klas, "huiswerkIngevuld")} style={styles.purpleButton}>
+                  🟣 {huiswerkIngevuld.length} huiswerk ingevuld
+                </button>
+
+                <button onClick={() => toggleKlas(klas, "huiswerkOntbreekt")} style={styles.orangeButton}>
+                  🟠 {huiswerkOntbreekt.length} huiswerk ontbreekt
+                </button>
               </div>
 
               {openKlas === klas && openType ? (
                 <div style={styles.openBox}>
                   <h3 style={{ marginTop: 0, color: ui.text }}>
-                    {openType === "ingevuld"
-                      ? "Leerlingen met Eurofit ingevuld"
-                      : "Leerlingen zonder Eurofit"}
+                    {openTypeTitel(openType)}
                   </h3>
 
                   <div className="student-grid" style={styles.studentGrid}>
-                    {(openType === "ingevuld" ? ingevuld : ontbreekt).map((leerling) => (
-                      <button
-                        key={leerling.id}
-                        style={{
-                          ...styles.studentButton,
-                          borderColor:
-                            selectedLeerling?.id === leerling.id
-                              ? "rgba(137,194,170,0.65)"
-                              : ui.border,
-                        }}
-                        onClick={() => setSelectedLeerling(leerling)}
-                      >
-                        {leerling.naam}
-                      </button>
-                    ))}
+                    {leerlingenVoorOpenType(openType, ingevuld, ontbreekt, huiswerkIngevuld, huiswerkOntbreekt).map((leerling) => {
+                      const isOpen = selectedLeerling?.id === leerling.id;
+                      const leerlingResultaten = resultatenRows
+                        .filter((r) => {
+                          const naam = String(r.volledige_naam ?? "").trim();
+                          const klasNaam = String(r.profiel_klas_naam ?? r.klas_naam ?? "").trim();
+                          const rowSchooljaar = r.schooljaar ? String(r.schooljaar) : "";
+
+                          return (
+                            leerlingKey(naam, klasNaam) === leerlingKey(leerling.naam, leerling.klas) &&
+                            (schooljaar === "Alle" || rowSchooljaar === schooljaar)
+                          );
+                        })
+                        .sort((a, b) => String(a.test_type ?? "").localeCompare(String(b.test_type ?? "")));
+
+                      const profielMap = new Map<string, RawRow>();
+                      profielen.forEach((p) => {
+                        if (p.id) profielMap.set(String(p.id), p);
+                      });
+
+                      const leerlingHuiswerk = huiswerkRows
+                        .filter((r) => {
+                          const rowSchooljaar = r.schooljaar ? String(r.schooljaar) : "";
+                          if (schooljaar !== "Alle" && rowSchooljaar !== schooljaar) return false;
+
+                          const profiel = profielMap.get(String(r.user_id ?? ""));
+                          const payload = r.payload && typeof r.payload === "object" ? r.payload : {};
+
+                          const naam = String(
+                            profiel?.volledige_naam ??
+                              payload.leerling ??
+                              payload.form?.leerling ??
+                              ""
+                          ).trim();
+
+                          const klasNaam = String(
+                            r.klas_naam ??
+                              profiel?.klas_naam ??
+                              payload.klasNaam ??
+                              payload.klas_naam ??
+                              ""
+                          ).trim();
+
+                          return leerlingKey(naam, klasNaam) === leerlingKey(leerling.naam, leerling.klas);
+                        })
+                        .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
+
+                      return (
+                        <div key={leerling.id} style={styles.studentAccordion}>
+                          <button
+                            style={{
+                              ...styles.studentButton,
+                              borderColor: isOpen ? "rgba(137,194,170,0.65)" : ui.border,
+                            }}
+                            onClick={() => {
+                              if (isOpen) {
+                                setSelectedLeerling(null);
+                                return;
+                              }
+
+                              setSelectedLeerling(leerling);
+                              setSelectedDetail(
+                                openType === "huiswerkIngevuld" || openType === "huiswerkOntbreekt"
+                                  ? "huiswerk"
+                                  : "resultaten"
+                              );
+                            }}
+                          >
+                            <span>{leerling.naam}</span>
+                            <span style={{ opacity: 0.75 }}>{isOpen ? "▲" : "▼"}</span>
+                          </button>
+
+                          {isOpen ? (
+                            <div style={styles.inlineDetailBox}>
+                              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                                <button
+                                  onClick={() => setSelectedDetail("resultaten")}
+                                  style={selectedDetail === "resultaten" ? styles.greenButton : styles.closeButton}
+                                >
+                                  📊 Eurofitresultaten
+                                </button>
+                                <button
+                                  onClick={() => setSelectedDetail("huiswerk")}
+                                  style={selectedDetail === "huiswerk" ? styles.purpleButton : styles.closeButton}
+                                >
+                                  📚 Huiswerk
+                                </button>
+                              </div>
+
+                              {selectedDetail === "resultaten" ? (
+                                <ResultsTable rows={leerlingResultaten} getEvaluatie={getEvaluatie} />
+                              ) : (
+                                <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
+                                  {leerlingHuiswerk.length === 0 ? (
+                                    <div style={styles.openBox}>Geen huiswerk gevonden voor deze leerling.</div>
+                                  ) : (
+                                    leerlingHuiswerk.map((hw) => (
+                                      <HomeworkSubmissionCard key={hw.id ?? hw.created_at} row={hw} />
+                                    ))
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               ) : null}
@@ -537,6 +680,124 @@ export default function EurofitLeerkrachtPage() {
     </AppShell>
   );
 }
+
+function ResultsTable({
+  rows,
+  getEvaluatie,
+}: {
+  rows: RawRow[];
+  getEvaluatie: (row: RawRow) => any;
+}) {
+  return (
+    <div style={{ marginTop: 14, overflowX: "auto" }}>
+      <table style={styles.table}>
+        <thead>
+          <tr>
+            <th style={styles.th}>Test</th>
+            <th style={styles.th}>Waarde</th>
+            <th style={styles.th}>Evaluatie</th>
+            <th style={styles.th}>Datum</th>
+            <th style={styles.th}>Schooljaar</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {rows.map((r) => {
+            const evaluatie = getEvaluatie(r);
+
+            return (
+              <tr key={r.id}>
+                <td style={styles.td}>{TEST_LABELS[String(r.test_type)] ?? r.test_type ?? "—"}</td>
+                <td style={styles.td}>
+                  {r.waarde ?? "—"} {r.eenheid ?? ""}
+                </td>
+                <td style={styles.td}>
+                  {evaluatie ? (
+                    <span style={{ ...styles.badge, background: evaluatie.kleur }}>
+                      {evaluatie.label}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td style={styles.td}>{r.test_datum ?? "—"}</td>
+                <td style={styles.td}>{r.schooljaar ?? "—"}</td>
+              </tr>
+            );
+          })}
+
+          {rows.length === 0 ? (
+            <tr>
+              <td style={styles.td} colSpan={5}>
+                Geen Eurofitresultaten gevonden voor deze leerling.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+
+function getPayload(row: RawRow) {
+  return row.payload && typeof row.payload === "object" ? row.payload : {};
+}
+
+function renderValue(value: unknown) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value, null, 2);
+}
+
+function HomeworkSubmissionCard({ row }: { row: RawRow }) {
+  const payload = getPayload(row);
+  const form = payload.form && typeof payload.form === "object" ? payload.form : {};
+  const rubric = payload.rubric ?? payload.rubrics ?? null;
+  const grade = String(row.grade ?? payload.grade ?? "—");
+
+  const visibleFields = Object.entries(form).filter(([key]) =>
+    !["date"].includes(key)
+  );
+
+  return (
+    <div style={styles.openBox}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <h3 style={{ margin: 0, color: ui.text }}>Huiswerk {grade} graad</h3>
+          <p style={{ margin: "6px 0 0", color: ui.muted }}>
+            Datum: {row.date ?? form.date ?? "—"} · Ingediend:{" "}
+            {row.created_at ? new Date(row.created_at).toLocaleString("nl-BE") : "—"}
+          </p>
+        </div>
+        {rubric && !Array.isArray(rubric) && typeof rubric === "object" && "level" in rubric ? (
+          <span style={styles.badge}>{String((rubric as any).level)}</span>
+        ) : null}
+      </div>
+
+      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+        {visibleFields.length === 0 ? (
+          <div style={{ color: ui.muted }}>Geen formuliergegevens gevonden.</div>
+        ) : (
+          visibleFields.map(([key, value]) => (
+            <div key={key} style={styles.homeworkField}>
+              <div style={styles.homeworkLabel}>{key}</div>
+              <div style={styles.homeworkValue}>{renderValue(value)}</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {rubric ? (
+        <div style={{ marginTop: 12 }}>
+          <div style={styles.homeworkLabel}>Automatische rubric</div>
+          <pre style={styles.preBox}>{renderValue(rubric)}</pre>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 
 function StatCard({ label, value }: { label: string; value: number }) {
   return (
@@ -584,7 +845,7 @@ const styles: Record<string, React.CSSProperties> = {
   statGrid: {
     marginTop: 16,
     display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+    gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
     gap: 12,
   },
   filterGrid: {
@@ -639,6 +900,24 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
   },
+  purpleButton: {
+    border: "1px solid rgba(170,120,255,0.32)",
+    background: "rgba(170,120,255,0.14)",
+    color: ui.text,
+    borderRadius: 16,
+    padding: "10px 14px",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
+  orangeButton: {
+    border: "1px solid rgba(255,170,70,0.32)",
+    background: "rgba(255,170,70,0.14)",
+    color: ui.text,
+    borderRadius: 16,
+    padding: "10px 14px",
+    fontWeight: 950,
+    cursor: "pointer",
+  },
   closeButton: {
     border: `1px solid ${ui.border}`,
     background: "rgba(0,0,0,0.28)",
@@ -661,6 +940,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 10,
   },
   studentButton: {
+    width: "100%",
     textAlign: "left",
     border: `1px solid ${ui.border}`,
     background: "rgba(255,255,255,0.05)",
@@ -669,6 +949,20 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "10px 12px",
     fontWeight: 850,
     cursor: "pointer",
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    alignItems: "center",
+  },
+  studentAccordion: {
+    display: "grid",
+    gap: 8,
+  },
+  inlineDetailBox: {
+    padding: 14,
+    borderRadius: 18,
+    border: `1px solid ${ui.border}`,
+    background: "rgba(0,0,0,0.22)",
   },
   error: {
     marginTop: 12,
@@ -708,6 +1002,40 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     color: "#fff",
     whiteSpace: "nowrap",
+    background: "rgba(0,0,0,0.35)",
+    border: `1px solid ${ui.border}`,
+  },
+  homeworkField: {
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(255,255,255,0.045)",
+    border: `1px solid ${ui.border}`,
+  },
+  homeworkLabel: {
+    color: ui.muted,
+    fontSize: 12,
+    fontWeight: 950,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  homeworkValue: {
+    marginTop: 6,
+    color: ui.text,
+    fontSize: 13.5,
+    lineHeight: 1.45,
+    whiteSpace: "pre-wrap",
+  },
+  preBox: {
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 16,
+    background: "rgba(0,0,0,0.35)",
+    border: `1px solid ${ui.border}`,
+    color: ui.text,
+    fontSize: 12,
+    lineHeight: 1.45,
+    whiteSpace: "pre-wrap",
+    overflowX: "auto",
   },
 };
 
