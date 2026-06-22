@@ -67,6 +67,43 @@ function geslachtLabel(value: "M" | "V" | null) {
   return "—";
 }
 
+const birthDateYears = Array.from({ length: 90 }, (_, index) => String(new Date().getFullYear() - 16 - index));
+const birthDateMonths = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"));
+
+function daysInMonth(year: string, month: string) {
+  if (!year || !month) return 31;
+  return new Date(Number(year), Number(month), 0).getDate();
+}
+
+function splitDate(value: string) {
+  const [year = "", month = "", day = ""] = value.split("-");
+  return { year, month, day };
+}
+
+function buildDate(year: string, month: string, day: string) {
+  if (!year || !month || !day) return "";
+  return `${year}-${month}-${day}`;
+}
+
+function monthLabel(month: string) {
+  const labels: Record<string, string> = {
+    "01": "januari",
+    "02": "februari",
+    "03": "maart",
+    "04": "april",
+    "05": "mei",
+    "06": "juni",
+    "07": "juli",
+    "08": "augustus",
+    "09": "september",
+    "10": "oktober",
+    "11": "november",
+    "12": "december",
+  };
+
+  return labels[month] ?? month;
+}
+
 function formatDate(value: string | null) {
   if (!value) return "—";
   const date = new Date(value);
@@ -89,6 +126,90 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
       <div className="flex min-h-[46px] items-center rounded-2xl border border-white/15 bg-black/20 px-4 py-3 text-sm text-white">
         {value}
       </div>
+    </div>
+  );
+}
+
+function BirthDateSelects({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { year, month, day } = splitDate(value);
+  const maxDays = daysInMonth(year, month);
+  const days = Array.from({ length: maxDays }, (_, index) => String(index + 1).padStart(2, "0"));
+
+  function updateDate(next: { year?: string; month?: string; day?: string }) {
+    const nextYear = next.year ?? year;
+    const nextMonth = next.month ?? month;
+    let nextDay = next.day ?? day;
+
+    if (nextYear && nextMonth && nextDay) {
+      const nextMaxDays = daysInMonth(nextYear, nextMonth);
+      if (Number(nextDay) > nextMaxDays) {
+        nextDay = String(nextMaxDays).padStart(2, "0");
+      }
+    }
+
+    onChange(buildDate(nextYear, nextMonth, nextDay));
+  }
+
+  const selectClassName =
+    "min-h-[50px] w-full rounded-2xl border border-white/15 bg-black/30 px-3 py-3 text-base text-white outline-none [color-scheme:dark]";
+
+  return (
+    <div className="grid gap-2">
+      <label className="text-sm font-black text-white">Geboortedatum</label>
+
+      <div className="grid grid-cols-3 gap-2">
+        <select
+          aria-label="Dag"
+          value={day}
+          onChange={(e) => updateDate({ day: e.target.value })}
+          className={selectClassName}
+        >
+          <option value="">Dag</option>
+          {days.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </select>
+
+        <select
+          aria-label="Maand"
+          value={month}
+          onChange={(e) => updateDate({ month: e.target.value })}
+          className={selectClassName}
+        >
+          <option value="">Maand</option>
+          {birthDateMonths.map((item) => (
+            <option key={item} value={item}>
+              {monthLabel(item)}
+            </option>
+          ))}
+        </select>
+
+        <select
+          aria-label="Jaar"
+          value={year}
+          onChange={(e) => updateDate({ year: e.target.value })}
+          className={selectClassName}
+        >
+          <option value="">Jaar</option>
+          {birthDateYears.map((item) => (
+            <option key={item} value={item}>
+              {item}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <p className="text-xs leading-5 text-white/55">
+        Kies dag, maand en jaar. Dit werkt betrouwbaarder op gsm dan één datumveld.
+      </p>
     </div>
   );
 }
@@ -256,15 +377,7 @@ export default function ProfielPage() {
               <ReadOnlyField label="Geslacht" value={geslachtLabel(profile.geslacht)} />
 
               {isTeacher ? (
-                <div className="grid gap-2">
-                  <label className="text-sm font-black text-white">Geboortedatum</label>
-                  <input
-                    type="date"
-                    value={teacherBirthDate}
-                    onChange={(e) => setTeacherBirthDate(e.target.value)}
-                    className="min-h-[46px] w-full rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-sm text-white outline-none"
-                  />
-                </div>
+                <BirthDateSelects value={teacherBirthDate} onChange={setTeacherBirthDate} />
               ) : (
                 <ReadOnlyField label="Geboortedatum" value={formatDate(profile.geboortedatum)} />
               )}
