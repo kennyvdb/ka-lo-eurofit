@@ -462,7 +462,7 @@ export default function ProfielPage() {
           <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-5">
             <SectionHeader
               title="Vaste gegevens"
-              subtitle="Deze gegevens komen uit Smartschool. Alleen leerkrachten kunnen hun geboortedatum aanvullen."
+              subtitle=""
             />
 
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
