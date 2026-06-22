@@ -130,6 +130,8 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
   );
 }
 
+// MOBIELE FIX: dag, maand en jaar blijven apart bewaard in deze component.
+// Daardoor blijft bv. dag "09" zichtbaar, ook wanneer maand of jaar nog niet gekozen is.
 function BirthDateSelects({
   value,
   onChange,
@@ -137,23 +139,65 @@ function BirthDateSelects({
   value: string;
   onChange: (value: string) => void;
 }) {
-  const { year, month, day } = splitDate(value);
-  const maxDays = daysInMonth(year, month);
-  const days = Array.from({ length: maxDays }, (_, index) => String(index + 1).padStart(2, "0"));
+  const initialDate = splitDate(value);
+  const [selectedDay, setSelectedDay] = useState(initialDate.day);
+  const [selectedMonth, setSelectedMonth] = useState(initialDate.month);
+  const [selectedYear, setSelectedYear] = useState(initialDate.year);
 
-  function updateDate(next: { year?: string; month?: string; day?: string }) {
-    const nextYear = next.year ?? year;
-    const nextMonth = next.month ?? month;
-    let nextDay = next.day ?? day;
+  useEffect(() => {
+    if (!value) return;
 
-    if (nextYear && nextMonth && nextDay) {
-      const nextMaxDays = daysInMonth(nextYear, nextMonth);
-      if (Number(nextDay) > nextMaxDays) {
-        nextDay = String(nextMaxDays).padStart(2, "0");
-      }
+    const nextDate = splitDate(value);
+    setSelectedDay(nextDate.day);
+    setSelectedMonth(nextDate.month);
+    setSelectedYear(nextDate.year);
+  }, [value]);
+
+  const maxDays = daysInMonth(selectedYear, selectedMonth);
+  const days = Array.from({ length: maxDays }, (_, index) =>
+    String(index + 1).padStart(2, "0")
+  );
+
+  function syncBirthDate(nextYear: string, nextMonth: string, nextDay: string) {
+    if (!nextYear || !nextMonth || !nextDay) {
+      onChange("");
+      return;
     }
 
-    onChange(buildDate(nextYear, nextMonth, nextDay));
+    const nextMaxDays = daysInMonth(nextYear, nextMonth);
+    const safeDay =
+      Number(nextDay) > nextMaxDays ? String(nextMaxDays).padStart(2, "0") : nextDay;
+
+    onChange(buildDate(nextYear, nextMonth, safeDay));
+  }
+
+  function handleDayChange(nextDay: string) {
+    setSelectedDay(nextDay);
+    syncBirthDate(selectedYear, selectedMonth, nextDay);
+  }
+
+  function handleMonthChange(nextMonth: string) {
+    const nextMaxDays = daysInMonth(selectedYear, nextMonth);
+    const safeDay =
+      selectedDay && Number(selectedDay) > nextMaxDays
+        ? String(nextMaxDays).padStart(2, "0")
+        : selectedDay;
+
+    setSelectedMonth(nextMonth);
+    setSelectedDay(safeDay);
+    syncBirthDate(selectedYear, nextMonth, safeDay);
+  }
+
+  function handleYearChange(nextYear: string) {
+    const nextMaxDays = daysInMonth(nextYear, selectedMonth);
+    const safeDay =
+      selectedDay && Number(selectedDay) > nextMaxDays
+        ? String(nextMaxDays).padStart(2, "0")
+        : selectedDay;
+
+    setSelectedYear(nextYear);
+    setSelectedDay(safeDay);
+    syncBirthDate(nextYear, selectedMonth, safeDay);
   }
 
   const selectClassName =
@@ -163,11 +207,11 @@ function BirthDateSelects({
     <div className="grid gap-2">
       <label className="text-sm font-black text-white">Geboortedatum</label>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <select
           aria-label="Dag"
-          value={day}
-          onChange={(e) => updateDate({ day: e.target.value })}
+          value={selectedDay}
+          onChange={(e) => handleDayChange(e.target.value)}
           className={selectClassName}
         >
           <option value="">Dag</option>
@@ -180,8 +224,8 @@ function BirthDateSelects({
 
         <select
           aria-label="Maand"
-          value={month}
-          onChange={(e) => updateDate({ month: e.target.value })}
+          value={selectedMonth}
+          onChange={(e) => handleMonthChange(e.target.value)}
           className={selectClassName}
         >
           <option value="">Maand</option>
@@ -194,8 +238,8 @@ function BirthDateSelects({
 
         <select
           aria-label="Jaar"
-          value={year}
-          onChange={(e) => updateDate({ year: e.target.value })}
+          value={selectedYear}
+          onChange={(e) => handleYearChange(e.target.value)}
           className={selectClassName}
         >
           <option value="">Jaar</option>
@@ -208,7 +252,7 @@ function BirthDateSelects({
       </div>
 
       <p className="text-xs leading-5 text-white/55">
-        Kies dag, maand en jaar. Dit werkt betrouwbaarder op gsm dan één datumveld.
+        Kies dag, maand en jaar. Elke keuze blijft meteen zichtbaar op gsm.
       </p>
     </div>
   );
