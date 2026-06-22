@@ -5,7 +5,9 @@ import Link from "next/link";
 import AppShell from "../../components/AppShell";
 import ChallengeCard from "./ChallengeCard";
 import BaseHero from "@/components/heroes/BaseHero";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
+
+const supabase = createClient();
 
 type Profiel = {
   id: string;

@@ -3,12 +3,14 @@
 import AppShell from "@/components/AppShell";
 import Image from "next/image";
 import React, { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
 import GradeBoard from "./GradeBoard";
 import ResponsiveThreeCol from "./ResponsiveThreeCol";
 import { ui } from "./theme";
 import { getSuggestedSchooljaar, mkDiscipline, withTriatlonInMiddle } from "./utils";
 import type { Discipline } from "./types";
+
+const supabase = createClient();
 
 type Profiel = {
   id: string;

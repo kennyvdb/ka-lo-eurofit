@@ -1,10 +1,12 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
+
+const supabase = createClient();
 
 type Profiel = {
   id: string;

@@ -1,13 +1,18 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import React, { useEffect, useMemo, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
+const supabase = createClient();
 
 type ProfielLite = {
   id: string;
   volledige_naam: string | null;
   klas_naam: string | null;
   schooljaar: string | null;
+  geslacht?: string | null;
+  gender?: string | null;
+  raw?: unknown;
 };
 
 type RubricLevel = "-" | "+/-" | "+" | "++";
@@ -78,7 +83,7 @@ function levelText(
   minus: string,
   pm: string,
   plus: string,
-  pp: string
+  pp: string,
 ) {
   if (level === "-") return minus;
   if (level === "+/-") return pm;
@@ -282,9 +287,112 @@ const styles: Record<string, React.CSSProperties> = {
 ========================= */
 
 type TalkTest = "Groen" | "Oranje" | "Rood" | "";
+type GenderChoice = "Meisje" | "Jongen" | "";
+
+function normalizeGender(v: unknown): GenderChoice {
+  const t = String(v ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (
+    [
+      "jongen",
+      "jongens",
+      "man",
+      "m",
+      "male",
+      "boy",
+      "masculin",
+      "mannelijk",
+      "1",
+    ].includes(t)
+  )
+    return "Jongen";
+  if (
+    [
+      "meisje",
+      "meisjes",
+      "vrouw",
+      "v",
+      "f",
+      "female",
+      "girl",
+      "feminin",
+      "vrouwelijk",
+      "2",
+    ].includes(t)
+  )
+    return "Meisje";
+  return "";
+}
+
+function findGenderInRaw(raw: unknown): GenderChoice {
+  const direct = normalizeGender(raw);
+  if (direct) return direct;
+
+  // smartschool_users.raw kan een JSON-object zijn, maar soms ook een JSON-string.
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      const found = findGenderInRaw(parsed);
+      if (found) return found;
+    } catch {
+      // Geen JSON-string: dan valt de functie gewoon terug op geen resultaat.
+    }
+  }
+
+  if (!raw || typeof raw !== "object") return "";
+
+  const preferredKeys = [
+    "geslacht",
+    "gender",
+    "sex",
+    "sexe",
+    "gendercode",
+    "gender_code",
+  ];
+  const stack: unknown[] = [raw];
+
+  while (stack.length) {
+    const current = stack.pop();
+    if (!current || typeof current !== "object") continue;
+
+    if (Array.isArray(current)) {
+      stack.push(...current);
+      continue;
+    }
+
+    const obj = current as Record<string, unknown>;
+
+    for (const key of preferredKeys) {
+      if (key in obj) {
+        const found = normalizeGender(obj[key]);
+        if (found) return found;
+      }
+    }
+
+    for (const [key, val] of Object.entries(obj)) {
+      const keyLower = key.toLowerCase();
+      if (
+        keyLower.includes("geslacht") ||
+        keyLower.includes("gender") ||
+        keyLower === "sex" ||
+        keyLower === "sexe"
+      ) {
+        const found = normalizeGender(val);
+        if (found) return found;
+      }
+
+      if (val && typeof val === "object") stack.push(val);
+    }
+  }
+
+  return "";
+}
 
 type SecondGradeForm = {
   date: string;
+  gender: GenderChoice;
   mas: string;
   trainingType: "Duur" | "Interval" | "";
   warmupMin: string;
@@ -306,9 +414,13 @@ type SecondGradeForm = {
   strengthRpe: string;
 };
 
-function initSecond(defaultMas?: number | null): SecondGradeForm {
+function initSecond(
+  defaultMas?: number | null,
+  defaultGender: GenderChoice = "",
+): SecondGradeForm {
   return {
     date: toYMD(),
+    gender: defaultGender,
     mas: defaultMas && Number.isFinite(defaultMas) ? String(defaultMas) : "",
     trainingType: "",
     warmupMin: "",
@@ -327,504 +439,490 @@ function initSecond(defaultMas?: number | null): SecondGradeForm {
   };
 }
 
-function rubricsSecond(f: SecondGradeForm): RubricItem[] {
-  const hasType = Boolean(f.trainingType);
-  const hasWarm = Boolean(f.warmupMin.trim());
-  const hasCore = Boolean(f.coreText.trim());
-  const hasCool = Boolean(f.cooldownMin.trim());
-  const filled = [hasType, hasWarm, hasCore, hasCool].filter(Boolean).length;
+function getMasSpeedText(masRaw: string) {
+  const mas = toNum(masRaw);
+  if (!Number.isFinite(mas) || mas <= 0)
+    return "Vul je MAS in om je persoonlijke richttempo's te zien.";
 
-  let lvl1: RubricLevel = "-";
-  if (filled <= 2) lvl1 = "-";
-  else if (filled === 3) lvl1 = "+/-";
-  else {
-    const coreSpecific =
-      f.trainingType === "Duur"
-        ? f.coreText.toLowerCase().includes("%") ||
-          f.coreText.toLowerCase().includes("mas") ||
-          f.coreText.toLowerCase().includes("min")
-        : f.coreText.includes("x") ||
-          f.coreText.includes("×") ||
-          f.coreText.includes("'") ||
-          f.coreText.toLowerCase().includes("rust");
-    lvl1 = coreSpecific ? "++" : "+";
+  const speedToPace = (speed: number) => {
+    if (!Number.isFinite(speed) || speed <= 0) return "—";
+    const totalSec = Math.round(3600 / speed);
+    const min = Math.floor(totalSec / 60);
+    const sec = String(totalSec % 60).padStart(2, "0");
+    return `${min}:${sec}/km`;
+  };
+
+  const duur70 = mas * 0.7;
+  const duur80 = mas * 0.8;
+  const int90 = mas * 0.9;
+  const int100 = mas;
+
+  return `Met jouw MAS van ${mas.toFixed(1)} km/u: duurtraining ≈ 70–80% MAS (${duur70.toFixed(
+    1,
+  )}–${duur80.toFixed(1)} km/u = ${speedToPace(duur70)} tot ${speedToPace(
+    duur80,
+  )}). Interval ≈ 90–100% MAS (${int90.toFixed(1)}–${int100.toFixed(
+    1,
+  )} km/u = ${speedToPace(int90)} tot ${speedToPace(int100)}).`;
+}
+
+function getMasPerformanceEvaluation(f: SecondGradeForm): RubricItem {
+  const mas = toNum(f.mas);
+  const gender = f.gender;
+
+  let level: RubricLevel = "-";
+  let description =
+    "Vul je MAS in. Het geslacht wordt automatisch uit Supabase opgehaald.";
+  let autoFeedback =
+    "Geen volledige automatische MAS-evaluatie mogelijk zolang MAS of geslacht ontbreekt.";
+
+  if (Number.isFinite(mas) && mas > 0 && gender) {
+    if (gender === "Meisje") {
+      if (mas < 8.9) {
+        level = "-";
+        description = "Prestatie: MAS < 8,8 km/u (meisjes).";
+        autoFeedback =
+          "Je MAS-score zit nog onder de richtwaarde. Blijf regelmatig en rustig duurwerk opbouwen.";
+      } else if (mas <= 10) {
+        level = "+/-";
+        description = "Prestatie: MAS 8,9–10 km/u (meisjes).";
+        autoFeedback =
+          "Je hebt de basis. Met regelmatige duurtraining kan je verder groeien.";
+      } else if (mas <= 12) {
+        level = "+";
+        description = "Prestatie: MAS 10–12 km/u (meisjes).";
+        autoFeedback =
+          "Goed uitgevoerd: je MAS-score toont een goede duurprestatie.";
+      } else {
+        level = "++";
+        description = "Prestatie: MAS > 12 km/u (meisjes).";
+        autoFeedback =
+          "Sterk: je onderscheidt je met een zeer goede MAS-score.";
+      }
+    }
+
+    if (gender === "Jongen") {
+      if (mas < 10) {
+        level = "-";
+        description = "Prestatie: MAS < 10 km/u (jongens).";
+        autoFeedback =
+          "Je MAS-score zit nog onder de richtwaarde. Blijf regelmatig en rustig duurwerk opbouwen.";
+      } else if (mas < 11) {
+        level = "+/-";
+        description = "Prestatie: MAS 10–10,9 km/u (jongens).";
+        autoFeedback =
+          "Je hebt de basis. Met regelmatige duurtraining kan je verder groeien.";
+      } else if (mas < 14.5) {
+        level = "+";
+        description = "Prestatie: MAS 11–14,4 km/u (jongens).";
+        autoFeedback =
+          "Goed uitgevoerd: je MAS-score toont een goede duurprestatie.";
+      } else {
+        level = "++";
+        description = "Prestatie: MAS > 14,5 km/u (jongens).";
+        autoFeedback =
+          "Sterk: je onderscheidt je met een zeer goede MAS-score.";
+      }
+    }
   }
 
-  const item1: RubricItem = {
-    key: "plan",
-    title: "Training volledig en logisch ingevuld",
-    level: lvl1,
-    color: rubricColors[lvl1],
-    description: levelText(
-      lvl1,
-      "Training ontbreekt of kern/opwarming/cooling-down is niet ingevuld.",
-      "Training is grotendeels ingevuld maar mist 1 onderdeel of intensiteit is onduidelijk.",
-      "Volledig ingevuld (opwarming–kern–cooling-down) en keuze duur/interval is duidelijk.",
-      "Volledig én zeer verzorgd: tijden/intensiteit zijn duidelijk én passen bij de gekozen training."
-    ),
-    autoFeedback:
-      lvl1 === "++"
-        ? "Top: je plan is volledig én duidelijk uitgewerkt."
-        : lvl1 === "+"
-        ? "Goed: alles staat ingevuld."
-        : lvl1 === "+/-"
-        ? "Bijna: vul nog één ontbrekend onderdeel concreet aan."
-        : "Vul je training volledig in (type, opwarming, kern, cooling-down).",
+  return {
+    key: "mas_prestatie",
+    title: "Automatische MAS-evaluatie",
+    level,
+    color: rubricColors[level],
+    description,
+    autoFeedback,
   };
+}
+
+function getMasPerformanceText(f: SecondGradeForm) {
+  const item = getMasPerformanceEvaluation(f);
+  if (!f.gender || !Number.isFinite(toNum(f.mas)) || toNum(f.mas) <= 0) {
+    return "Vul je MAS in. Het geslacht wordt automatisch uit je profiel gehaald.";
+  }
+  return `${item.level} — ${item.description} ${item.autoFeedback}`;
+}
+
+function getSecondConclusion(f: SecondGradeForm) {
+  const rest = toNum(f.hrRest);
+  const peak = toNum(f.hrPeak);
+  const rec = toNum(f.hrRec1);
+  const rpe = toNum(f.rpe);
+  const drop = Number.isFinite(peak) && Number.isFinite(rec) ? peak - rec : NaN;
+
+  const parts: string[] = [];
+
+  const masItem = getMasPerformanceEvaluation(f);
+  if (f.gender && Number.isFinite(toNum(f.mas)) && toNum(f.mas) > 0) {
+    parts.push(`MAS-evaluatie: ${masItem.level}. ${masItem.description}`);
+  }
+
+  if (Number.isFinite(rest) && Number.isFinite(peak) && Number.isFinite(rec)) {
+    if (peak <= rest) {
+      parts.push(
+        "Je hartslaggegevens lijken niet logisch: je hoogste hartslag moet hoger zijn dan je rusthartslag. Controleer je meting of je ingevulde waarden.",
+      );
+    } else if (rec >= peak) {
+      parts.push(
+        "Je herstelhartslag is niet lager dan je piekhartslag. Meet na de kern exact 1 minuut rustig herstel en noteer dan opnieuw.",
+      );
+    } else if (drop >= 25) {
+      parts.push(
+        "Je herstel is zeer goed: je hartslag daalt sterk na 1 minuut. Dat wijst op een vlotte recuperatie na de inspanning.",
+      );
+    } else if (drop >= 15) {
+      parts.push(
+        "Je herstel is goed: je hartslag daalt duidelijk na 1 minuut. Je lichaam recupereert normaal na deze inspanning.",
+      );
+    } else {
+      parts.push(
+        "Je herstel is beperkt: je hartslag blijft nog vrij hoog na 1 minuut. Volgende keer kan je iets rustiger starten, je rust langer nemen of beter doseren.",
+      );
+    }
+  } else {
+    parts.push(
+      "Vul rusthartslag, hoogste hartslag en herstelhartslag na 1 minuut in voor een automatische conclusie over je herstel.",
+    );
+  }
+
+  if (f.talk === "Groen")
+    parts.push(
+      "De praattest was groen: je intensiteit was rustig tot matig en past goed bij een duurtraining.",
+    );
+  if (f.talk === "Oranje")
+    parts.push(
+      "De praattest was oranje: je intensiteit was stevig maar controleerbaar. Dit past goed bij een stevige kern of interval.",
+    );
+  if (f.talk === "Rood")
+    parts.push(
+      "De praattest was rood: je intensiteit was zeer hoog. Dit kan kort bij interval, maar is te zwaar voor een volledige duurtraining.",
+    );
+
+  if (Number.isFinite(rpe)) {
+    if (rpe <= 4)
+      parts.push("Je RPE is laag: de training voelde eerder gemakkelijk aan.");
+    else if (rpe <= 7)
+      parts.push("Je RPE is passend: de training voelde matig tot stevig aan.");
+    else
+      parts.push(
+        "Je RPE is hoog: de training voelde zwaar aan. Let op dat je de intensiteit goed doseert en voldoende herstelt.",
+      );
+  }
+
+  return parts.join(" ");
+}
+
+function rubricsSecond(f: SecondGradeForm): RubricItem[] {
+  const mas = toNum(f.mas);
+  const hasMas = Number.isFinite(mas) && mas > 0;
+  const hasGender = Boolean(f.gender);
+  const hasType = Boolean(f.trainingType);
+  const hasWarm =
+    Boolean(f.warmupMin.trim()) &&
+    Number.isFinite(toNum(f.warmupMin)) &&
+    toNum(f.warmupMin) > 0;
+  const hasCore = Boolean(f.coreText.trim());
+  const hasCool =
+    Boolean(f.cooldownMin.trim()) &&
+    Number.isFinite(toNum(f.cooldownMin)) &&
+    toNum(f.cooldownMin) > 0;
+  const coreMentionsMas = hasAnyWord(f.coreText, [
+    "mas",
+    "%",
+    "km/u",
+    "tempo",
+    "min",
+    "rust",
+    "x",
+    "×",
+  ]);
 
   const rest = toNum(f.hrRest);
   const peak = toNum(f.hrPeak);
   const rec = toNum(f.hrRec1);
-  const hrCount = [rest, peak, rec].filter((n) => Number.isFinite(n)).length;
+  const hrComplete =
+    Number.isFinite(rest) && Number.isFinite(peak) && Number.isFinite(rec);
+  const hrLogical = hrComplete && peak > rest && rec < peak;
 
-  let lvl2: RubricLevel = "-";
-  if (hrCount < 2) lvl2 = "-";
-  else if (hrCount === 2) lvl2 = "+/-";
-  else {
-    const logical = peak > rest && rec < peak;
-    if (!logical) lvl2 = "+/-";
-    else {
-      const drop = peak - rec;
-      lvl2 = drop >= 15 ? "++" : "+";
-    }
-  }
-
-  const item2: RubricItem = {
-    key: "hr",
-    title: "Hartslagmetingen correct uitgevoerd",
-    level: lvl2,
-    color: rubricColors[lvl2],
-    description: levelText(
-      lvl2,
-      "Minder dan 2 hartslagwaarden ingevuld.",
-      "Waarden zijn (bijna) volledig maar onlogisch of onduidelijk gemeten.",
-      "3 waarden ingevuld en logisch (piek > rust, herstel < piek).",
-      "3 waarden logisch én herstel toont duidelijke recuperatie (herstel merkbaar lager dan piek)."
-    ),
-    autoFeedback:
-      lvl2 === "++"
-        ? "Sterk: je herstel toont duidelijke recuperatie."
-        : lvl2 === "+"
-        ? "Goed: hartslagwaarden zijn logisch."
-        : lvl2 === "+/-"
-        ? "Controleer je meting: piek moet hoger zijn dan rust en herstel lager dan piek."
-        : "Vul rust, piek en herstelhartslag (na 1 min) in.",
-  };
-
-  const hasTalk = Boolean(f.talk);
-  const hasExplain = (f.talkExplain || "").trim().length > 0;
-
-  let lvl3: RubricLevel = "-";
-  if (!hasTalk) lvl3 = "-";
-  else if (hasTalk && !hasExplain) lvl3 = "+/-";
-  else {
-    const refl = (f.reflection || "").toLowerCase();
-    const adaptive =
-      refl.includes("volgende") ||
-      refl.includes("aanpassen") ||
-      refl.includes("trager") ||
-      refl.includes("sneller");
-    lvl3 = adaptive ? "++" : "+";
-  }
-
-  const item3: RubricItem = {
-    key: "talk",
-    title: "Praattest correct toegepast",
-    level: lvl3,
-    color: rubricColors[lvl3],
-    description: levelText(
-      lvl3,
-      "Praattest niet ingevuld.",
-      "Praattest ingevuld maar zonder uitlegzin.",
-      "Praattest + korte uitlegzin ingevuld.",
-      "Praattest + goede uitleg én je stuurt bij (bv. volgende keer aanpassen)."
-    ),
-    autoFeedback:
-      lvl3 === "++"
-        ? "Mooi: je gebruikt de praattest en stuurt bij."
-        : lvl3 === "+"
-        ? "Goed: je praattest en uitleg zijn ingevuld."
-        : lvl3 === "+/-"
-        ? "Vul nog 1 korte uitlegzin in bij je praattest."
-        : "Kies Groen/Oranje/Rood en schrijf 1 zin uitleg.",
-  };
-
+  const hasTalk = Boolean(f.talk) && Boolean(f.talkExplain.trim());
   const rpe = toNum(f.rpe);
   const hasRpe = Number.isFinite(rpe) && rpe >= 1 && rpe <= 10;
   const refl = (f.reflection || "").trim();
-  const reflLen = refl.length;
-  const sentences = countSentencesApprox(refl);
+  const hasReflection = countSentencesApprox(refl) >= 2 && refl.length >= 80;
 
-  let lvl4: RubricLevel = "-";
-  if (!hasRpe || !refl) lvl4 = "-";
-  else if (reflLen < 100 || sentences < 2) lvl4 = "+/-";
-  else if (reflLen >= 160 && hasActionKeyword(refl)) lvl4 = "++";
-  else lvl4 = "+";
+  const checks = [
+    hasMas,
+    hasGender,
+    hasType,
+    hasWarm,
+    hasCore,
+    hasCool,
+    coreMentionsMas,
+    hrComplete,
+    hrLogical,
+    hasTalk,
+    hasRpe,
+    hasReflection,
+  ];
+  const score = checks.filter(Boolean).length;
 
-  const item4: RubricItem = {
-    key: "reflectie",
-    title: "Reflectie en RPE",
-    level: lvl4,
-    color: rubricColors[lvl4],
-    description: levelText(
-      lvl4,
-      "Geen RPE of reflectie ontbreekt.",
-      "RPE ingevuld + reflectie te kort (of minder dan 2 zinnen).",
-      "RPE + minimaal 2 zinnen (goed + verbeterpunt).",
-      "RPE + sterke reflectie met concreet actiepunt voor volgende keer."
-    ),
-    autoFeedback:
-      lvl4 === "++"
-        ? "Topreflectie: concreet en met actiepunt."
-        : lvl4 === "+"
-        ? "Goed: je reflectie is duidelijk."
-        : lvl4 === "+/-"
-        ? "Schrijf minstens 2 zinnen: wat ging goed + wat neem je mee."
-        : "Vul je RPE (1–10) in en schrijf een korte reflectie.",
-  };
+  let level: RubricLevel = "-";
+  if (score >= 10) level = "++";
+  else if (score >= 8) level = "+";
+  else if (score >= 6) level = "+/-";
 
-  return [item1, item2, item3, item4];
+  const missing: string[] = [];
+  if (!hasMas) missing.push("vul je MAS correct in");
+  if (!hasGender)
+    missing.push("geslacht werd niet automatisch gevonden in profielen.geslacht (M/V)");
+  if (!hasType) missing.push("kies duurtraining of intervaltraining");
+  if (!hasWarm || !hasCore || !hasCool)
+    missing.push("maak je plan volledig: opwarming, kern en cooling-down");
+  if (hasCore && !coreMentionsMas)
+    missing.push("koppel je kern duidelijk aan je MAS of tempo");
+  if (!hrComplete) missing.push("vul rust, piek en herstel na 1 minuut in");
+  else if (!hrLogical)
+    missing.push(
+      "controleer je hartslag: piek hoger dan rust, herstel lager dan piek",
+    );
+  if (!hasTalk) missing.push("vul de praattest met korte uitleg in");
+  if (!hasRpe) missing.push("vul RPE 1–10 correct in");
+  if (!hasReflection)
+    missing.push("schrijf minstens 2 duidelijke reflectiezinnen");
+
+  return [
+    getMasPerformanceEvaluation(f),
+    {
+      key: "huiswerk_2e_totaal",
+      title: "Evaluatie huiswerk 2e graad",
+      level,
+      color: rubricColors[level],
+      description: levelText(
+        level,
+        "Onvoldoende: meerdere verplichte onderdelen ontbreken of zijn niet controleerbaar.",
+        "Bijna in orde: de basis is aanwezig, maar minstens één belangrijk onderdeel ontbreekt of is onduidelijk.",
+        "In orde: het huiswerk is volledig genoeg, logisch en controleerbaar ingevuld.",
+        "Zeer goed: het huiswerk is volledig, persoonlijk met MAS uitgewerkt, logisch gemeten en sterk gereflecteerd.",
+      ),
+      autoFeedback:
+        level === "++"
+          ? "Klaar: je huiswerk is volledig, duidelijk en sterk onderbouwd."
+          : level === "+"
+            ? "Goed: je huiswerk is in orde. Werk nog kleine details bij voor ++."
+            : missing.length
+              ? `Nog aanpassen: ${missing.join("; ")}.`
+              : "Controleer je ingevulde gegevens nog eens.",
+    },
+  ];
 }
 
 /* =========================
    3E GRAAD
 ========================= */
 
-type ActivityRow = {
-  id: string;
-  activity: string;
-  minutes: string;
-  met: string;
-};
-
-type PalChoice = "Laag actief" | "Matig actief" | "Actief" | "";
+type MealChoice = "Ontbijt" | "Lunch" | "Avondeten" | "Tussendoortje" | "Drank" | "";
+type IntakeAppChoice = "iFood" | "MyFitnessPal" | "Yazio" | "Andere app" | "";
 
 type ThirdGradeForm = {
   date: string;
   weightKg: string;
 
-  activities: ActivityRow[];
-
-  pal: PalChoice;
-  palExplain: string;
-
+  intakeApp: IntakeAppChoice;
+  intakeAppOther: string;
   kcalIntake: string;
-  kcalIntakeSource: string;
+  proteinG: string;
+  carbsG: string;
+  fatG: string;
+  mealsCount: string;
+  highestKcalMeal: MealChoice;
 
   kcalTotalBurn: string;
-  burnSource: "Automatisch via activiteiten" | "Externe calculator / app" | "Eigen schatting" | "";
+  burnSource: "TDEE Calculator" | "Smartwatch / gezondheidsapp" | "Andere calculator" | "";
 
   balanceExplain: string;
-  conceptExplain: string;
+  longTermExplain: string;
+  macroExplain: string;
+  reflection: string;
 };
-
-const MET_OPTIONS: { label: string; value: number }[] = [
-  { label: "Slapen (0.9)", value: 0.9 },
-  { label: "Zitten / schoolwerk (1.3)", value: 1.3 },
-  { label: "Staan rustig (1.8)", value: 1.8 },
-  { label: "Wandelen rustig (2.8)", value: 2.8 },
-  { label: "Wandelen stevig (3.5)", value: 3.5 },
-  { label: "Huishoudelijk werk licht (2.5)", value: 2.5 },
-  { label: "Fietsen rustig (4.0)", value: 4.0 },
-  { label: "Fietsen stevig (6.0)", value: 6.0 },
-  { label: "Sporttraining gematigd (5.0)", value: 5.0 },
-  { label: "Krachttraining (6.0)", value: 6.0 },
-  { label: "Lopen rustig (7.0)", value: 7.0 },
-  { label: "Traplopen (8.0)", value: 8.0 },
-  { label: "Intensieve sport (8.5)", value: 8.5 },
-];
 
 function initThird(): ThirdGradeForm {
   return {
     date: toYMD(),
     weightKg: "",
-    activities: Array.from({ length: 6 }).map(() => ({
-      id: mkId(),
-      activity: "",
-      minutes: "",
-      met: "",
-    })),
-    pal: "",
-    palExplain: "",
+    intakeApp: "iFood",
+    intakeAppOther: "",
     kcalIntake: "",
-    kcalIntakeSource: "",
+    proteinG: "",
+    carbsG: "",
+    fatG: "",
+    mealsCount: "",
+    highestKcalMeal: "",
     kcalTotalBurn: "",
-    burnSource: "",
+    burnSource: "TDEE Calculator",
     balanceExplain: "",
-    conceptExplain: "",
+    longTermExplain: "",
+    macroExplain: "",
+    reflection: "",
   };
 }
 
-function isRowComplete(r: ActivityRow) {
-  const min = toNum(r.minutes);
-  const met = toNum(r.met);
-  return r.activity.trim() && Number.isFinite(min) && min > 0 && Number.isFinite(met) && met > 0;
+function calcMacroKcal(proteinG: number, carbsG: number, fatG: number) {
+  return proteinG * 4 + carbsG * 4 + fatG * 9;
 }
 
-function calcMetMinutes(r: ActivityRow) {
-  const min = toNum(r.minutes);
-  const met = toNum(r.met);
-  if (!Number.isFinite(min) || !Number.isFinite(met)) return 0;
-  return met * min;
+function macroPercent(partKcal: number, totalKcal: number) {
+  if (!Number.isFinite(partKcal) || !Number.isFinite(totalKcal) || totalKcal <= 0) return null;
+  return Math.round((partKcal / totalKcal) * 100);
 }
 
-function calcActivityKcal(r: ActivityRow, weightKg: string) {
-  const min = toNum(r.minutes);
-  const met = toNum(r.met);
-  const kg = toNum(weightKg);
-  if (!Number.isFinite(min) || !Number.isFinite(met) || !Number.isFinite(kg) || kg <= 0) return 0;
-  return met * kg * (min / 60);
+function energyBalanceLabel(balance: number | null) {
+  if (balance === null) return "Nog niet berekend";
+  if (balance > 150) return "Energieoverschot";
+  if (balance < -150) return "Energietekort";
+  return "Ongeveer in balans";
 }
 
-function inferPalFromActivities(rows: ActivityRow[]): PalChoice | "" {
-  const complete = rows.filter(isRowComplete);
-  const totalMinutes = complete.reduce((sum, r) => sum + Math.max(0, toNum(r.minutes)), 0);
-  const lowMinutes = complete.reduce((sum, r) => {
-    const met = toNum(r.met);
-    return sum + (Number.isFinite(met) && met <= 1.8 ? Math.max(0, toNum(r.minutes)) : 0);
-  }, 0);
-  const modHighMinutes = complete.reduce((sum, r) => {
-    const met = toNum(r.met);
-    return sum + (Number.isFinite(met) && met >= 3 ? Math.max(0, toNum(r.minutes)) : 0);
-  }, 0);
-
-  if (totalMinutes <= 0) return "";
-
-  const ratioModHigh = modHighMinutes / totalMinutes;
-  const ratioLow = lowMinutes / totalMinutes;
-
-  if (ratioModHigh >= 0.3) return "Actief";
-  if (ratioModHigh >= 0.14 || (ratioLow < 0.7 && modHighMinutes >= 60)) return "Matig actief";
-  return "Laag actief";
-}
-
-function textExplainsPalVsMet(s: string) {
-  const t = (s || "").toLowerCase();
-  const hasMet = t.includes("met");
-  const hasPal = t.includes("pal");
-  const hasActivity = t.includes("activiteit") || t.includes("een activiteit") || t.includes("één activiteit");
-  const hasDay = t.includes("dag") || t.includes("hele dag") || t.includes("volledige dag");
-  return hasMet && hasPal && hasActivity && hasDay;
+function proteinAdviceText(proteinPerKg: number | null) {
+  if (proteinPerKg === null) return "Vul gewicht en eiwitten in voor een automatische eiwitinschatting.";
+  if (proteinPerKg < 0.8) return "Je eiwitinname ligt laag. Vergelijk dit met de richtwaarde van ongeveer 0,8 g/kg lichaamsgewicht per dag.";
+  if (proteinPerKg < 1.2) return "Je eiwitinname zit rond de algemene basisrichtwaarde. Voor actieve jongeren of sporters mag dit vaak wat hoger liggen.";
+  if (proteinPerKg <= 2.0) return "Je eiwitinname ligt in een goede zone voor iemand die regelmatig beweegt of sport.";
+  if (proteinPerKg <= 3.0) return "Je eiwitinname is hoog. Dat is niet automatisch fout, maar bekijk of dit past bij je sportbelasting en totale voeding.";
+  return "Je eiwitinname is zeer hoog. Controleer of je de waarden juist hebt overgenomen uit de app.";
 }
 
 function rubricsThird(f: ThirdGradeForm): {
   items: RubricItem[];
   totals: {
-    metMinutesTotal: number;
-    activityKcalTotal: number;
     kcalBalance: number | null;
-    inferredPal: PalChoice | "";
+    proteinPerKg: number | null;
+    macroKcalTotal: number | null;
+    proteinPct: number | null;
+    carbsPct: number | null;
+    fatPct: number | null;
   };
   flags: string[];
 } {
-  const rows = f.activities || [];
-  const completeRows = rows.filter(isRowComplete);
-  const completeCount = completeRows.length;
-
-  const hasLow = rows.some((r) => {
-    const met = toNum(r.met);
-    return Number.isFinite(met) && met <= 1.8;
-  });
-
-  const hasModerateOrHigh = rows.some((r) => {
-    const met = toNum(r.met);
-    return Number.isFinite(met) && met >= 3;
-  });
-
-  const metTotal = rows.reduce((sum, r) => sum + calcMetMinutes(r), 0);
-  const activityKcalTotal = rows.reduce((sum, r) => sum + calcActivityKcal(r, f.weightKg), 0);
-
+  const weight = toNum(f.weightKg);
   const intake = toNum(f.kcalIntake);
-  const totalBurn = toNum(f.kcalTotalBurn);
-  const kcalBalance =
-    Number.isFinite(intake) && Number.isFinite(totalBurn) ? intake - totalBurn : null;
+  const burn = toNum(f.kcalTotalBurn);
+  const protein = toNum(f.proteinG);
+  const carbs = toNum(f.carbsG);
+  const fat = toNum(f.fatG);
+  const meals = toNum(f.mealsCount);
 
-  const inferredPal = completeCount >= 3 ? inferPalFromActivities(rows) : "";
+  const hasWeight = Number.isFinite(weight) && weight > 0;
+  const hasIntake = Number.isFinite(intake) && intake > 0;
+  const hasBurn = Number.isFinite(burn) && burn > 0;
+  const hasProtein = Number.isFinite(protein) && protein >= 0;
+  const hasCarbs = Number.isFinite(carbs) && carbs >= 0;
+  const hasFat = Number.isFinite(fat) && fat >= 0;
+  const hasMeals = Number.isFinite(meals) && meals > 0;
+  const hasApp = Boolean(f.intakeApp && (f.intakeApp !== "Andere app" || f.intakeAppOther.trim()));
+  const hasBurnSource = Boolean(f.burnSource);
+  const hasHighestMeal = Boolean(f.highestKcalMeal);
+
+  const kcalBalance = hasIntake && hasBurn ? intake - burn : null;
+  const proteinPerKg = hasWeight && hasProtein ? protein / weight : null;
+  const macroKcalTotal = hasProtein && hasCarbs && hasFat ? calcMacroKcal(protein, carbs, fat) : null;
+  const proteinPct = macroKcalTotal ? macroPercent(protein * 4, macroKcalTotal) : null;
+  const carbsPct = macroKcalTotal ? macroPercent(carbs * 4, macroKcalTotal) : null;
+  const fatPct = macroKcalTotal ? macroPercent(fat * 9, macroKcalTotal) : null;
 
   const flags: string[] = [];
-  if (f.pal && inferredPal && f.pal !== inferredPal) {
-    flags.push(
-      `Je gekozen PAL (${f.pal}) lijkt niet helemaal te passen bij je activiteiten. De app schat eerder: ${inferredPal}.`
-    );
+  if (hasIntake && (intake < 1000 || intake > 6000)) {
+    flags.push("Je kcal-inname lijkt weinig realistisch. Controleer of je de waarde correct uit iFood hebt overgenomen.");
   }
-  if (
-    Number.isFinite(totalBurn) &&
-    Number.isFinite(activityKcalTotal) &&
-    Math.abs(totalBurn - activityKcalTotal) > 1200
-  ) {
-    flags.push(
-      "Je totaal kcal-verbruik wijkt sterk af van het automatisch berekende verbruik uit je activiteiten. Controleer je getallen."
-    );
+  if (hasBurn && (burn < 1000 || burn > 6000)) {
+    flags.push("Je kcal-verbruik lijkt weinig realistisch. Controleer of je de TDEE Calculator correct hebt ingevuld.");
   }
-
-  let lvl1: RubricLevel = "-";
-  if (completeCount < 4) lvl1 = "-";
-  else if (completeCount < 6) lvl1 = "+/-";
-  else if (completeCount >= 7 && hasLow && hasModerateOrHigh) lvl1 = "++";
-  else lvl1 = "+";
-
-  const item1: RubricItem = {
-    key: "log_met",
-    title: "Activiteitenlog en MET correct ingevuld",
-    level: lvl1,
-    color: rubricColors[lvl1],
-    description: levelText(
-      lvl1,
-      "Te weinig activiteiten volledig ingevuld of meerdere activiteiten missen duur/MET.",
-      "Er is al een bruikbaar logboek, maar het is nog niet volledig genoeg.",
-      "Minstens 6 activiteiten zijn volledig ingevuld met passende duur en MET.",
-      "Sterk dagoverzicht: voldoende activiteiten én duidelijke spreiding tussen laag en matig/hoog actief."
-    ),
-    autoFeedback:
-      lvl1 === "++"
-        ? "Sterk: je daglog is volledig en realistisch opgebouwd."
-        : lvl1 === "+"
-        ? "Goed: je hebt voldoende activiteiten correct ingevuld."
-        : lvl1 === "+/-"
-        ? "Vul nog meer activiteiten volledig in tot je dag duidelijker in beeld komt."
-        : "Je activiteitenlog is nog te onvolledig. Vul activiteit, duur en MET correct in.",
-  };
-
-  const hasPal = Boolean(f.pal);
-  const palText = (f.palExplain || "").trim();
-  const palLen = palText.length;
-  const palMentionsDay = hasAnyWord(palText, ["dag", "hele dag", "volledige dag"]);
-  const palMentionsExamples = hasAnyWord(palText, [
-    "zitten",
-    "school",
-    "wandelen",
-    "fietsen",
-    "training",
-    "sport",
-    "bewegen",
-  ]);
-  const palLogicOk = !f.pal || !inferredPal || f.pal === inferredPal;
-
-  let lvl2: RubricLevel = "-";
-  if (!hasPal) lvl2 = "-";
-  else if (palLen < 60) lvl2 = "+/-";
-  else if (palLen >= 120 && palMentionsDay && palMentionsExamples && palLogicOk) lvl2 = "++";
-  else lvl2 = "+";
-
-  const item2: RubricItem = {
-    key: "pal",
-    title: "PAL correct gekozen en uitgelegd",
-    level: lvl2,
-    color: rubricColors[lvl2],
-    description: levelText(
-      lvl2,
-      "PAL ontbreekt.",
-      "PAL is gekozen, maar de uitleg is te kort of te vaag.",
-      "PAL is gekozen en duidelijk gekoppeld aan de volledige dag.",
-      "PAL is sterk uitgelegd met concrete voorbeelden uit de dag én past logisch bij het activiteitenprofiel."
-    ),
-    autoFeedback:
-      lvl2 === "++"
-        ? "Heel goed: je PAL-keuze is logisch en goed beargumenteerd."
-        : lvl2 === "+"
-        ? "Goed: je PAL-uitleg is duidelijk."
-        : lvl2 === "+/-"
-        ? "Schrijf duidelijker waarom jouw volledige dag laag, matig of actief was."
-        : "Kies een PAL-niveau en leg het uit op basis van je volledige dag.",
-  };
-
-  const hasIntake = Number.isFinite(intake) && intake > 0;
-  const hasBurn = Number.isFinite(totalBurn) && totalBurn > 0;
-  const explain = (f.balanceExplain || "").trim();
-  const explainLen = explain.length;
-  const saysGain = hasAnyWord(explain, ["toename", "aankomen", "meer", "overschot"]);
-  const saysLoss = hasAnyWord(explain, ["afname", "afvallen", "minder", "tekort"]);
-  const saysStable = hasAnyWord(explain, ["stabiel", "behoud", "gelijk", "ongeveer hetzelfde"]);
-  const saysLongTerm = hasAnyWord(explain, [
-    "lange termijn",
-    "op termijn",
-    "als dit vaker gebeurt",
-    "als dit vaak zo is",
-  ]);
-
-  let balanceLogicOk = false;
-  if (kcalBalance !== null) {
-    if (kcalBalance > 100) balanceLogicOk = saysGain;
-    else if (kcalBalance < -100) balanceLogicOk = saysLoss;
-    else balanceLogicOk = saysStable;
+  if (hasProtein && hasWeight && proteinPerKg !== null && (proteinPerKg < 0.6 || proteinPerKg > 3)) {
+    flags.push("Je eiwitinname per kg lichaamsgewicht valt buiten de normale controlezone. Controleer je gram eiwitten.");
+  }
+  if (hasCarbs && (carbs < 50 || carbs > 700)) {
+    flags.push("Je koolhydraten lijken opvallend laag of hoog. Controleer of je de waarde correct hebt overgenomen.");
+  }
+  if (hasFat && (fat < 20 || fat > 220)) {
+    flags.push("Je vetinname lijkt opvallend laag of hoog. Controleer of je de waarde correct hebt overgenomen.");
+  }
+  if (macroKcalTotal && hasIntake && Math.abs(macroKcalTotal - intake) > Math.max(450, intake * 0.35)) {
+    flags.push("De kcal uit je macro's wijken sterk af van je totale kcal-inname. Dat kan door afronding of alcohol/vezels komen, maar controleer je waarden.");
   }
 
-  let lvl3: RubricLevel = "-";
-  if (!hasIntake || !hasBurn) lvl3 = "-";
-  else if (explainLen < 70) lvl3 = "+/-";
-  else if (balanceLogicOk && saysLongTerm) lvl3 = "++";
-  else lvl3 = "+";
+  // Gewicht is optioneel: het telt niet mee voor de volledigheid van de huistaak.
+  // Als gewicht wél wordt ingevuld, berekent de app automatisch eiwitten per kg lichaamsgewicht.
+  const registrationCount = [
+    f.date.trim(),
+    hasApp,
+    hasIntake,
+    hasBurn,
+    hasBurnSource,
+    hasProtein,
+    hasCarbs,
+    hasFat,
+    hasMeals,
+    hasHighestMeal,
+  ].filter(Boolean).length;
 
-  const item3: RubricItem = {
-    key: "kcal_balance",
-    title: "kcal-inname, verbruik en energiebalans",
-    level: lvl3,
-    color: rubricColors[lvl3],
+  const balanceText = (f.balanceExplain || "").trim();
+  const longText = (f.longTermExplain || "").trim();
+  const macroText = (f.macroExplain || "").trim();
+  const reflText = (f.reflection || "").trim();
+  const allText = `${balanceText} ${longText} ${macroText} ${reflText}`.toLowerCase();
+  const textLen = balanceText.length + longText.length + macroText.length + reflText.length;
+
+  const mentionsBalance = hasAnyWord(allText, ["overschot", "tekort", "balans", "inname", "verbruik"]);
+  const mentionsLongTerm = hasAnyWord(allText, ["lange termijn", "weken", "maanden", "blijft", "gewicht", "aankomen", "afvallen", "stabiel"]);
+  const mentionsMacros = hasAnyWord(allText, ["eiwit", "eiwitten", "koolhydraat", "koolhydraten", "vet", "vetten", "macro"]);
+  const mentionsImprovement = hasActionKeyword(allText) || hasAnyWord(allText, ["verbeter", "aanpassing", "meer", "minder", "volgende keer", "realistisch"]);
+
+  let level: RubricLevel = "-";
+  if (registrationCount < 7 || !hasIntake || !hasBurn || !hasProtein || !hasCarbs || !hasFat) {
+    level = "-";
+  } else if (registrationCount < 9 || textLen < 180 || !mentionsBalance || flags.length >= 3) {
+    level = "+/-";
+  } else if (textLen >= 360 && mentionsBalance && mentionsLongTerm && mentionsMacros && mentionsImprovement && flags.length <= 1) {
+    level = "++";
+  } else {
+    level = "+";
+  }
+
+  const item: RubricItem = {
+    key: "energiebalans_voeding",
+    title: "Huistaak 3e graad: energiebalans, macro's en reflectie",
+    level,
+    color: rubricColors[level],
     description: levelText(
-      lvl3,
-      "kcal-inname of kcal-verbruik ontbreekt.",
-      "De berekeningen zijn ingevuld, maar de conclusie is nog te beperkt.",
-      "Inname en verbruik zijn ingevuld en correct vergeleken.",
-      "Sterk: de leerling legt correct uit wat het kcal-verschil betekent voor lichaamsgewicht op langere termijn."
+      level,
+      "De opdracht is onvolledig of bevat weinig geloofwaardige gegevens. De leerling toont onvoldoende inzicht in de relatie tussen energie-inname, energieverbruik en voeding.",
+      "De opdracht is grotendeels ingevuld. De basis van energiebalans is aanwezig, maar de analyse of reflectie blijft oppervlakkig of bevat onduidelijkheden.",
+      "De opdracht is volledig en correct uitgevoerd. De leerling interpreteert energiebalans en voedingsgegevens correct en formuleert een duidelijke persoonlijke conclusie.",
+      "De opdracht is volledig, zorgvuldig en realistisch uitgevoerd. De leerling toont sterk inzicht in energie-inname, energieverbruik en macronutriënten en formuleert een goed onderbouwde reflectie met realistisch verbeterpunt.",
     ),
     autoFeedback:
-      lvl3 === "++"
-        ? "Top: je energiebalans klopt én je conclusie is juist geformuleerd."
-        : lvl3 === "+"
-        ? "Goed: je vergelijkt inname en verbruik correct."
-        : lvl3 === "+/-"
-        ? "Leg duidelijker uit wat het verschil tussen inname en verbruik betekent."
-        : "Vul kcal-inname en totaal kcal-verbruik in.",
-  };
-
-  const concept = (f.conceptExplain || "").trim();
-  const conceptLen = concept.length;
-  const conceptSentences = countSentencesApprox(concept);
-
-  const mentionsMET = hasAnyWord(concept, ["met"]);
-  const mentionsPAL = hasAnyWord(concept, ["pal"]);
-  const mentionsKcal = hasAnyWord(concept, ["kcal", "calorie", "energie"]);
-
-  let lvl4: RubricLevel = "-";
-  if (conceptLen < 70 || conceptSentences < 2) lvl4 = "-";
-  else if (!(mentionsMET && mentionsPAL && mentionsKcal)) lvl4 = "+/-";
-  else if (textExplainsPalVsMet(concept) && conceptLen >= 150) lvl4 = "++";
-  else lvl4 = "+";
-
-  const item4: RubricItem = {
-    key: "concept",
-    title: "Begrip van MET, PAL en kcal",
-    level: lvl4,
-    color: rubricColors[lvl4],
-    description: levelText(
-      lvl4,
-      "De uitleg is te kort of toont nog te weinig begrip van de begrippen.",
-      "De begrippen komen terug, maar het onderscheid is nog niet helemaal duidelijk.",
-      "De leerling legt PAL, MET en kcal in eenvoudige correcte taal uit.",
-      "Sterke uitleg: MET wordt gekoppeld aan één activiteit, PAL aan de hele dag en kcal aan energiebalans."
-    ),
-    autoFeedback:
-      lvl4 === "++"
-        ? "Uitstekend: je maakt het verschil tussen MET en PAL duidelijk."
-        : lvl4 === "+"
-        ? "Goed: de basisbegrippen zijn correct uitgelegd."
-        : lvl4 === "+/-"
-        ? "Leg duidelijker uit dat MET bij een activiteit hoort en PAL bij je hele dag."
-        : "Schrijf minstens 2 duidelijke zinnen over MET, PAL en kcal.",
+      level === "++"
+        ? "Uitstekend: je registreerde zorgvuldig, analyseerde kritisch en toont sterk inzicht in energiebalans en voeding."
+        : level === "+"
+          ? "Goed gewerkt: je gegevens zijn volledig en je conclusie toont dat je energiebalans begrijpt."
+          : level === "+/-"
+            ? "Je bent goed gestart. Controleer je gegevens en werk je analyse/conclusie concreter uit."
+            : "Vul alle verplichte gegevens in: kcal-inname, kcal-verbruik, macro's, app, maaltijdinfo en reflectie.",
   };
 
   return {
-    items: [item1, item2, item3, item4],
+    items: [item],
     totals: {
-      metMinutesTotal: metTotal,
-      activityKcalTotal,
       kcalBalance,
-      inferredPal,
+      proteinPerKg,
+      macroKcalTotal,
+      proteinPct,
+      carbsPct,
+      fatPct,
     },
     flags,
   };
 }
-
 /* =========================
    HOOFDCOMPONENT
 ========================= */
@@ -836,8 +934,95 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const [f2, setF2] = useState<SecondGradeForm>(() => initSecond(defaultMas ?? null));
+  const initialGender =
+    normalizeGender(profiel?.geslacht ?? profiel?.gender) ||
+    findGenderInRaw(profiel?.raw);
+  const [detectedGender, setDetectedGender] =
+    useState<GenderChoice>(initialGender);
+
+  const [f2, setF2] = useState<SecondGradeForm>(() =>
+    initSecond(defaultMas ?? null, initialGender),
+  );
   const [f3, setF3] = useState<ThirdGradeForm>(() => initThird());
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadGenderFromSupabase() {
+      const applyGender = (gender: GenderChoice) => {
+        if (!gender || cancelled) return false;
+        setDetectedGender(gender);
+        setF2((prev) =>
+          prev.gender ? prev : { ...prev, gender },
+        );
+        return true;
+      };
+
+      // 1) Eerst gebruiken wat al in het aangemelde profiel zit.
+      // In jouw tabel profielen staat geslacht als "M" of "V".
+      // Ook oude waarden zoals mannelijk/vrouwelijk/male/female blijven ondersteund.
+      const genderFromProfile =
+        normalizeGender(profiel?.geslacht ?? profiel?.gender) ||
+        findGenderInRaw(profiel?.raw);
+
+      if (applyGender(genderFromProfile)) return;
+
+      if (!uid && !profiel?.id) return;
+
+      // 2) Als de prop 'profiel' de kolom geslacht niet meekreeg, halen we ze hier zelf op.
+      // Belangrijk: we selecteren hier enkel "geslacht", zodat Supabase niet faalt
+      // wanneer kolommen zoals gender/raw niet bestaan in profielen.
+      const profileLinks = [
+        { column: "id", value: profiel?.id ?? uid },
+        { column: "user_id", value: uid },
+        { column: "auth_user_id", value: uid },
+      ].filter((x) => Boolean(x.value));
+
+      for (const link of profileLinks) {
+        const { data, error } = await supabase
+          .from("profielen")
+          .select("geslacht")
+          .eq(link.column, link.value as string)
+          .maybeSingle();
+
+        if (cancelled) return;
+        if (error || !data) continue;
+
+        const gender = normalizeGender((data as any).geslacht);
+        if (applyGender(gender)) return;
+      }
+
+      // 3) Daarna zoeken we in smartschool_users.raw.
+      // In raw staat dit bij jou als "male" of "female".
+      // raw kan een object of JSON-string zijn; beide worden ondersteund.
+      const smartschoolLinks = [
+        { column: "id", value: profiel?.id ?? uid },
+        { column: "user_id", value: uid },
+        { column: "auth_user_id", value: uid },
+        { column: "profiel_id", value: profiel?.id ?? uid },
+        { column: "profile_id", value: profiel?.id ?? uid },
+      ].filter((x) => Boolean(x.value));
+
+      for (const link of smartschoolLinks) {
+        const { data, error } = await supabase
+          .from("smartschool_users")
+          .select("raw")
+          .eq(link.column, link.value as string)
+          .maybeSingle();
+
+        if (cancelled) return;
+        if (error || !data) continue;
+
+        const genderFromRaw = findGenderInRaw((data as any).raw);
+        if (applyGender(genderFromRaw)) return;
+      }
+    }
+
+    loadGenderFromSupabase();
+    return () => {
+      cancelled = true;
+    };
+  }, [uid, profiel?.geslacht, profiel?.gender, profiel?.raw]);
 
   const rub2 = useMemo(() => rubricsSecond(f2), [f2]);
   const rub3 = useMemo(() => rubricsThird(f3), [f3]);
@@ -845,7 +1030,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
   const reset = () => {
     setInfo(null);
     setError(null);
-    if (mode === "2e") setF2(initSecond(defaultMas ?? null));
+    if (mode === "2e") setF2(initSecond(defaultMas ?? null, detectedGender));
     else setF3(initThird());
   };
 
@@ -880,7 +1065,9 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
         created_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase.from("functional_huiswerk_submissions").insert(row);
+      const { error } = await supabase
+        .from("functional_huiswerk_submissions")
+        .insert(row);
       if (error) throw new Error(error.message);
 
       setInfo("✅ Huiswerk opgeslagen!");
@@ -894,15 +1081,30 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
   return (
     <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
       <div style={styles.panel}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
           <div>
             <div style={styles.sectionTitle}>📚 Huiswerk</div>
             <div style={{ ...styles.small, marginTop: 6 }}>
-              Kies je graad en vul de opdracht in. De app berekent automatisch rubrics.
+              Kies je graad en vul de opdracht in. De app berekent automatisch
+              rubrics.
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
             <span style={styles.pill}>Graad</span>
             <select
               value={mode}
@@ -935,16 +1137,23 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
       {mode === "2e" ? (
         <>
           <SecondGradePanel value={f2} onChange={setF2} />
-          <RubricPanel title="Rubrics (2e graad)" items={rub2} />
+          <RubricPanel title="Evaluatie (2e graad)" items={rub2} />
         </>
       ) : (
         <>
-          <ThirdGradePanel value={f3} onChange={setF3} derived={rub3.totals} flags={rub3.flags} />
+          <ThirdGradePanel
+            value={f3}
+            onChange={setF3}
+            derived={rub3.totals}
+            flags={rub3.flags}
+          />
           <RubricPanel
             title="Rubrics (3e graad)"
             items={rub3.items}
-            extraRight={`MET-minuten: ${Math.round(rub3.totals.metMinutesTotal)} | kcal-saldo: ${
-              rub3.totals.kcalBalance === null ? "—" : Math.round(rub3.totals.kcalBalance)
+            extraRight={`Energiebalans: ${
+              rub3.totals.kcalBalance === null
+                ? "—"
+                : `${Math.round(rub3.totals.kcalBalance)} kcal`
             }`}
           />
         </>
@@ -1004,7 +1213,8 @@ function RubricPanel({
         <div>
           <div style={styles.sectionTitle}>🎯 {title}</div>
           <div style={{ ...styles.small, marginTop: 6 }}>
-            Score: <b style={{ color: ui.text }}>- / +/- / + / ++</b> met kleur en uitleg.
+            Score: <b style={{ color: ui.text }}>- / +/- / + / ++</b> met kleur
+            en uitleg.
           </div>
         </div>
         {extraRight ? <div style={styles.pill}>{extraRight}</div> : null}
@@ -1014,14 +1224,23 @@ function RubricPanel({
         {items.map((it) => (
           <div
             key={it.key}
-            style={{ ...styles.rubricCard, borderColor: ui.border, background: it.color }}
+            style={{
+              ...styles.rubricCard,
+              borderColor: ui.border,
+              background: it.color,
+            }}
           >
             <div style={styles.rubricTop}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 980, color: ui.text }}>{it.title}</div>
-                <div style={{ ...styles.small, marginTop: 6 }}>{it.description}</div>
+                <div style={{ fontWeight: 980, color: ui.text }}>
+                  {it.title}
+                </div>
+                <div style={{ ...styles.small, marginTop: 6 }}>
+                  {it.description}
+                </div>
                 <div style={{ ...styles.small, marginTop: 10 }}>
-                  <b style={{ color: ui.text }}>Auto-feedback:</b> {it.autoFeedback}
+                  <b style={{ color: ui.text }}>Auto-feedback:</b>{" "}
+                  {it.autoFeedback}
                 </div>
               </div>
 
@@ -1045,16 +1264,43 @@ function SecondGradePanel({
   value: SecondGradeForm;
   onChange: (next: SecondGradeForm) => void;
 }) {
-  const set = (patch: Partial<SecondGradeForm>) => onChange({ ...value, ...patch });
+  const set = (patch: Partial<SecondGradeForm>) =>
+    onChange({ ...value, ...patch });
+  const masText = getMasSpeedText(value.mas);
+  const masPerformanceText = getMasPerformanceText(value);
+  const conclusion = getSecondConclusion(value);
 
   return (
     <>
       <div style={styles.panel}>
-        <div style={styles.sectionTitle}>🏃‍♂️ Huiswerk 2e graad — MAS + hartslag + praattest</div>
+        <div style={styles.sectionTitle}>
+          🏃‍♂️ Huiswerk 2e graad — MAS + hartslag + praattest
+        </div>
         <div style={{ ...styles.small, marginTop: 8 }}>
-          Kies <b style={{ color: ui.text }}>Duur</b> of <b style={{ color: ui.text }}>Interval</b>.
-          Meet <b style={{ color: ui.text }}>rust</b>, <b style={{ color: ui.text }}>piek</b> en{" "}
-          <b style={{ color: ui.text }}>herstel (na 1 min)</b>. Gebruik de praattest tijdens de kern.
+          Je werkt thuis{" "}
+          <b style={{ color: ui.text }}>één volledige training</b> af. Je kiest
+          zelf:
+          <b style={{ color: ui.text }}> duurtraining</b> of{" "}
+          <b style={{ color: ui.text }}>intervaltraining</b>. Gebruik je{" "}
+          <b style={{ color: ui.text }}>MAS/VMA</b> om je tempo te bepalen. Meet
+          je hartslag voor, tijdens/na de kern en na 1 minuut herstel. Tijdens
+          de kern gebruik je ook de praattest.
+        </div>
+      </div>
+
+      <div style={styles.infoBox}>
+        <div style={{ fontWeight: 980, color: ui.text }}>
+          Wat moet je precies doen?
+        </div>
+        <div style={{ ...styles.small, marginTop: 8, display: "grid", gap: 6 }}>
+          <div>1. Kies één training: duur of interval.</div>
+          <div>2. Maak een plan met opwarming, kern en cooling-down.</div>
+          <div>3. Gebruik je MAS om je tempo te kiezen.</div>
+          <div>
+            4. Meet rusthartslag, hoogste hartslag en herstelhartslag na exact 1
+            minuut.
+          </div>
+          <div>5. Noteer praattest, RPE en een korte reflectie.</div>
         </div>
       </div>
 
@@ -1073,6 +1319,30 @@ function SecondGradePanel({
           </div>
 
           <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Geslacht voor MAS-evaluatie</div>
+            <div style={{ ...styles.small, marginTop: 6 }}>
+              Wordt automatisch opgehaald uit <b style={{ color: ui.text }}>profielen.geslacht</b> (M/V). Als reserve zoekt de app in <b style={{ color: ui.text }}>smartschool_users.raw</b> (male/female).
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <span
+                style={{
+                  ...styles.pill,
+                  height: 46,
+                  borderRadius: 16,
+                  padding: "0 14px",
+                }}
+              >
+                {value.gender || "Nog niet gevonden"}
+              </span>
+            </div>
+            {!value.gender ? (
+              <div style={{ ...styles.warnBox, marginTop: 10 }}>
+                Geslacht niet automatisch gevonden. Controleer of <b>profielen.geslacht</b> de waarde <b>M</b> of <b>V</b> bevat. Als dat niet lukt, zoekt de app daarna in <b>smartschool_users.raw</b> naar <b>male</b> of <b>female</b>.
+              </div>
+            ) : null}
+          </div>
+
+          <div style={{ marginTop: 12 }}>
             <div style={styles.label}>MAS/VMA (km/u)</div>
             <input
               value={value.mas}
@@ -1081,6 +1351,16 @@ function SecondGradePanel({
               inputMode="decimal"
               placeholder="bv. 12.5"
             />
+            <div style={{ ...styles.small, marginTop: 8 }}>
+              MAS is je maximale aerobe snelheid. In de praktijk gebruik je die
+              als richttempo: duurtraining aan ongeveer{" "}
+              <b style={{ color: ui.text }}>70–80%</b> van je MAS, interval aan
+              ongeveer <b style={{ color: ui.text }}>90–100%</b> van je MAS.
+            </div>
+            <div style={{ ...styles.infoBox, marginTop: 10 }}>{masText}</div>
+            <div style={{ ...styles.okBox, marginTop: 10 }}>
+              <b>Automatische MAS-evaluatie:</b> {masPerformanceText}
+            </div>
           </div>
 
           <div style={{ marginTop: 12 }}>
@@ -1098,7 +1378,20 @@ function SecondGradePanel({
         </div>
 
         <div style={styles.panel}>
-          <div style={styles.sectionTitle}>2) Plan (opwarming – kern – cooling-down)</div>
+          <div style={styles.sectionTitle}>
+            2) Plan met MAS (opwarming – kern – cooling-down)
+          </div>
+          <div style={{ ...styles.small, marginTop: 8 }}>
+            <b style={{ color: ui.text }}>Duurtraining:</b> loop of wandel-loop
+            15–30 minuten aan een tempo dat je lang kan volhouden. Richting:
+            70–80% MAS. Je blijft meestal in praattest groen/oranje.
+          </div>
+          <div style={{ ...styles.small, marginTop: 8 }}>
+            <b style={{ color: ui.text }}>Intervaltraining:</b> wissel
+            inspanning en herstel af. Dat kan als wandelen → lopen, of als
+            rustig lopen → versnellen. Richting: inspanningen aan 90–100% MAS,
+            herstel zeer rustig wandelen of joggen.
+          </div>
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.label}>Opwarming (min)</div>
@@ -1112,19 +1405,22 @@ function SecondGradePanel({
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Kern (beschrijf)</div>
+            <div style={styles.label}>Kern (beschrijf met MAS/tempo)</div>
             <textarea
               value={value.coreText}
               onChange={(e) => set({ coreText: e.target.value })}
               style={styles.textarea}
               placeholder={
                 value.trainingType === "Interval"
-                  ? "bv. 8×1' aan 90–95% MAS met 1' rustig"
-                  : "bv. 20 min aan 70% MAS (rustig tempo)"
+                  ? "bv. 8×1 min aan 90–95% MAS met 1 min wandelen/joggen als rust. Of: 10×30 sec versnellen + 60 sec rustig lopen."
+                  : "bv. 20 min aan 70–80% MAS. Ik loop rustig door en blijf in praattest groen/oranje."
               }
             />
             <div style={{ ...styles.small, marginTop: 8 }}>
-              Tip: bij duurtraining schrijf je best “% MAS” of “tempo”. Bij interval: “aantal × duur / rust”.
+              Praktisch: ken je je tempo niet exact? Gebruik dan je MAS als
+              richtlijn én controleer met praattest en RPE. Bij duur moet je
+              kunnen blijven praten. Bij interval mag praten tijdens de snelle
+              stukken moeilijker zijn.
             </div>
           </div>
 
@@ -1144,6 +1440,13 @@ function SecondGradePanel({
       <div className="row3" style={styles.row3}>
         <div style={styles.panel}>
           <div style={styles.sectionTitle}>3) Hartslag (verplicht)</div>
+          <div style={{ ...styles.small, marginTop: 8 }}>
+            Met hartslagmeter of smartwatch: noteer de waarden. Zonder
+            hartslagmeter: voel je pols aan je hals of pols, tel{" "}
+            <b style={{ color: ui.text }}>15 seconden</b> en vermenigvuldig met
+            4. Meet rust vóór de training, piek meteen na het zwaarste stuk en
+            herstel exact 1 minuut later.
+          </div>
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.label}>Rusthartslag (bpm)</div>
@@ -1157,7 +1460,7 @@ function SecondGradePanel({
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Hoogste hartslag (bpm)</div>
+            <div style={styles.label}>Hoogste hartslag / piek (bpm)</div>
             <input
               value={value.hrPeak}
               onChange={(e) => set({ hrPeak: e.target.value })}
@@ -1177,14 +1480,15 @@ function SecondGradePanel({
               placeholder="bv. 155"
             />
           </div>
-
-          <div style={{ ...styles.small, marginTop: 10 }}>
-            Meet rustig, noteer eerlijk. De app checkt enkel logica: piek hoger dan rust, herstel lager dan piek.
-          </div>
         </div>
 
         <div style={styles.panel}>
           <div style={styles.sectionTitle}>4) Praattest (verplicht)</div>
+          <div style={{ ...styles.small, marginTop: 8 }}>
+            De praattest helpt je controleren of je intensiteit past bij je
+            doel. Groen = rustig genoeg, oranje = stevig maar controleerbaar,
+            rood = zeer zwaar. Zo leer je doseren zonder toestel.
+          </div>
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.label}>Tijdens de kern</div>
@@ -1195,7 +1499,9 @@ function SecondGradePanel({
             >
               <option value="">Kies…</option>
               <option value="Groen">Groen — vlot praten in zinnen</option>
-              <option value="Oranje">Oranje — korte zinnen, praten lastig</option>
+              <option value="Oranje">
+                Oranje — korte zinnen, praten lastig
+              </option>
               <option value="Rood">Rood — bijna niet praten</option>
             </select>
           </div>
@@ -1212,7 +1518,13 @@ function SecondGradePanel({
         </div>
 
         <div style={styles.panel}>
-          <div style={styles.sectionTitle}>5) Ervaring</div>
+          <div style={styles.sectionTitle}>5) RPE en reflectie</div>
+          <div style={{ ...styles.small, marginTop: 8 }}>
+            RPE is je eigen gevoel van inspanning op 10. 1 = zeer gemakkelijk, 5
+            = matig, 10 = maximaal. Het nut: je vergelijkt je gevoel met MAS,
+            hartslag en praattest. Zo leer je of je te rustig, goed of te zwaar
+            trainde.
+          </div>
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.label}>RPE (1–10)</div>
@@ -1231,10 +1543,17 @@ function SecondGradePanel({
               value={value.reflection}
               onChange={(e) => set({ reflection: e.target.value })}
               style={styles.textarea}
-              placeholder="Schrijf: wat ging goed? wat neem ik mee naar volgende keer?"
+              placeholder="Schrijf: wat ging goed? wat zegt mijn hartslag/praattest/RPE? wat neem ik mee naar volgende keer?"
             />
           </div>
         </div>
+      </div>
+
+      <div style={styles.panel}>
+        <div style={styles.sectionTitle}>
+          📌 Automatische conclusie over je resultaten
+        </div>
+        <div style={{ ...styles.small, marginTop: 8 }}>{conclusion}</div>
       </div>
 
       <div style={styles.panel}>
@@ -1249,7 +1568,8 @@ function SecondGradePanel({
           <div>
             <div style={styles.sectionTitle}>6) Optioneel — krachtcircuit</div>
             <div style={{ ...styles.small, marginTop: 6 }}>
-              Alleen invullen als je het effectief gedaan hebt (niet beoordeeld in rubrics).
+              Alleen invullen als je het effectief gedaan hebt (niet beoordeeld
+              in evaluatie).
             </div>
           </div>
           <div style={styles.pill}>OPTIONEEL</div>
@@ -1316,106 +1636,64 @@ function ThirdGradePanel({
   value: ThirdGradeForm;
   onChange: (next: ThirdGradeForm) => void;
   derived: {
-    metMinutesTotal: number;
-    activityKcalTotal: number;
     kcalBalance: number | null;
-    inferredPal: PalChoice | "";
+    proteinPerKg: number | null;
+    macroKcalTotal: number | null;
+    proteinPct: number | null;
+    carbsPct: number | null;
+    fatPct: number | null;
   };
   flags: string[];
 }) {
-  const set = (patch: Partial<ThirdGradeForm>) => onChange({ ...value, ...patch });
+  const set = (patch: Partial<ThirdGradeForm>) =>
+    onChange({ ...value, ...patch });
 
-  const updateRow = (id: string, patch: Partial<ActivityRow>) => {
-    const next = value.activities.map((r) => (r.id === id ? { ...r, ...patch } : r));
-    set({ activities: next });
-  };
-
-  const addRow = () => {
-    set({
-      activities: [...value.activities, { id: mkId(), activity: "", minutes: "", met: "" }],
-    });
-  };
-
-  const removeRow = (id: string) => {
-    if (value.activities.length <= 6) return;
-    set({ activities: value.activities.filter((r) => r.id !== id) });
-  };
-
-  const autoFillBurnFromActivities = () => {
-    set({
-      kcalTotalBurn: String(Math.round(derived.activityKcalTotal)),
-      burnSource: "Automatisch via activiteiten",
-    });
-  };
+  const balanceLabel = energyBalanceLabel(derived.kcalBalance);
+  const proteinAdvice = proteinAdviceText(derived.proteinPerKg);
 
   return (
     <>
       <div style={styles.panel}>
-        <div style={styles.sectionTitle}>🚴 Huiswerk 3e graad — PAL + MET + kcal</div>
+        <div style={styles.sectionTitle}>🥗 Huiswerk 3e graad — energiebalans en voeding</div>
         <div style={{ ...styles.small, marginTop: 8 }}>
-          Dit huiswerk mag je invullen <b style={{ color: ui.text }}>zonder voorkennis</b>. Lees eerst de uitleg hieronder en vul daarna alles stap voor stap in.
-        </div>
-      </div>
-
-      <div style={styles.infoBox}>
-        <div style={{ fontWeight: 980, color: ui.text }}>Wat moet je hier doen?</div>
-        <div style={{ ...styles.small, marginTop: 8 }}>
-          Je kiest <b style={{ color: ui.text }}>één echte dag</b>, bijvoorbeeld gisteren. Daarna vul je in:
-        </div>
-        <div style={{ ...styles.small, marginTop: 8, display: "grid", gap: 6 }}>
-          <div>1. je activiteiten van die dag</div>
-          <div>2. hoe lang die activiteiten duurden</div>
-          <div>3. de MET-waarde van elke activiteit</div>
-          <div>4. je PAL-inschatting voor je volledige dag</div>
-          <div>5. hoeveel kcal je ongeveer at en hoeveel kcal je ongeveer verbruikte</div>
-          <div>6. wat dit betekent voor gewicht op langere termijn</div>
+          Registreer <b style={{ color: ui.text }}>één volledige dag</b>. Gebruik voor je
+          energie-inname bij voorkeur <b style={{ color: ui.text }}>iFood</b>. Gebruik voor je
+          energieverbruik de <b style={{ color: ui.text }}>TDEE Calculator</b>. Vul daarna je
+          kcal-inname, kcal-verbruik en macro's in en trek zelf je conclusie.
         </div>
       </div>
 
       <div className="row2" style={styles.row2}>
-        <div style={styles.panel}>
-          <div style={styles.sectionTitle}>Korte uitleg voor je begint</div>
-
-          <div style={{ ...styles.small, marginTop: 10 }}>
-            <b style={{ color: ui.text }}>MET</b> zegt hoe zwaar <b style={{ color: ui.text }}>één activiteit</b> is.
-            Rust is ongeveer 1 MET. Hoe hoger de MET, hoe intensiever de activiteit.
-          </div>
-
-          <div style={{ ...styles.small, marginTop: 10 }}>
-            <b style={{ color: ui.text }}>PAL</b> zegt hoe actief je <b style={{ color: ui.text }}>hele dag</b> was.
-            Het gaat dus niet over één moment, maar over het totaal van je dag.
-          </div>
-
-          <div style={{ ...styles.small, marginTop: 10 }}>
-            <b style={{ color: ui.text }}>kcal</b> zijn een maat voor energie.
-            Eten en drinken leveren energie op. Bewegen en leven verbruiken energie.
-          </div>
-
-          <div style={{ ...styles.small, marginTop: 10 }}>
-            Als je op langere termijn <b style={{ color: ui.text }}>meer kcal inneemt dan verbruikt</b>, is er meer kans op gewichtstoename.
-            Als je op langere termijn <b style={{ color: ui.text }}>minder kcal inneemt dan verbruikt</b>, is er meer kans op gewichtsafname.
+        <div style={styles.infoBox}>
+          <div style={{ fontWeight: 980, color: ui.text }}>Wat moet je doen?</div>
+          <div style={{ ...styles.small, marginTop: 8, display: "grid", gap: 6 }}>
+            <div>1. Kies één gewone dag.</div>
+            <div>2. Registreer alles wat je eet en drinkt in iFood of een gelijkaardige app.</div>
+            <div>3. Noteer je kcal-inname, eiwitten, koolhydraten en vetten.</div>
+            <div>4. Bereken je kcal-verbruik met de TDEE Calculator.</div>
+            <div>5. Vergelijk inname en verbruik en schrijf je eigen conclusie.</div>
           </div>
         </div>
 
         <div style={styles.panel}>
-          <div style={styles.sectionTitle}>Belangrijk verschil</div>
-
+          <div style={styles.sectionTitle}>Korte theorie</div>
           <div style={{ ...styles.small, marginTop: 10 }}>
-            <b style={{ color: ui.text }}>MET = één activiteit</b>
+            <b style={{ color: ui.text }}>Energie-inname</b> is de energie die je binnenkrijgt via eten en drinken.
           </div>
-          <div style={{ ...styles.small, marginTop: 6 }}>
-            Bijvoorbeeld: fietsen, wandelen, zitten, trainen…
-          </div>
-
           <div style={{ ...styles.small, marginTop: 10 }}>
-            <b style={{ color: ui.text }}>PAL = je volledige dag</b>
+            <b style={{ color: ui.text }}>Energieverbruik</b> is de energie die je lichaam gebruikt om te leven en te bewegen.
           </div>
-          <div style={{ ...styles.small, marginTop: 6 }}>
-            Bijvoorbeeld: “Mijn dag was laag actief / matig actief / actief.”
-          </div>
-
           <div style={{ ...styles.small, marginTop: 10 }}>
-            Daarna leg jij alles nog eens uit <b style={{ color: ui.text }}>in je eigen woorden</b>. Zo toont de app of je het begrijpt.
+            <b style={{ color: ui.text }}>Energiebalans</b> is het verschil tussen je inname en je verbruik.
+            Als hetzelfde patroon weken of maanden blijft terugkomen, kan dat invloed hebben op je lichaamsgewicht.
+          </div>
+          <div style={{ ...styles.small, marginTop: 10 }}>
+            <b style={{ color: ui.text }}>Macro's</b> zijn eiwitten, koolhydraten en vetten.
+            Eiwitten ondersteunen spierherstel, koolhydraten leveren veel trainingsenergie en vetten zijn nodig voor onder andere hormonen en opname van vitamines.
+          </div>
+          <div style={{ ...styles.small, marginTop: 10 }}>
+            <b style={{ color: ui.text }}>MET en PAL</b> worden soms gebruikt om energieverbruik te schatten,
+            maar voor deze huistaak hoef je ze niet zelf te berekenen.
           </div>
         </div>
       </div>
@@ -1431,9 +1709,9 @@ function ThirdGradePanel({
           }}
         >
           <div>
-            <div style={styles.sectionTitle}>Handige link voor kcal-berekening</div>
+            <div style={styles.sectionTitle}>TDEE Calculator voor kcal-verbruik</div>
             <div style={{ ...styles.small, marginTop: 6 }}>
-              Gebruik een externe site of app om je kcal-inname of totale kcal-verbruik te schatten.
+              Gebruik deze calculator om je totaal energieverbruik per dag te schatten.
             </div>
           </div>
 
@@ -1443,12 +1721,8 @@ function ThirdGradePanel({
             rel="noreferrer"
             style={styles.linkBtn}
           >
-            Open kcal / TDEE calculator
+            Open TDEE Calculator
           </a>
-        </div>
-
-        <div style={{ ...styles.small, marginTop: 10 }}>
-          Let op: dit zijn altijd <b style={{ color: ui.text }}>schattingen</b>. Je hoeft dus niet exact te zijn, maar wel eerlijk en logisch.
         </div>
       </div>
 
@@ -1468,7 +1742,7 @@ function ThirdGradePanel({
           <div style={styles.sectionTitle}>1) Basis</div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Datum van de dag die je analyseert</div>
+            <div style={styles.label}>Datum van de dag die je registreerde</div>
             <input
               value={value.date}
               onChange={(e) => set({ date: e.target.value })}
@@ -1478,7 +1752,7 @@ function ThirdGradePanel({
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Gewicht (kg)</div>
+            <div style={styles.label}>Gewicht (kg) — optioneel</div>
             <input
               value={value.weightKg}
               onChange={(e) => set({ weightKg: e.target.value })}
@@ -1486,183 +1760,77 @@ function ThirdGradePanel({
               inputMode="decimal"
               placeholder="bv. 68"
             />
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Totaal MET-minuten (auto)</div>
-            <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ ...styles.pill, height: 46, borderRadius: 16, padding: "0 14px" }}>
-                {Math.round(derived.metMinutesTotal)}
-              </div>
-              <div style={styles.small}>Dit is de som van MET × minuten.</div>
+            <div style={{ ...styles.small, marginTop: 8 }}>
+              Optioneel: vul dit alleen in als je een automatische inschatting van je eiwitten per kg lichaamsgewicht wilt zien.
             </div>
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>kcal verbruikt via je activiteiten (auto)</div>
-            <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <div style={{ ...styles.pill, height: 46, borderRadius: 16, padding: "0 14px" }}>
-                {value.weightKg ? Math.round(derived.activityKcalTotal) : "Vul gewicht in"}
-              </div>
-              <div style={styles.small}>Schoolschatting op basis van MET × gewicht × uren.</div>
-            </div>
-          </div>
-        </div>
-
-        <div style={styles.panel}>
-          <div style={styles.sectionTitle}>2) PAL-inschatting</div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Kies je PAL voor je volledige dag</div>
+            <div style={styles.label}>Welke app gebruikte je voor je voeding?</div>
             <select
-              value={value.pal}
-              onChange={(e) => set({ pal: e.target.value as any })}
+              value={value.intakeApp}
+              onChange={(e) => set({ intakeApp: e.target.value as IntakeAppChoice })}
               style={{ ...styles.input, marginTop: 10 }}
             >
               <option value="">Kies…</option>
-              <option value="Laag actief">Laag actief</option>
-              <option value="Matig actief">Matig actief</option>
-              <option value="Actief">Actief</option>
+              <option value="iFood">iFood</option>
+              <option value="MyFitnessPal">MyFitnessPal</option>
+              <option value="Yazio">Yazio</option>
+              <option value="Andere app">Andere app</option>
             </select>
           </div>
 
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Automatische inschatting van de app</div>
-            <div style={{ marginTop: 10 }}>
-              <span style={styles.pill}>{derived.inferredPal || "Nog te weinig gegevens"}</span>
+          {value.intakeApp === "Andere app" ? (
+            <div style={{ marginTop: 12 }}>
+              <div style={styles.label}>Naam andere app</div>
+              <input
+                value={value.intakeAppOther}
+                onChange={(e) => set({ intakeAppOther: e.target.value })}
+                style={styles.input}
+                placeholder="bv. Lifesum"
+              />
             </div>
-          </div>
+          ) : null}
+        </div>
+
+        <div style={styles.panel}>
+          <div style={styles.sectionTitle}>2) Extra gegevens uit iFood</div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Leg uit waarom (in je eigen woorden)</div>
-            <textarea
-              value={value.palExplain}
-              onChange={(e) => set({ palExplain: e.target.value })}
-              style={styles.textarea}
-              placeholder="bv. Ik zat lang op school, maar ik fietste ook heen en terug en had training. Daarom schat ik mijn hele dag als matig actief."
+            <div style={styles.label}>Aantal maaltijden / eetmomenten geregistreerd</div>
+            <input
+              value={value.mealsCount}
+              onChange={(e) => set({ mealsCount: e.target.value })}
+              style={styles.input}
+              inputMode="numeric"
+              placeholder="bv. 4"
             />
           </div>
-        </div>
-      </div>
 
-      <div style={styles.panel}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 12,
-            alignItems: "flex-start",
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div style={styles.sectionTitle}>3) Activiteitenlog (min. 6 activiteiten)</div>
-            <div style={{ ...styles.small, marginTop: 6 }}>
-              Vul je dag zo volledig mogelijk in. Ook rustige activiteiten zoals slapen of zitten tellen mee.
-            </div>
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Welke maaltijd leverde volgens de app de meeste kcal?</div>
+            <select
+              value={value.highestKcalMeal}
+              onChange={(e) => set({ highestKcalMeal: e.target.value as MealChoice })}
+              style={{ ...styles.input, marginTop: 10 }}
+            >
+              <option value="">Kies…</option>
+              <option value="Ontbijt">Ontbijt</option>
+              <option value="Lunch">Lunch</option>
+              <option value="Avondeten">Avondeten</option>
+              <option value="Tussendoortje">Tussendoortje</option>
+              <option value="Drank">Drank</option>
+            </select>
           </div>
-          <button onClick={addRow} style={{ ...styles.ghostBtn, height: 46 }}>
-            + Activiteit
-          </button>
-        </div>
-
-        <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-          {value.activities.map((r, idx) => {
-            const metMin = calcMetMinutes(r);
-            const kcal = calcActivityKcal(r, value.weightKg);
-            const canRemove = value.activities.length > 6;
-
-            return (
-              <div key={r.id} style={{ ...styles.rubricCard, background: "rgba(0,0,0,0.22)" }}>
-                <div style={{ display: "grid", gap: 10 }}>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      alignItems: "center",
-                    }}
-                  >
-                    <div style={{ fontWeight: 980, color: ui.text }}>Activiteit {idx + 1}</div>
-                    <button
-                      onClick={() => removeRow(r.id)}
-                      disabled={!canRemove}
-                      style={{ ...styles.ghostBtn, height: 38, opacity: canRemove ? 1 : 0.5 }}
-                      title={canRemove ? "Verwijderen" : "Minstens 6 activiteiten verplicht"}
-                    >
-                      Verwijder
-                    </button>
-                  </div>
-
-                  <div className="row3" style={styles.row3}>
-                    <div>
-                      <div style={styles.label}>Activiteit</div>
-                      <input
-                        value={r.activity}
-                        onChange={(e) => updateRow(r.id, { activity: e.target.value })}
-                        style={styles.input}
-                        placeholder="bv. fietsen naar school"
-                      />
-                    </div>
-
-                    <div>
-                      <div style={styles.label}>Duur (min)</div>
-                      <input
-                        value={r.minutes}
-                        onChange={(e) => updateRow(r.id, { minutes: e.target.value })}
-                        style={styles.input}
-                        inputMode="numeric"
-                        placeholder="bv. 25"
-                      />
-                    </div>
-
-                    <div>
-                      <div style={styles.label}>MET</div>
-                      <select
-                        value={r.met}
-                        onChange={(e) => updateRow(r.id, { met: e.target.value })}
-                        style={{ ...styles.input, marginTop: 10 }}
-                      >
-                        <option value="">Kies…</option>
-                        {MET_OPTIONS.map((m) => (
-                          <option key={`${m.value}-${m.label}`} value={String(m.value)}>
-                            {m.label}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 10,
-                      alignItems: "center",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <div style={styles.small}>
-                      MET-minuten (auto): <b style={{ color: ui.text }}>{Math.round(metMin)}</b>
-                    </div>
-                    <div style={styles.small}>
-                      kcal activiteit (auto):{" "}
-                      <b style={{ color: ui.text }}>{value.weightKg ? Math.round(kcal) : "vul gewicht in"}</b>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
         </div>
       </div>
 
       <div className="row2" style={styles.row2}>
         <div style={styles.panel}>
-          <div style={styles.sectionTitle}>4) kcal-inname</div>
+          <div style={styles.sectionTitle}>3) Energie-inname via iFood</div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Totale kcal-inname van die dag</div>
+            <div style={styles.label}>Totale kcal-inname</div>
             <input
               value={value.kcalIntake}
               onChange={(e) => set({ kcalIntake: e.target.value })}
@@ -1672,19 +1840,51 @@ function ThirdGradePanel({
             />
           </div>
 
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Hoe heb je dit berekend?</div>
-            <textarea
-              value={value.kcalIntakeSource}
-              onChange={(e) => set({ kcalIntakeSource: e.target.value })}
-              style={styles.textarea}
-              placeholder="bv. Ik heb alles van gisteren ingevoerd in een app / site en zo mijn kcal-inname geschat."
-            />
+          <div className="row3" style={{ ...styles.row3, marginTop: 12 }}>
+            <div>
+              <div style={styles.label}>Eiwitten (g)</div>
+              <input
+                value={value.proteinG}
+                onChange={(e) => set({ proteinG: e.target.value })}
+                style={styles.input}
+                inputMode="decimal"
+                placeholder="bv. 95"
+              />
+            </div>
+            <div>
+              <div style={styles.label}>Koolhydraten (g)</div>
+              <input
+                value={value.carbsG}
+                onChange={(e) => set({ carbsG: e.target.value })}
+                style={styles.input}
+                inputMode="decimal"
+                placeholder="bv. 260"
+              />
+            </div>
+            <div>
+              <div style={styles.label}>Vetten (g)</div>
+              <input
+                value={value.fatG}
+                onChange={(e) => set({ fatG: e.target.value })}
+                style={styles.input}
+                inputMode="decimal"
+                placeholder="bv. 75"
+              />
+            </div>
+          </div>
+
+          <div style={styles.infoBox}>
+            <div style={{ fontWeight: 980, color: ui.text }}>Macro-overzicht automatisch</div>
+            <div style={{ ...styles.small, marginTop: 8, display: "grid", gap: 6 }}>
+              <div>Eiwit per kg lichaamsgewicht: <b style={{ color: ui.text }}>{derived.proteinPerKg === null ? "—" : `${derived.proteinPerKg.toFixed(2)} g/kg`}</b></div>
+              <div>Verdeling op basis van macro-kcal: <b style={{ color: ui.text }}>Eiwit {derived.proteinPct ?? "—"}% | KH {derived.carbsPct ?? "—"}% | Vet {derived.fatPct ?? "—"}%</b></div>
+              <div>{proteinAdvice}</div>
+            </div>
           </div>
         </div>
 
         <div style={styles.panel}>
-          <div style={styles.sectionTitle}>5) kcal-verbruik</div>
+          <div style={styles.sectionTitle}>4) Energieverbruik via TDEE Calculator</div>
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.label}>Totaal kcal-verbruik van die dag</div>
@@ -1698,67 +1898,99 @@ function ThirdGradePanel({
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Bron</div>
+            <div style={styles.label}>Bron voor verbruik</div>
             <select
               value={value.burnSource}
-              onChange={(e) => set({ burnSource: e.target.value as any })}
+              onChange={(e) => set({ burnSource: e.target.value as ThirdGradeForm["burnSource"] })}
               style={{ ...styles.input, marginTop: 10 }}
             >
               <option value="">Kies…</option>
-              <option value="Automatisch via activiteiten">Automatisch via activiteiten</option>
-              <option value="Externe calculator / app">Externe calculator / app</option>
-              <option value="Eigen schatting">Eigen schatting</option>
+              <option value="TDEE Calculator">TDEE Calculator</option>
+              <option value="Smartwatch / gezondheidsapp">Smartwatch / gezondheidsapp</option>
+              <option value="Andere calculator">Andere calculator</option>
             </select>
           </div>
 
-          <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button onClick={autoFillBurnFromActivities} style={{ ...styles.ghostBtn, height: 46 }}>
-              Gebruik automatisch berekend verbruik
-            </button>
-            <div style={styles.small}>Handig om te vergelijken met je externe calculator of app.</div>
+          <div style={styles.infoBox}>
+            <div style={{ fontWeight: 980, color: ui.text }}>Energiebalans automatisch</div>
+            <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ ...styles.pill, height: 46, borderRadius: 16, padding: "0 14px" }}>
+                {derived.kcalBalance === null ? "—" : `${Math.round(derived.kcalBalance)} kcal`}
+              </span>
+              <span style={styles.pill}>{balanceLabel}</span>
+            </div>
+            <div style={{ ...styles.small, marginTop: 10 }}>
+              De app toont enkel het verschil. Jij legt zelf uit wat dit volgens jou betekent.
+            </div>
           </div>
         </div>
       </div>
 
       <div className="row2" style={styles.row2}>
         <div style={styles.panel}>
-          <div style={styles.sectionTitle}>6) Energiebalans</div>
+          <div style={styles.sectionTitle}>5) Conclusie energiebalans</div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>kcal-saldo (auto = inname - verbruik)</div>
-            <div style={{ marginTop: 10 }}>
-              <span style={{ ...styles.pill, height: 46, borderRadius: 16, padding: "0 14px" }}>
-                {derived.kcalBalance === null ? "—" : Math.round(derived.kcalBalance)}
-              </span>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Wat betekent dit? (in je eigen woorden)</div>
+            <div style={styles.label}>Beschrijf jouw energiebalans in je eigen woorden</div>
             <textarea
               value={value.balanceExplain}
               onChange={(e) => set({ balanceExplain: e.target.value })}
               style={styles.textarea}
-              placeholder="bv. Mijn inname ligt lager dan mijn verbruik. Als dit vaker zo is, kan dat op langere termijn leiden tot gewichtsafname."
+              placeholder="Wat valt je op wanneer je jouw kcal-inname vergelijkt met je kcal-verbruik?"
+            />
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Wat kan dit op lange termijn betekenen?</div>
+            <textarea
+              value={value.longTermExplain}
+              onChange={(e) => set({ longTermExplain: e.target.value })}
+              style={styles.textarea}
+              placeholder="Stel dat dit patroon weken of maanden ongeveer hetzelfde blijft. Wat verwacht je dan? Leg uit waarom."
             />
           </div>
         </div>
 
         <div style={styles.panel}>
-          <div style={styles.sectionTitle}>7) Leg het uit in je eigen woorden</div>
+          <div style={styles.sectionTitle}>6) Conclusie macro's en reflectie</div>
+
+          <div style={styles.infoBox}>
+            <div style={{ fontWeight: 980, color: ui.text }}>Korte theorie over macro's</div>
+
+            <div style={{ ...styles.small, marginTop: 10 }}>
+              <b style={{ color: ui.text }}>Eiwitten</b> helpen bij spieropbouw, spierherstel en behoud van spiermassa.
+            </div>
+            <div style={{ ...styles.small, marginTop: 6 }}>
+              Richtwaarden: niet-sporter ongeveer <b style={{ color: ui.text }}>0,8 g/kg</b>, actieve jongeren ongeveer <b style={{ color: ui.text }}>1,2–1,6 g/kg</b> en bij veel sport ongeveer <b style={{ color: ui.text }}>1,6–2,0 g/kg</b> lichaamsgewicht per dag.
+            </div>
+
+            <div style={{ ...styles.small, marginTop: 10 }}>
+              <b style={{ color: ui.text }}>Koolhydraten</b> zijn een belangrijke energiebron. Te weinig koolhydraten kan zorgen voor sneller vermoeid zijn en minder trainingsenergie. Te veel koolhydraten kan, samen met de rest van je voeding, bijdragen aan een energieoverschot.
+            </div>
+
+            <div style={{ ...styles.small, marginTop: 10 }}>
+              <b style={{ color: ui.text }}>Vetten</b> zijn nodig voor hormonen, je hersenen en de opname van bepaalde vitamines. Je moet vetten dus niet vermijden, maar kies bij voorkeur voor gezonde vetten.
+            </div>
+          </div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Wat is MET? Wat is PAL? Wat is het verschil? Hoe hangen kcal hiermee samen?</div>
+            <div style={styles.label}>Bespreek je eiwitten, koolhydraten en vetten</div>
             <textarea
-              value={value.conceptExplain}
-              onChange={(e) => set({ conceptExplain: e.target.value })}
+              value={value.macroExplain}
+              onChange={(e) => set({ macroExplain: e.target.value })}
               style={styles.textarea}
-              placeholder="Schrijf minstens 2 duidelijke zinnen. Leg uit dat MET over één activiteit gaat en PAL over je volledige dag."
+              placeholder="Welke macro kwam het meest voor? Was je eiwitinname volgens jou voldoende? Wat valt je op?"
             />
           </div>
 
-          <div style={{ ...styles.small, marginTop: 10 }}>
-            Tip: schrijf niet gewoon de woorden over. Probeer het echt uit te leggen alsof je het aan een klasgenoot vertelt.
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Persoonlijke reflectie</div>
+            <textarea
+              value={value.reflection}
+              onChange={(e) => set({ reflection: e.target.value })}
+              style={styles.textarea}
+              placeholder="Is deze dag typisch voor jou? Noem één positief punt en één realistische aanpassing die je eventueel zou kunnen maken."
+            />
           </div>
         </div>
       </div>

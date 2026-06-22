@@ -1,10 +1,12 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import Image from "next/image";
 import React, { useEffect, useMemo, useState } from "react";
+
+const supabase = createClient();
 
 type Profiel = {
   id: string;
@@ -20,6 +22,36 @@ type Profiel = {
   last_login_date: string | null;
 };
 
+type RealRole = "leerling" | "leerkracht" | "lo_leerkracht" | "admin";
+
+function normalizeRole(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+function mapProfileRole(rol: unknown, role: unknown): RealRole | null {
+  const dbRol = normalizeRole(rol);
+  const dbRole = normalizeRole(role);
+
+  if (dbRol === "admin" || dbRole === "admin") return "admin";
+  if (dbRol === "lo_leerkracht" || dbRol === "loleerkracht") return "lo_leerkracht";
+  if (dbRol === "leerkracht" || dbRole === "teacher") return "leerkracht";
+  if (dbRol === "leerling" || dbRole === "student") return "leerling";
+
+  return null;
+}
+
+function getShownRoleLabel(role: RealRole | null) {
+  if (role === "admin") return "Admin";
+  if (role === "lo_leerkracht") return "LO-leerkracht";
+  if (role === "leerkracht") return "Leerkracht";
+  if (role === "leerling") return "Leerling";
+  return "Gebruiker";
+}
+
 const brand = {
   blue: "#255971",
   teal: "#4B8E8D",
@@ -30,7 +62,6 @@ const ui = {
   text: "rgba(234,240,255,0.92)",
   muted: "rgba(234,240,255,0.72)",
   panel: "rgba(255,255,255,0.06)",
-  panel2: "rgba(255,255,255,0.08)",
   border: "rgba(255,255,255,0.12)",
   border2: "rgba(255,255,255,0.18)",
   warnBg: "rgba(255,193,102,0.10)",
@@ -58,13 +89,12 @@ async function applyDailyLoginRewards(userId: string, p: Profiel) {
   const base = 10;
 
   if (!last) {
-    const newStreak = 1;
     await supabase
       .from("profielen")
       .update({
         xp: (p.xp ?? 0) + base,
-        streak: newStreak,
-        best_streak: Math.max(p.best_streak ?? 0, newStreak),
+        streak: 1,
+        best_streak: Math.max(p.best_streak ?? 0, 1),
         last_login_date: today,
       })
       .eq("id", userId);
@@ -72,11 +102,13 @@ async function applyDailyLoginRewards(userId: string, p: Profiel) {
   }
 
   const diff = daysBetween(last, today);
+
   if (diff === 0) return;
 
   if (diff === 1) {
     const newStreak = (p.streak ?? 0) + 1;
     const bonus = Math.min(newStreak * 2, 20);
+
     await supabase
       .from("profielen")
       .update({
@@ -86,6 +118,7 @@ async function applyDailyLoginRewards(userId: string, p: Profiel) {
         last_login_date: today,
       })
       .eq("id", userId);
+
     return;
   }
 
@@ -115,6 +148,7 @@ function getBeastLevel(xp: number) {
 
   for (let i = 0; i < LEVELS.length; i++) {
     if (xp >= LEVELS[i].xp) current = LEVELS[i];
+
     if (xp < LEVELS[i].xp) {
       next = LEVELS[i];
       break;
@@ -139,33 +173,8 @@ function quoteOfMonth(d = new Date()) {
     { q: "You are one session away from better.", a: "Reminder" },
     { q: "Hard work is the talent you choose.", a: "Beast mode" },
   ];
-  return quotes[d.getMonth() % quotes.length];
-}
 
-function WolfIcon({ size = 16 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-      style={{ display: "block" }}
-    >
-      <path
-        d="M4 9.2 7.2 4.6 10 7.2 12 5 14 7.2 16.8 4.6 20 9.2 18.6 18.3 12 21 5.4 18.3 4 9.2Z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M9.2 12.3c.9.9 1.8 1.3 2.8 1.3s1.9-.4 2.8-1.3"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
+  return quotes[d.getMonth() % quotes.length];
 }
 
 type DashboardTileProps = {
@@ -179,18 +188,13 @@ function DashboardTile({ href, icon, title, desc }: DashboardTileProps) {
   return (
     <Link
       href={href}
-      className="group relative flex aspect-square flex-col justify-between overflow-hidden rounded-[20px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.06)] p-3.5 transition duration-200 hover:-translate-y-1 hover:scale-[1.01] hover:border-[rgba(255,255,255,0.10)] hover:bg-[rgba(255,255,255,0.08)] hover:shadow-[0_18px_44px_rgba(0,0,0,0.42),0_0_0_1px_rgba(75,142,141,0.08)] active:-translate-y-0.5"
+      className="group relative flex aspect-square flex-col justify-between overflow-hidden rounded-[20px] border border-[rgba(255,255,255,0.07)] bg-[rgba(255,255,255,0.06)] p-3.5 transition duration-200 hover:-translate-y-1 hover:scale-[1.01] hover:border-[rgba(255,255,255,0.10)] hover:bg-[rgba(255,255,255,0.08)]"
     >
-      <div className="absolute -right-12 -top-12 h-40 w-40 rounded-full bg-[rgba(75,142,141,0.16)] blur-[14px] transition duration-200 group-hover:translate-x-2 group-hover:-translate-y-1.5" />
-
-      <div className="pointer-events-none absolute inset-0 rounded-[20px] border border-transparent opacity-0 transition duration-200 group-hover:opacity-100 [background:linear-gradient(135deg,rgba(37,89,113,0.32),rgba(75,142,141,0.28),rgba(137,194,170,0.20))_border-box] [mask-composite:exclude] [mask:linear-gradient(#000_0_0)_padding-box,linear-gradient(#000_0_0)]" />
-
-      <div className="pointer-events-none absolute inset-[-40%_-30%] opacity-0 transition group-hover:animate-[sweep_900ms_ease_forwards] group-hover:opacity-100 [background:linear-gradient(120deg,rgba(255,255,255,0)_35%,rgba(255,255,255,0.10)_50%,rgba(255,255,255,0)_65%)]" />
-
       <div className="relative z-10 grid gap-2">
         <div className="grid h-11 w-11 place-items-center rounded-2xl border border-[rgba(255,255,255,0.06)] bg-black/35 text-xl text-white">
           {icon}
         </div>
+
         <div className="text-[15px] font-black tracking-[0.01em] text-white">
           {title}
         </div>
@@ -198,22 +202,10 @@ function DashboardTile({ href, icon, title, desc }: DashboardTileProps) {
 
       <div className="relative z-10">
         <div className="text-xs leading-5 text-white/70">{desc}</div>
-        <div className="tile-action mt-2.5 text-xs font-black text-white/90">
+        <div className="mt-2.5 text-xs font-black text-white/90">
           Openen →
         </div>
       </div>
-
-      <style jsx>{`
-        .tile-action {
-          display: block;
-        }
-
-        @media (max-width: 699px) {
-          .tile-action {
-            display: none;
-          }
-        }
-      `}</style>
     </Link>
   );
 }
@@ -225,6 +217,7 @@ export default function DashboardPage() {
   const [profiel, setProfiel] = useState<Profiel | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [confirmingYear, setConfirmingYear] = useState(false);
+  const [realRole, setRealRole] = useState<RealRole | null>(null);
 
   const suggestedSchooljaar = useMemo(() => {
     const now = new Date();
@@ -245,11 +238,29 @@ export default function DashboardPage() {
     if (error) {
       setError(error.message);
       setProfiel(null);
+      setRealRole(null);
       return null;
     }
 
     const p = (data as Profiel) ?? null;
+
+    if (!p) {
+      window.location.replace("/login");
+      return null;
+    }
+
+    const appRole = mapProfileRole(p.rol, p.role);
+
+    if (!appRole) {
+      setError("Je profiel heeft geen geldige rol. Contacteer een beheerder.");
+      setProfiel(p);
+      setRealRole(null);
+      return null;
+    }
+
     setProfiel(p);
+    setRealRole(appRole);
+
     return p;
   };
 
@@ -258,25 +269,24 @@ export default function DashboardPage() {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        setError(error.message);
-        setLoading(false);
-        return;
-      }
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      const userId = data.session?.user?.id ?? null;
-      if (!userId) {
+      if (userError || !user) {
+        await supabase.auth.signOut({ scope: "local" });
         window.location.replace("/login");
         return;
       }
 
-      setUid(userId);
+      setUid(user.id);
 
-      const p = await fetchProfile(userId);
+      const p = await fetchProfile(user.id);
+
       if (p) {
-        await applyDailyLoginRewards(userId, p);
-        await fetchProfile(userId);
+        await applyDailyLoginRewards(user.id, p);
+        await fetchProfile(user.id);
       }
 
       setLoading(false);
@@ -288,12 +298,15 @@ export default function DashboardPage() {
   const handleSignOut = async () => {
     setSigningOut(true);
     setError(null);
+
     await supabase.auth.signOut({ scope: "local" });
+
     window.location.replace("/login");
   };
 
   const handleConfirmSchooljaar = async () => {
     if (!uid) return;
+
     if (!profiel) {
       setError("Profiel niet gevonden.");
       return;
@@ -328,13 +341,9 @@ export default function DashboardPage() {
     );
   }
 
-  const shownRoleRaw = (profiel?.role ?? profiel?.rol ?? "").toLowerCase();
-  const shownRoleLabel =
-    shownRoleRaw === "teacher" || shownRoleRaw === "leerkracht"
-      ? "Leerkracht"
-      : "Leerling";
-
+  const shownRoleLabel = getShownRoleLabel(realRole);
   const greetingName = profiel?.volledige_naam?.split(" ")?.[0] ?? "Welkom";
+
   const showSchooljaarBanner =
     !profiel?.schooljaar || !profiel?.schooljaar_bevestigd_op;
 
@@ -347,7 +356,7 @@ export default function DashboardPage() {
       <Hero
         greetingName={greetingName}
         shownRoleLabel={shownRoleLabel}
-        klasNaam={profiel?.klas_naam}
+        klasNaam={realRole === "leerling" ? profiel?.klas_naam : null}
       />
 
       <div style={{ ...styles.headerRow, marginTop: 14 }}>
@@ -355,7 +364,7 @@ export default function DashboardPage() {
           <div style={{ marginTop: 0, fontSize: 13, color: ui.muted }}>
             Dag <b style={{ color: ui.text }}>{greetingName}</b> 👋 •{" "}
             {shownRoleLabel}
-            {profiel?.klas_naam ? (
+            {realRole === "leerling" && profiel?.klas_naam ? (
               <span style={{ color: ui.muted }}> • {profiel.klas_naam}</span>
             ) : null}
           </div>
@@ -391,6 +400,7 @@ export default function DashboardPage() {
             <div style={{ fontWeight: 950, color: ui.text }}>
               Bevestig je schooljaar
             </div>
+
             <div style={{ marginTop: 3, fontSize: 13, color: ui.muted }}>
               We stellen voor:{" "}
               <b style={{ color: ui.text }}>{suggestedSchooljaar}</b>
@@ -465,6 +475,16 @@ export default function DashboardPage() {
             title="Les LO"
             desc="Lesinhoud & planning"
           />
+
+          {(realRole === "lo_leerkracht" || realRole === "admin") && (
+            <DashboardTile
+              href="/leerkrachten-lo"
+              icon="👨‍🏫"
+              title="Leerkrachten LO"
+              desc="Dashboard voor LO-leerkrachten"
+            />
+          )}
+
           <DashboardTile
             href="/reservaties"
             icon="📅"
@@ -504,17 +524,6 @@ export default function DashboardPage() {
             }
           }
         `}</style>
-
-        <style jsx global>{`
-          @keyframes sweep {
-            0% {
-              transform: translateX(-55%) rotate(10deg);
-            }
-            100% {
-              transform: translateX(55%) rotate(10deg);
-            }
-          }
-        `}</style>
       </section>
     </AppShell>
   );
@@ -532,12 +541,9 @@ function Hero({
   const q = quoteOfMonth();
 
   return (
-    <section className="hero" style={hero.wrap}>
-      <div style={hero.bgGlow1} />
-      <div style={hero.bgGlow2} />
-
-      <div className="heroInner" style={hero.inner}>
-        <div className="heroText" style={hero.content}>
+    <section style={hero.wrap}>
+      <div style={hero.inner}>
+        <div style={hero.content}>
           <div style={hero.kicker}>BEAST HQ</div>
 
           <h1
@@ -565,8 +571,8 @@ function Hero({
             {klasNaam ? (
               <span style={{ opacity: 0.85 }}> • {klasNaam}</span>
             ) : null}
-            <span style={{ opacity: 0.85 }}> •</span> Login, train, verzamel XP
-            en stijg in status.
+            <span style={{ opacity: 0.85 }}> • </span>
+            Login, train, verzamel XP en stijg in status.
           </div>
 
           <div style={hero.actions}>
@@ -582,8 +588,8 @@ function Hero({
           </div>
         </div>
 
-        <div className="heroArt" style={hero.artCol}>
-          <div className="illuBox" style={hero.illuBox}>
+        <div style={hero.artCol}>
+          <div style={hero.illuBox}>
             <Image
               src="/hero/sportapp.png"
               alt="LO illustratie"
@@ -601,54 +607,73 @@ function Hero({
       </div>
 
       <style jsx>{`
-        .heroInner {
+        section > div {
           display: grid;
           gap: 14px;
           align-items: stretch;
-          position: relative;
-          z-index: 1;
-        }
-
-        .heroArt {
-          display: flex;
-          justify-content: flex-end;
-          align-items: stretch;
-          height: 100%;
         }
 
         @media (min-width: 768px) {
-          .heroInner {
+          section > div {
             grid-template-columns: minmax(0, 1fr) 440px;
           }
         }
 
         @media (max-width: 767px) {
-          .heroInner {
+          section > div {
             grid-template-columns: 1fr;
-          }
-
-          .heroArt {
-            margin-top: 8px;
-            justify-content: flex-start;
-          }
-
-          .illuBox {
-            width: 100%;
-            min-height: 320px;
-          }
-        }
-
-        @media (max-width: 420px) {
-          .hero :global(h1) {
-            font-size: 26px !important;
-          }
-
-          .illuBox {
-            min-height: 280px;
           }
         }
       `}</style>
     </section>
+  );
+}
+
+function BeastStatusCard({
+  xp = 0,
+  streak = 0,
+  bestStreak = 0,
+}: {
+  xp?: number;
+  streak?: number;
+  bestStreak?: number;
+}) {
+  const { current, next } = getBeastLevel(xp);
+  const from = current.xp;
+  const to = next?.xp ?? current.xp + 500;
+  const pct = Math.max(0, Math.min(100, ((xp - from) / (to - from)) * 100));
+
+  return (
+    <div style={beast.card}>
+      <div style={beast.row}>
+        <div>
+          <div style={beast.label}>Beast status</div>
+          <div style={beast.title}>{current.name}</div>
+
+          <div style={beast.meta}>
+            <b style={{ color: ui.text }}>{xp} XP</b> • 🔥 Streak:{" "}
+            <b style={{ color: ui.text }}>{streak}</b>{" "}
+            <span style={{ color: ui.muted }}>• Best: {bestStreak}</span>
+          </div>
+        </div>
+
+        <div style={beast.pill}>LEVEL</div>
+      </div>
+
+      <div style={beast.barWrap}>
+        <div style={{ ...beast.barFill, width: `${pct}%` }} />
+      </div>
+
+      <div style={beast.bottom}>
+        <span style={{ color: ui.muted }}>
+          Volgende:{" "}
+          <b style={{ color: ui.text }}>{next?.name ?? "Max level"}</b>
+        </span>
+        <span style={{ color: ui.muted }}>
+          {next ? `${xp}/${to} XP` : "🚀"}
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -664,28 +689,13 @@ const hero: Record<string, React.CSSProperties> = {
   },
   inner: {
     position: "relative",
+    zIndex: 1,
   },
-  bgGlow1: {
-    position: "absolute",
-    width: 260,
-    height: 260,
-    borderRadius: 999,
-    left: -120,
-    top: -140,
-    background: "rgba(75,142,141,0.20)",
-    filter: "blur(24px)",
+  content: {
+    position: "relative",
+    maxWidth: 620,
+    zIndex: 1,
   },
-  bgGlow2: {
-    position: "absolute",
-    width: 320,
-    height: 320,
-    borderRadius: 999,
-    right: -160,
-    top: -170,
-    background: "rgba(137,194,170,0.16)",
-    filter: "blur(26px)",
-  },
-  content: { position: "relative", maxWidth: 620, zIndex: 1 },
   kicker: {
     fontSize: 12,
     fontWeight: 950,
@@ -727,19 +737,6 @@ const hero: Record<string, React.CSSProperties> = {
     fontWeight: 950,
     border: `1px solid ${ui.border2}`,
     background: "rgba(0,0,0,0.55)",
-    boxShadow: "0 12px 30px rgba(0,0,0,0.28)",
-  },
-  secondary: {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 46,
-    padding: "0 14px",
-    borderRadius: 16,
-    textDecoration: "none",
-    color: ui.text,
-    fontWeight: 950,
-    border: `1px solid ${ui.border}`,
-    background: "rgba(0,0,0,0.35)",
   },
   quoteCard: {
     marginTop: 14,
@@ -747,10 +744,13 @@ const hero: Record<string, React.CSSProperties> = {
     padding: 14,
     border: `1px solid ${ui.border}`,
     background: "rgba(0,0,0,0.35)",
-    backdropFilter: "blur(8px)",
     maxWidth: 520,
   },
-  quoteLabel: { fontSize: 12, fontWeight: 950, color: ui.muted },
+  quoteLabel: {
+    fontSize: 12,
+    fontWeight: 950,
+    color: ui.muted,
+  },
   quoteText: {
     marginTop: 8,
     fontSize: 16,
@@ -758,7 +758,11 @@ const hero: Record<string, React.CSSProperties> = {
     color: ui.text,
     lineHeight: 1.25,
   },
-  quoteAuthor: { marginTop: 8, fontSize: 12.5, color: ui.muted },
+  quoteAuthor: {
+    marginTop: 8,
+    fontSize: 12.5,
+    color: ui.muted,
+  },
   artCol: {
     position: "relative",
     zIndex: 1,
@@ -773,109 +777,8 @@ const hero: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     border: `1px solid ${ui.border}`,
     background: "rgba(0,0,0,0.18)",
-    padding: 10,
-    boxSizing: "border-box",
   },
 };
-
-function BeastStatusCard({
-  xp = 0,
-  streak = 0,
-  bestStreak = 0,
-}: {
-  xp?: number;
-  streak?: number;
-  bestStreak?: number;
-}) {
-  const { current, next } = getBeastLevel(xp);
-  const from = current.xp;
-  const to = next?.xp ?? current.xp + 500;
-  const pct = Math.max(0, Math.min(100, ((xp - from) / (to - from)) * 100));
-
-  return (
-    <div style={beast.card}>
-      <div style={beast.row}>
-        <div>
-          <div style={beast.label}>
-            <span style={beast.wolfBadge}>
-              <span style={{ color: "rgba(234,240,255,0.92)" }}>
-                <WolfIcon size={16} />
-              </span>
-            </span>
-            <span>Beast status</span>
-          </div>
-
-          <div style={beast.title}>{current.name}</div>
-
-          <div style={beast.meta}>
-            <b style={{ color: ui.text }}>{xp} XP</b> • 🔥 Streak:{" "}
-            <b style={{ color: ui.text }}>{streak}</b>{" "}
-            <span style={{ color: ui.muted }}>• Best: {bestStreak}</span>
-          </div>
-        </div>
-
-        <div style={beast.pill}>LEVEL</div>
-      </div>
-
-      <div style={beast.barWrap}>
-        <div style={beast.barHalo} />
-        <div className="xpEnergyFull" />
-        <div style={{ ...beast.barFill, width: `${pct}%` }}>
-          <div style={beast.barEdgeGlow} />
-        </div>
-        <div style={beast.barShine} />
-
-        <style jsx>{`
-          .xpEnergyFull {
-            position: absolute;
-            inset: 0;
-            border-radius: 999px;
-            pointer-events: none;
-            overflow: hidden;
-          }
-
-          .xpEnergyFull:before {
-            content: "";
-            position: absolute;
-            top: -60%;
-            left: -60%;
-            width: 220%;
-            height: 220%;
-            background: linear-gradient(
-              100deg,
-              rgba(255, 255, 255, 0) 35%,
-              rgba(255, 255, 255, 0.16) 48%,
-              rgba(255, 255, 255, 0.28) 50%,
-              rgba(255, 255, 255, 0.16) 52%,
-              rgba(255, 255, 255, 0) 65%
-            );
-            transform: translateX(-35%);
-            animation: energyFlowFull 2.2s linear infinite;
-            mix-blend-mode: screen;
-            filter: blur(1px);
-            opacity: 0.9;
-          }
-
-          @keyframes energyFlowFull {
-            0% {
-              transform: translateX(-45%);
-            }
-            100% {
-              transform: translateX(45%);
-            }
-          }
-        `}</style>
-      </div>
-
-      <div style={beast.bottom}>
-        <span style={{ color: ui.muted }}>
-          Volgende: <b style={{ color: ui.text }}>{next?.name ?? "Max level"}</b>
-        </span>
-        <span style={{ color: ui.muted }}>{next ? `${xp}/${to} XP` : "🚀"}</span>
-      </div>
-    </div>
-  );
-}
 
 const beast: Record<string, React.CSSProperties> = {
   card: {
@@ -892,24 +795,10 @@ const beast: Record<string, React.CSSProperties> = {
     alignItems: "flex-start",
   },
   label: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 10,
     fontSize: 12,
     fontWeight: 950,
     color: ui.muted,
     letterSpacing: 0.6,
-  },
-  wolfBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: 12,
-    display: "grid",
-    placeItems: "center",
-    background: "rgba(0,0,0,0.40)",
-    border: `1px solid ${ui.border}`,
-    boxShadow:
-      "0 10px 26px rgba(0,0,0,0.20), 0 0 0 1px rgba(75,142,141,0.22)",
   },
   title: {
     marginTop: 6,
@@ -917,7 +806,11 @@ const beast: Record<string, React.CSSProperties> = {
     fontWeight: 980,
     color: ui.text,
   },
-  meta: { marginTop: 6, fontSize: 13, color: ui.muted },
+  meta: {
+    marginTop: 6,
+    fontSize: 13,
+    color: ui.muted,
+  },
   pill: {
     height: 34,
     padding: "0 12px",
@@ -939,42 +832,10 @@ const beast: Record<string, React.CSSProperties> = {
     overflow: "hidden",
     position: "relative",
   },
-  barHalo: {
-    position: "absolute",
-    inset: 0,
-    borderRadius: 999,
-    background:
-      "radial-gradient(120px 24px at 0% 50%, rgba(37,89,113,0.00) 0%, rgba(37,89,113,0.22) 40%, rgba(0,0,0,0) 72%)",
-    opacity: 0.9,
-    pointerEvents: "none",
-  },
   barFill: {
     height: "100%",
     borderRadius: 999,
-    position: "relative",
     background: `linear-gradient(90deg, ${brand.blue}, ${brand.teal}, ${brand.mint})`,
-    boxShadow:
-      "0 0 18px rgba(75,142,141,0.35), 0 0 40px rgba(137,194,170,0.12)",
-  },
-  barEdgeGlow: {
-    position: "absolute",
-    top: -10,
-    right: -10,
-    width: 26,
-    height: 34,
-    borderRadius: 999,
-    background: "rgba(234,240,255,0.22)",
-    filter: "blur(10px)",
-    pointerEvents: "none",
-  },
-  barShine: {
-    position: "absolute",
-    inset: 0,
-    borderRadius: 999,
-    background:
-      "linear-gradient(180deg, rgba(255,255,255,0.14) 0%, rgba(255,255,255,0.00) 60%)",
-    mixBlendMode: "soft-light",
-    pointerEvents: "none",
   },
   bottom: {
     marginTop: 10,
@@ -1005,8 +866,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 950,
     cursor: "pointer",
     whiteSpace: "nowrap",
-    transition: "transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease",
-    boxShadow: "0 10px 26px rgba(0,0,0,0.25)",
   },
   banner: {
     marginTop: 14,

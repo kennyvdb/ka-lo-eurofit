@@ -3,7 +3,9 @@
 import AppShell from "@/components/AppShell";
 import React, { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
+
+const supabase = createClient();
 
 type Profile = {
   id: string;

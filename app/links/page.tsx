@@ -4,6 +4,9 @@ import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import Link from "next/link";
 import React from "react";
+import { createClient } from "@/lib/supabase/client";
+
+const supabase = createClient();
 
 const brand = {
   blue: "#255971",

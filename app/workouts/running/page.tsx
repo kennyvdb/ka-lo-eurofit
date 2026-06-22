@@ -5,7 +5,9 @@ import WorkoutsCardsTemplate, {
   CardItem,
 } from "@/components/workouts/WorkoutsCardsTemplate";
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
+
+const supabase = createClient();
 
 type Profile = {
   id: string;

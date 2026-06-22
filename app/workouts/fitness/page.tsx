@@ -2,8 +2,10 @@
 
 import AppShell from "@/components/AppShell";
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
 import WorkoutsCardsTemplate, { CardItem } from "@/components/workouts/WorkoutsCardsTemplate";
+
+const supabase = createClient();
 
 type Profile = {
   id: string;

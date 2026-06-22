@@ -1,8 +1,10 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
 import React, { useEffect, useMemo, useState } from "react";
+
+const supabase = createClient();
 
 type ProfielRole = {
   role: string | null;

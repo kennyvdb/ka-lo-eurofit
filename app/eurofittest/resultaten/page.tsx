@@ -4,9 +4,11 @@ import AppShell from "@/components/AppShell";
 import ProfileRequiredGate from "@/components/ProfileRequiredGate";
 import BaseHero from "@/components/heroes/BaseHero";
 import { checkProfileCompletion } from "@/lib/profileCompletion";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
+
+const supabase = createClient();
 
 /* ---------------------------
    Types

@@ -1,5 +1,7 @@
 // lib/profileCompletion.ts
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
+
+const supabase = createClient();
 
 export function getCurrentSchoolYearBelgium(d = new Date()) {
   const year = d.getFullYear();
@@ -9,9 +11,26 @@ export function getCurrentSchoolYearBelgium(d = new Date()) {
 
 export type ProfileCompletion = {
   isReady: boolean;
-  missing: string[]; // lijst met ontbrekende velden
+  missing: string[];
   currentSchoolYear: string;
 };
+
+const PROFILE_EXEMPT_ROLES = [
+  "leerkracht",
+  "administratief personeel",
+  "lo-leerkracht",
+  "lo leerkracht",
+  "lo_leerkracht",
+  "admin",
+];
+
+function normalizeRole(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
 
 export async function checkProfileCompletion(): Promise<ProfileCompletion> {
   const currentSchoolYear = getCurrentSchoolYearBelgium();
@@ -29,7 +48,7 @@ export async function checkProfileCompletion(): Promise<ProfileCompletion> {
 
   const { data: p, error } = await supabase
     .from("profielen")
-    .select("geslacht, geboortedatum, graad, leerjaar, finaliteit, klas_naam, schooljaar")
+    .select("rol, geslacht, geboortedatum, graad, leerjaar, finaliteit, klas_naam, schooljaar")
     .eq("id", userId)
     .maybeSingle();
 
@@ -42,19 +61,20 @@ export async function checkProfileCompletion(): Promise<ProfileCompletion> {
   }
 
   const missing: string[] = [];
+  const rol = normalizeRole(p.rol);
+  const isExemptRole = PROFILE_EXEMPT_ROLES.map(normalizeRole).includes(rol);
 
-  // vaste velden
   if (!p.geslacht) missing.push("geslacht");
   if (!p.geboortedatum) missing.push("geboortedatum");
 
-  // schooljaar velden
-  if (!p.graad) missing.push("graad");
-  if (!p.leerjaar) missing.push("leerjaar");
-  if (!p.finaliteit) missing.push("finaliteit");
-  if (!p.klas_naam) missing.push("klas");
+  if (!isExemptRole) {
+    if (!p.graad) missing.push("graad");
+    if (!p.leerjaar) missing.push("leerjaar");
+    if (!p.finaliteit) missing.push("finaliteit");
+    if (!p.klas_naam) missing.push("klas");
 
-  // schooljaar check
-  if (p.schooljaar !== currentSchoolYear) missing.push("schooljaar");
+    if (p.schooljaar !== currentSchoolYear) missing.push("schooljaar");
+  }
 
   return {
     isReady: missing.length === 0,

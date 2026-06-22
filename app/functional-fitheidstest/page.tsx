@@ -2,11 +2,13 @@
 
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import Image from "next/image";
 import React, { useEffect, useMemo, useState } from "react";
 import HomeworkTab from "./HomeworkTab";
+
+const supabase = createClient();
 
 const brand = {
   blue: "#255971",

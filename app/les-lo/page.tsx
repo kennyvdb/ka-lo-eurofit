@@ -1,14 +1,18 @@
 "use client";
 
+import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import { BaseTile } from "@/components/tiles/BaseTile";
 import React, { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabase/client";
+
+const supabase = createClient();
 
 type Profiel = {
   id: string;
   volledige_naam: string | null;
+  rol: string | null;
 };
 
 export default function LesLOHubPage() {
@@ -28,7 +32,7 @@ export default function LesLOHubPage() {
 
       const { data: profielData, error: profielError } = await supabase
         .from("profielen")
-        .select("id, volledige_naam")
+        .select("id, volledige_naam, rol")
         .eq("id", userId)
         .maybeSingle();
 
@@ -70,6 +74,14 @@ export default function LesLOHubPage() {
         quoteTitle="Samen sterk in LO"
         quote="Iedere rol telt mee in een goede les."
         quoteAuthor="LO team"
+        actions={
+          <Link
+            href="/dashboard"
+            className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
+          >
+            🏠 Terug naar dashboard
+          </Link>
+        }
       />
 
       <section className="mt-4">
@@ -82,24 +94,28 @@ export default function LesLOHubPage() {
             title="Kijkwijzers"
             desc="Waarop letten tijdens de les"
           />
+
           <BaseTile
             href="/les-lo/rollen"
             icon="🎭"
             title="Rollenkaarten"
             desc="Scheidsrechter, coach, timekeeper…"
           />
+
           <BaseTile
             href="/les-lo/jaarplanning"
             icon="🗓️"
             title="Jaarplanning"
             desc="Kies je leerkracht & planning"
           />
+
           <BaseTile
             href="/les-lo/evaluaties"
             icon="✅"
             title="Evaluaties"
             desc="Rubrics (SAM) & feedback"
           />
+
           <BaseTile
             href="/les-lo/afspraken"
             icon="📌"
