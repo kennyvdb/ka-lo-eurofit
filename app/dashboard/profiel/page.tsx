@@ -3,6 +3,7 @@
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
@@ -130,8 +131,9 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
   );
 }
 
-// MOBIELE FIX: dag, maand en jaar blijven apart bewaard in deze component.
-// Daardoor blijft bv. dag "09" zichtbaar, ook wanneer maand of jaar nog niet gekozen is.
+// MOBIELE FIX DEFINITIEF: geen native <select> meer.
+// Sommige mobiele browsers tonen de keuzelijst wel, maar geven de gekozen waarde niet betrouwbaar door.
+// Deze component gebruikt gewone knoppen + eigen keuzelijsten, zodat dag/maand/jaar altijd zichtbaar blijven.
 function BirthDateSelects({
   value,
   onChange,
@@ -143,10 +145,9 @@ function BirthDateSelects({
   const [selectedDay, setSelectedDay] = useState(initialDate.day);
   const [selectedMonth, setSelectedMonth] = useState(initialDate.month);
   const [selectedYear, setSelectedYear] = useState(initialDate.year);
+  const [openPicker, setOpenPicker] = useState<"day" | "month" | "year" | null>(null);
 
   useEffect(() => {
-    if (!value) return;
-
     const nextDate = splitDate(value);
     setSelectedDay(nextDate.day);
     setSelectedMonth(nextDate.month);
@@ -158,7 +159,7 @@ function BirthDateSelects({
     String(index + 1).padStart(2, "0")
   );
 
-  function syncBirthDate(nextYear: string, nextMonth: string, nextDay: string) {
+  function pushDate(nextYear: string, nextMonth: string, nextDay: string) {
     if (!nextYear || !nextMonth || !nextDay) {
       onChange("");
       return;
@@ -171,12 +172,13 @@ function BirthDateSelects({
     onChange(buildDate(nextYear, nextMonth, safeDay));
   }
 
-  function handleDayChange(nextDay: string) {
+  function chooseDay(nextDay: string) {
     setSelectedDay(nextDay);
-    syncBirthDate(selectedYear, selectedMonth, nextDay);
+    setOpenPicker(null);
+    pushDate(selectedYear, selectedMonth, nextDay);
   }
 
-  function handleMonthChange(nextMonth: string) {
+  function chooseMonth(nextMonth: string) {
     const nextMaxDays = daysInMonth(selectedYear, nextMonth);
     const safeDay =
       selectedDay && Number(selectedDay) > nextMaxDays
@@ -185,10 +187,11 @@ function BirthDateSelects({
 
     setSelectedMonth(nextMonth);
     setSelectedDay(safeDay);
-    syncBirthDate(selectedYear, nextMonth, safeDay);
+    setOpenPicker(null);
+    pushDate(selectedYear, nextMonth, safeDay);
   }
 
-  function handleYearChange(nextYear: string) {
+  function chooseYear(nextYear: string) {
     const nextMaxDays = daysInMonth(nextYear, selectedMonth);
     const safeDay =
       selectedDay && Number(selectedDay) > nextMaxDays
@@ -197,62 +200,114 @@ function BirthDateSelects({
 
     setSelectedYear(nextYear);
     setSelectedDay(safeDay);
-    syncBirthDate(nextYear, selectedMonth, safeDay);
+    setOpenPicker(null);
+    pushDate(nextYear, selectedMonth, safeDay);
   }
 
-  const selectClassName =
-    "min-h-[50px] w-full rounded-2xl border border-white/15 bg-black/30 px-3 py-3 text-base text-white outline-none [color-scheme:dark]";
+  function PickerButton({
+    type,
+    label,
+    valueLabel,
+  }: {
+    type: "day" | "month" | "year";
+    label: string;
+    valueLabel: string;
+  }) {
+    const active = openPicker === type;
+
+    return (
+      <button
+        type="button"
+        onClick={() => setOpenPicker(active ? null : type)}
+        className="flex min-h-[54px] w-full items-center justify-between rounded-2xl border border-white/15 bg-black/30 px-4 py-3 text-left text-base font-bold text-white outline-none transition hover:bg-black/40"
+        aria-expanded={active}
+      >
+        <span>{valueLabel || label}</span>
+        <span className="text-white/55">⌄</span>
+      </button>
+    );
+  }
+
+  function OptionButton({
+    children,
+    active,
+    onClick,
+  }: {
+    children: ReactNode;
+    active: boolean;
+    onClick: () => void;
+  }) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`min-h-[44px] rounded-xl border px-3 py-2 text-sm font-extrabold transition ${
+          active
+            ? "border-white/35 bg-white/20 text-white"
+            : "border-white/10 bg-black/25 text-white/80 hover:bg-white/10"
+        }`}
+      >
+        {children}
+      </button>
+    );
+  }
 
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-2 md:col-span-2">
       <label className="text-sm font-black text-white">Geboortedatum</label>
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <select
-          aria-label="Dag"
-          value={selectedDay}
-          onChange={(e) => handleDayChange(e.target.value)}
-          className={selectClassName}
-        >
-          <option value="">Dag</option>
-          {days.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
-
-        <select
-          aria-label="Maand"
-          value={selectedMonth}
-          onChange={(e) => handleMonthChange(e.target.value)}
-          className={selectClassName}
-        >
-          <option value="">Maand</option>
-          {birthDateMonths.map((item) => (
-            <option key={item} value={item}>
-              {monthLabel(item)}
-            </option>
-          ))}
-        </select>
-
-        <select
-          aria-label="Jaar"
-          value={selectedYear}
-          onChange={(e) => handleYearChange(e.target.value)}
-          className={selectClassName}
-        >
-          <option value="">Jaar</option>
-          {birthDateYears.map((item) => (
-            <option key={item} value={item}>
-              {item}
-            </option>
-          ))}
-        </select>
+        <PickerButton type="day" label="Dag" valueLabel={selectedDay} />
+        <PickerButton
+          type="month"
+          label="Maand"
+          valueLabel={selectedMonth ? monthLabel(selectedMonth) : ""}
+        />
+        <PickerButton type="year" label="Jaar" valueLabel={selectedYear} />
       </div>
 
+      {openPicker === "day" && (
+        <div className="rounded-2xl border border-white/10 bg-black/35 p-3">
+          <div className="grid max-h-[260px] grid-cols-5 gap-2 overflow-y-auto pr-1 sm:grid-cols-7">
+            {days.map((item) => (
+              <OptionButton key={item} active={selectedDay === item} onClick={() => chooseDay(item)}>
+                {Number(item)}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {openPicker === "month" && (
+        <div className="rounded-2xl border border-white/10 bg-black/35 p-3">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {birthDateMonths.map((item) => (
+              <OptionButton
+                key={item}
+                active={selectedMonth === item}
+                onClick={() => chooseMonth(item)}
+              >
+                {monthLabel(item)}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {openPicker === "year" && (
+        <div className="rounded-2xl border border-white/10 bg-black/35 p-3">
+          <div className="grid max-h-[260px] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-5">
+            {birthDateYears.map((item) => (
+              <OptionButton key={item} active={selectedYear === item} onClick={() => chooseYear(item)}>
+                {item}
+              </OptionButton>
+            ))}
+          </div>
+        </div>
+      )}
+
       <p className="text-xs leading-5 text-white/55">
-        Kies dag, maand en jaar. Elke keuze blijft meteen zichtbaar op gsm.
+        Kies dag, maand en jaar. Deze mobiele fix gebruikt geen standaard dropdowns meer.
       </p>
     </div>
   );
