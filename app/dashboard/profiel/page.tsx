@@ -306,9 +306,6 @@ function BirthDateSelects({
         </div>
       )}
 
-      <p className="text-xs leading-5 text-white/55">
-        Kies dag, maand en jaar. Deze mobiele fix gebruikt geen standaard dropdowns meer.
-      </p>
     </div>
   );
 }
