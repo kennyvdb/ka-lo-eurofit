@@ -1017,12 +1017,6 @@ export default function EurofittestPage() {
           }}
           scores={scores}
           beoordelingen={beoordelingenMap}
-          testMeta={TESTS.map((t) => ({
-            value: t.value,
-            label: t.label,
-            eenheid: t.eenheid,
-            aspect: t.aspect,
-          }))}
         />
       ) : null}
     </AppShell>
