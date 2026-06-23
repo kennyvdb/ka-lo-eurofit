@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type AppShellProps = {
   title?: string;
@@ -25,6 +26,8 @@ const ui = {
   border: "rgba(255,255,255,0.12)",
   border2: "rgba(255,255,255,0.18)",
 };
+
+const supabase = createClient();
 
 const navItems = [
   { href: "/eurofittest", label: "Eurofittest", icon: "🧪" },
@@ -76,9 +79,55 @@ export default function AppShell({
 
   useEffect(() => {
     const nextName = normalizeName(userName);
+
     if (nextName) {
       setResolvedUserName(nextName);
     }
+  }, [userName]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUserName() {
+      const explicitName = normalizeName(userName);
+      if (explicitName) return;
+
+      const { data: userData } = await supabase.auth.getUser();
+      const user = userData.user;
+
+      if (!user) {
+        if (!cancelled) setResolvedUserName(null);
+        return;
+      }
+
+      const { data: profiel } = await supabase
+        .from("profielen")
+        .select("volledige_naam, naam, voornaam, achternaam")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      const profielNaam = normalizeName(
+        profiel?.volledige_naam ??
+          profiel?.naam ??
+          [profiel?.voornaam, profiel?.achternaam].filter(Boolean).join(" ")
+      );
+
+      const metadataNaam = normalizeName(
+        user.user_metadata?.full_name ??
+          user.user_metadata?.name ??
+          user.email
+      );
+
+      if (!cancelled) {
+        setResolvedUserName(profielNaam ?? metadataNaam);
+      }
+    }
+
+    loadUserName();
+
+    return () => {
+      cancelled = true;
+    };
   }, [userName]);
 
   const initials = useMemo(() => getInitials(resolvedUserName), [resolvedUserName]);

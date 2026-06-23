@@ -74,14 +74,104 @@ function leerlingKey(naam: string, klas: string) {
 function normaliseerLeerling(row: RawRow): Leerling {
   const email = String(getValue(row, ["email"])).trim();
   const username = String(getValue(row, ["username"])).trim();
+  const possibleUserId = String(
+    getValue(row, ["id", "user_id", "auth_user_id", "leerling_id", "profiel_id", "profile_id"])
+  ).trim();
 
   return {
-    id: username || email,
+    id: possibleUserId || username || email,
     naam: String(getValue(row, ["volledige_naam"])).trim(),
     klas: String(getValue(row, ["klas_naam"])).trim(),
     loGroep: String(getValue(row, ["lo_groepen"])).trim() || "Onbekend",
   };
 }
+
+function getPayloadObject(row: RawRow) {
+  if (!row?.payload) return {};
+  if (typeof row.payload === "object") return row.payload;
+  if (typeof row.payload === "string") {
+    try {
+      return JSON.parse(row.payload);
+    } catch {
+      return {};
+    }
+  }
+  return {};
+}
+
+function getHuiswerkLeerlingInfo(row: RawRow, profielMap: Map<string, RawRow>) {
+  const payload = getPayloadObject(row);
+  const userId = String(row.user_id ?? "").trim();
+  const profiel = profielMap.get(userId);
+
+  const naam = String(
+    profiel?.volledige_naam ??
+      payload.leerling ??
+      payload.form?.leerling ??
+      payload.volledige_naam ??
+      payload.naam ??
+      ""
+  ).trim();
+
+  const klas = String(
+    row.klas_naam ??
+      profiel?.klas_naam ??
+      profiel?.profiel_klas_naam ??
+      profiel?.klas ??
+      payload.klasNaam ??
+      payload.klas_naam ??
+      payload.klas ??
+      ""
+  ).trim();
+
+  return { userId, naam, klas };
+}
+
+function buildProfielMap(profielen: RawRow[]) {
+  const map = new Map<string, RawRow>();
+
+  profielen.forEach((p) => {
+    [
+      p.id,
+      p.user_id,
+      p.auth_user_id,
+      p.leerling_id,
+      p.profiel_id,
+      p.email,
+      p.username,
+    ].forEach((value) => {
+      const key = String(value ?? "").trim();
+      if (key) map.set(key, p);
+    });
+  });
+
+  return map;
+}
+
+function huiswerkHoortBijLeerling(row: RawRow, leerling: Leerling, profielMap: Map<string, RawRow>) {
+  const info = getHuiswerkLeerlingInfo(row, profielMap);
+
+  const leerlingIds = [
+    leerling.id,
+    (leerling as any).user_id,
+    (leerling as any).auth_user_id,
+    (leerling as any).leerling_id,
+    (leerling as any).profiel_id,
+    (leerling as any).email,
+    (leerling as any).username,
+  ]
+    .map((x) => String(x ?? "").trim())
+    .filter(Boolean);
+
+  if (info.userId && leerlingIds.includes(info.userId)) return true;
+
+  if (info.naam && info.klas) {
+    return leerlingKey(info.naam, info.klas) === leerlingKey(leerling.naam, leerling.klas);
+  }
+
+  return false;
+}
+
 
 function normalizeGeslacht(value: unknown) {
   const v = String(value ?? "").trim().toLowerCase();
@@ -195,7 +285,7 @@ export default function EurofitLeerkrachtPage() {
           supabase
             .from("eurofit_normen")
             .select("test_type, geslacht, leeftijd, p5, p20, p50, p80, p95"),
-          supabase.from("profielen").select("id, volledige_naam, klas_naam, geslacht, geboortedatum"),
+          supabase.from("profielen").select("*"),
         ]);
 
       if (leerlingenRes.error) setError(leerlingenRes.error.message);
@@ -260,39 +350,17 @@ export default function EurofitLeerkrachtPage() {
 
   const huiswerkKeys = useMemo(() => {
     const set = new Set<string>();
-    const profielMap = new Map<string, RawRow>();
-
-    profielen.forEach((p) => {
-      if (p.id) profielMap.set(String(p.id), p);
-    });
 
     huiswerkRows.forEach((r) => {
       const rowSchooljaar = r.schooljaar ? String(r.schooljaar) : "";
       if (schooljaar !== "Alle" && rowSchooljaar !== schooljaar) return;
 
-      const profiel = profielMap.get(String(r.user_id ?? ""));
-      const payload = r.payload && typeof r.payload === "object" ? r.payload : {};
-
-      const naam = String(
-        profiel?.volledige_naam ??
-          payload.leerling ??
-          payload.form?.leerling ??
-          ""
-      ).trim();
-
-      const klas = String(
-        r.klas_naam ??
-          profiel?.klas_naam ??
-          payload.klasNaam ??
-          payload.klas_naam ??
-          ""
-      ).trim();
-
-      if (naam && klas) set.add(leerlingKey(naam, klas));
+      const userId = String(r.user_id ?? "").trim();
+      if (userId) set.add(userId);
     });
 
     return set;
-  }, [huiswerkRows, profielen, schooljaar]);
+  }, [huiswerkRows, schooljaar]);
 
   const gefilterdeLeerlingen = useMemo(() => {
     return leerlingen.filter((l) => {
@@ -335,38 +403,15 @@ export default function EurofitLeerkrachtPage() {
   const geselecteerdHuiswerk = useMemo(() => {
     if (!selectedLeerling) return [];
 
-    const profielMap = new Map<string, RawRow>();
-    profielen.forEach((p) => {
-      if (p.id) profielMap.set(String(p.id), p);
-    });
-
     return huiswerkRows
       .filter((r) => {
         const rowSchooljaar = r.schooljaar ? String(r.schooljaar) : "";
         if (schooljaar !== "Alle" && rowSchooljaar !== schooljaar) return false;
 
-        const profiel = profielMap.get(String(r.user_id ?? ""));
-        const payload = r.payload && typeof r.payload === "object" ? r.payload : {};
-
-        const naam = String(
-          profiel?.volledige_naam ??
-            payload.leerling ??
-            payload.form?.leerling ??
-            ""
-        ).trim();
-
-        const klas = String(
-          r.klas_naam ??
-            profiel?.klas_naam ??
-            payload.klasNaam ??
-            payload.klas_naam ??
-            ""
-        ).trim();
-
-        return leerlingKey(naam, klas) === leerlingKey(selectedLeerling.naam, selectedLeerling.klas);
+        return String(r.user_id ?? "").trim() === selectedLeerling.id;
       })
       .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
-  }, [huiswerkRows, profielen, selectedLeerling, schooljaar]);
+  }, [huiswerkRows, selectedLeerling, schooljaar]);
 
   const totaalLeerlingen = gefilterdeLeerlingen.length;
   const totaalKlassen = klassenOverzicht.length;
@@ -375,7 +420,7 @@ export default function EurofitLeerkrachtPage() {
   ).length;
   const totaalOntbreekt = totaalLeerlingen - totaalIngevuld;
   const totaalHuiswerkIngevuld = gefilterdeLeerlingen.filter((l) =>
-    huiswerkKeys.has(leerlingKey(l.naam, l.klas))
+    huiswerkKeys.has(l.id)
   ).length;
   const totaalHuiswerkOntbreekt = totaalLeerlingen - totaalHuiswerkIngevuld;
 
@@ -523,11 +568,11 @@ export default function EurofitLeerkrachtPage() {
           );
 
           const huiswerkIngevuld = leerlingenInKlas.filter((l) =>
-            huiswerkKeys.has(leerlingKey(l.naam, l.klas))
+            huiswerkKeys.has(l.id)
           );
 
           const huiswerkOntbreekt = leerlingenInKlas.filter(
-            (l) => !huiswerkKeys.has(leerlingKey(l.naam, l.klas))
+            (l) => !huiswerkKeys.has(l.id)
           );
 
           return (
@@ -578,35 +623,14 @@ export default function EurofitLeerkrachtPage() {
                         })
                         .sort((a, b) => String(a.test_type ?? "").localeCompare(String(b.test_type ?? "")));
 
-                      const profielMap = new Map<string, RawRow>();
-                      profielen.forEach((p) => {
-                        if (p.id) profielMap.set(String(p.id), p);
-                      });
+                      const profielMap = buildProfielMap(profielen);
 
                       const leerlingHuiswerk = huiswerkRows
                         .filter((r) => {
                           const rowSchooljaar = r.schooljaar ? String(r.schooljaar) : "";
                           if (schooljaar !== "Alle" && rowSchooljaar !== schooljaar) return false;
 
-                          const profiel = profielMap.get(String(r.user_id ?? ""));
-                          const payload = r.payload && typeof r.payload === "object" ? r.payload : {};
-
-                          const naam = String(
-                            profiel?.volledige_naam ??
-                              payload.leerling ??
-                              payload.form?.leerling ??
-                              ""
-                          ).trim();
-
-                          const klasNaam = String(
-                            r.klas_naam ??
-                              profiel?.klas_naam ??
-                              payload.klasNaam ??
-                              payload.klas_naam ??
-                              ""
-                          ).trim();
-
-                          return leerlingKey(naam, klasNaam) === leerlingKey(leerling.naam, leerling.klas);
+                          return String(r.user_id ?? "").trim() === leerling.id;
                         })
                         .sort((a, b) => String(b.created_at ?? "").localeCompare(String(a.created_at ?? "")));
 
@@ -657,7 +681,12 @@ export default function EurofitLeerkrachtPage() {
                               ) : (
                                 <div style={{ marginTop: 14, display: "grid", gap: 12 }}>
                                   {leerlingHuiswerk.length === 0 ? (
-                                    <div style={styles.openBox}>Geen huiswerk gevonden voor deze leerling.</div>
+                                    <div style={styles.openBox}>
+                                      Geen huiswerk gevonden voor deze leerling.
+                                      <div style={{ marginTop: 8, color: ui.muted }}>
+                                        Er wordt alleen gekoppeld via profielen.id = eurofit_huiswerk_submissions.user_id.
+                                      </div>
+                                    </div>
                                   ) : (
                                     leerlingHuiswerk.map((hw) => (
                                       <HomeworkSubmissionCard key={hw.id ?? hw.created_at} row={hw} />
@@ -741,7 +770,7 @@ function ResultsTable({
 
 
 function getPayload(row: RawRow) {
-  return row.payload && typeof row.payload === "object" ? row.payload : {};
+  return getPayloadObject(row);
 }
 
 function renderValue(value: unknown) {
