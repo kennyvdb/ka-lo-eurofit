@@ -1003,6 +1003,27 @@ export default function EurofittestPage() {
               );
             })}
           </div>
+
+          <div
+            style={{
+              marginTop: 16,
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <button
+              onClick={handleSaveAll}
+              disabled={saving}
+              style={{
+                ...styles.primaryBtn,
+                opacity: saving ? 0.7 : 1,
+                width: "100%",
+                maxWidth: 420,
+              }}
+            >
+              {saving ? "Opslaan..." : "Alles opslaan"}
+            </button>
+          </div>
         </section>
       ) : activeTab === "info" ? (
         <InfoTab />

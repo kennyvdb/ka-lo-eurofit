@@ -142,9 +142,9 @@ export default function Page() {
           }
           description={
             <>
-              Ontdek alle sportieve challenges van school. Doe mee aan de Run &
-              Walk Challenge, test je kracht op de roeier of schrijf je in voor
-              een tornooi.
+              Ontdek alle sportieve challenges van school. Binnenkort kun je
+              deelnemen aan de Run & Walk Challenge, je kracht testen op de
+              roeier of je inschrijven voor een tornooi.
             </>
           }
           imageSrc="/challenges/challenges.png"
@@ -165,17 +165,17 @@ export default function Page() {
         />
 
         <SectionCard
-          title="Actieve en komende challenges"
-          subtitle="Kies een challenge en ontdek de details."
+          title="Komende challenges"
+          subtitle="Deze challenges worden binnenkort beschikbaar."
         >
           <div className="challengeGrid">
             <ChallengeCard
               href="/challenges/RunWalkChallenge"
               emoji="👟"
-              subtitle="Actieve challenge"
+              subtitle="Binnenkort"
               title="Run & Walk Challenge"
               description="Registreer je gelopen of gewandelde kilometers en help jouw klas naar de top van het klassement."
-              status="Actief"
+              status="Binnenkort"
             />
 
             <ChallengeCard

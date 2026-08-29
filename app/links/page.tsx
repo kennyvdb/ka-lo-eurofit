@@ -4,21 +4,13 @@ import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import Link from "next/link";
 import React from "react";
-import { createClient } from "@/lib/supabase/client";
-
-const supabase = createClient();
-
-const brand = {
-  blue: "#255971",
-  teal: "#4B8E8D",
-  mint: "#89C2AA",
-};
 
 const links = [
   {
     id: "sportnaschool",
     naam: "Sport Na School",
     url: "https://sportnaschool.be",
+    displayUrl: "sportnaschool.be",
     beschrijving: "Ontdek sportactiviteiten en beweegkansen buiten de schooluren.",
     categorie: "sport",
   },
@@ -26,13 +18,15 @@ const links = [
     id: "start-to-run",
     naam: "Start to Run",
     url: "https://www.start-to-run.be",
+    displayUrl: "www.start-to-run.be",
     beschrijving: "Begeleiding en motivatie om stap voor stap te leren lopen.",
     categorie: "lopen",
   },
   {
     id: "moev",
     naam: "MOEV Activiteiten",
-    url: "https://www.moev.be/activiteiten/filters:west-vlaanderen,secundair-onderwijs",
+    url: "https://www.moev.be/event/page/4?province=1877&taget_group=152%2C151%2C150%2C149%2C148%2C146%2C147&offering=39%2C40&education_type=&core=&compensation=&theme=&intermediary=&search=&date=scheduled&tags=&type=all&country=all",
+    displayUrl: "www.moev.be",
     beschrijving: "Activiteitenaanbod voor secundair onderwijs in West-Vlaanderen.",
     categorie: "school",
   },
@@ -40,6 +34,7 @@ const links = [
     id: "fit",
     naam: "FIT.nl",
     url: "https://www.fit.nl",
+    displayUrl: "www.fit.nl",
     beschrijving: "Informatie over training, gezondheid, voeding en fitheid.",
     categorie: "gezondheid",
   },
@@ -65,6 +60,7 @@ type LinkCardProps = {
     id: string;
     naam: string;
     url: string;
+    displayUrl: string;
     beschrijving: string;
     categorie: string;
   };
@@ -92,7 +88,10 @@ function ExternalLinkCard({ item }: LinkCardProps) {
               <div className="text-[15px] font-black tracking-[0.01em] text-white">
                 {item.naam}
               </div>
-              <div className="mt-1 break-all text-xs text-white/60">{item.url}</div>
+
+              <div className="mt-1 text-xs text-white/60">
+                {item.displayUrl}
+              </div>
             </div>
           </div>
 
@@ -106,7 +105,10 @@ function ExternalLinkCard({ item }: LinkCardProps) {
             <div className="text-[11px] font-black uppercase tracking-[0.08em] text-white/55">
               Beschrijving
             </div>
-            <div className="mt-1 text-sm leading-6 text-white/75">{item.beschrijving}</div>
+
+            <div className="mt-1 text-sm leading-6 text-white/75">
+              {item.beschrijving}
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-3">
@@ -114,7 +116,9 @@ function ExternalLinkCard({ item }: LinkCardProps) {
               Externe link
             </div>
 
-            <div className="text-sm font-black text-white/90">Openen ↗</div>
+            <div className="text-sm font-black text-white/90">
+              Openen ↗
+            </div>
           </div>
         </div>
       </div>
@@ -156,7 +160,10 @@ export default function LinksPage() {
       <section className="mt-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <div className="text-sm font-black text-white">Overzicht</div>
+            <div className="text-sm font-black text-white">
+              Overzicht
+            </div>
+
             <div className="text-xs text-white/60">
               Klik op een kaart om de website in een nieuw tabblad te openen.
             </div>

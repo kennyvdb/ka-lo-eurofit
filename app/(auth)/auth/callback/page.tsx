@@ -32,6 +32,7 @@ type ClassStudent = {
   username?: string | null;
   role?: string | null;
   primary_class?: boolean | null;
+  schooljaar?: string | null;
 };
 
 type TeacherLoginEmail = {
@@ -156,10 +157,13 @@ export default function AuthCallbackPage() {
           throw new Error(existingProfileError.message);
         }
 
+        const actueelSchooljaar = currentSchoolYear();
+
         const { data: classRows, error: classError } = await supabase
           .from("class_students")
           .select("*")
-          .eq("email", email);
+          .eq("email", email)
+          .eq("schooljaar", actueelSchooljaar);
 
         if (classError) {
           throw new Error(classError.message);
@@ -344,57 +348,54 @@ export default function AuthCallbackPage() {
             smartschoolGeboortedatum
           ),
 
-          klas_naam: keepExisting(
-            existingProfile?.klas_naam,
-            isStudent ? klasNaam : null
-          ),
+          // Deze velden komen uit de actuele Smartschool-sync en mogen
+          // dus bij een nieuw schooljaar geactualiseerd worden.
+          klas_naam: isStudent
+            ? klasNaam
+            : existingProfile?.klas_naam ?? null,
 
-          lo_groep: keepExisting(
-            existingProfile?.lo_groep,
-            isStudent ? loGroep : null
-          ),
+          lo_groep: isStudent
+            ? loGroep
+            : existingProfile?.lo_groep ?? null,
 
-          class_info: keepExisting(
-            existingProfile?.class_info,
-            smartschoolUser?.raw?.metadata?.["smsc.classInfo"] ?? klasNaam
-          ),
+          class_info:
+            smartschoolUser?.raw?.metadata?.["smsc.classInfo"] ??
+            (isStudent ? klasNaam : existingProfile?.class_info ?? null),
 
-          class_year: keepExisting(
-            existingProfile?.class_year,
-            smartschoolUser?.raw?.metadata?.["smsc.classYear"] ?? null
-          ),
+          class_year:
+            smartschoolUser?.raw?.metadata?.["smsc.classYear"] ??
+            existingProfile?.class_year ??
+            null,
 
-          class_level: keepExisting(
-            existingProfile?.class_level,
-            smartschoolUser?.raw?.metadata?.["smsc.classLevel"] ?? null
-          ),
+          class_level:
+            smartschoolUser?.raw?.metadata?.["smsc.classLevel"] ??
+            existingProfile?.class_level ??
+            null,
 
-          internal_number: keepExisting(
-            existingProfile?.internal_number,
-            smartschoolUser?.raw?.metadata?.["smsc.internalNumber"] ?? null
-          ),
+          internal_number:
+            smartschoolUser?.raw?.metadata?.["smsc.internalNumber"] ??
+            existingProfile?.internal_number ??
+            null,
 
-          graad: keepExisting(
-            existingProfile?.graad,
-            isStudent ? klasMeta?.graad ?? null : null
-          ),
+          graad: isStudent
+            ? klasMeta?.graad ?? null
+            : existingProfile?.graad ?? null,
 
-          leerjaar: keepExisting(
-            existingProfile?.leerjaar,
-            isStudent ? klasMeta?.leerjaar ?? null : null
-          ),
+          leerjaar: isStudent
+            ? klasMeta?.leerjaar ?? null
+            : existingProfile?.leerjaar ?? null,
 
-          finaliteit: keepExisting(
-            existingProfile?.finaliteit,
-            isStudent ? klasMeta?.finaliteit ?? null : null
-          ),
+          finaliteit: isStudent
+            ? klasMeta?.finaliteit ?? null
+            : existingProfile?.finaliteit ?? null,
 
-          schooljaar: keepExisting(existingProfile?.schooljaar, currentSchoolYear()),
+          schooljaar: actueelSchooljaar,
 
-          schooljaar_bevestigd_op: keepExisting(
-            existingProfile?.schooljaar_bevestigd_op,
-            new Date().toISOString().slice(0, 10)
-          ),
+          schooljaar_bevestigd_op:
+            existingProfile?.schooljaar === actueelSchooljaar
+              ? existingProfile?.schooljaar_bevestigd_op ??
+                new Date().toISOString().slice(0, 10)
+              : new Date().toISOString().slice(0, 10),
 
           updated_at: new Date().toISOString(),
         };

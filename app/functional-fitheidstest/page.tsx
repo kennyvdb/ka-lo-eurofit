@@ -603,26 +603,11 @@ export default function FunctionalFitheidstestPage() {
               style={{ ...styles.primaryBtn, opacity: saving ? 0.7 : 1 }}
               title="Slaat je meting op in Supabase"
             >
-              {saving ? "Opslaan..." : "Opslaan"}
+              {saving ? "Opslaan..." : "Alles opslaan"}
             </button>
           </div>
 
-          {teacherMode && (
-            <div style={styles.banner}>
-              <div>
-                <div style={{ fontWeight: 950, color: ui.text }}>Leerkrachtmodus</div>
-                <div style={{ marginTop: 3, fontSize: 13, color: ui.muted }}>
-                  Deze pagina is klaar als invulscherm. Wil je dat leerkrachten{" "}
-                  <b style={{ color: ui.text }}>leerlingen kunnen selecteren</b> en klasscores kunnen
-                  ingeven zoals in Excel? Dan voeg ik een “klas-overzicht + leerling-selector” toe op basis van
-                  jullie tabellen.
-                </div>
-              </div>
-              <div style={styles.pill}>TEACHER</div>
-            </div>
-          )}
-
-          <section style={{ marginTop: 14 }}>
+                    <section style={{ marginTop: 14 }}>
             <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 950, color: ui.text }}>Onderdelen</div>
 
             <div className="functional-grid" style={styles.gridWrap}>
@@ -637,6 +622,16 @@ export default function FunctionalFitheidstestPage() {
               ))}
             </div>
           </section>
+
+          <div style={{ marginTop: 20, display: "flex", justifyContent: "center" }}>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              style={{ ...styles.primaryBtn, opacity: saving ? 0.7 : 1 }}
+            >
+              {saving ? "Opslaan..." : "Alles opslaan"}
+            </button>
+          </div>
         </>
       ) : activeTab === "info" ? (
         <div style={{ marginTop: 14, display: "grid", gap: 12 }}>

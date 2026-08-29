@@ -24,40 +24,40 @@ const ui = {
 
 const modules = [
   {
-    href: "#",
+    href: "/eurofittest",
     icon: "🏃",
     title: "Eurofittest",
     desc: "Ingevuld, niet ingevuld, automatische evaluatie en resultaten.",
   },
   {
-    href: "#",
+    href: "/functional-fitheidstest",
     icon: "💪",
     title: "Functional Fitheidstest",
     desc: "Ingevuld, niet ingevuld, automatische evaluatie en resultaten.",
   },
   {
-    href: "#",
+    href: "/sportfolio",
     icon: "📁",
     title: "Sportfolio",
     desc: "Bewijsstukken, reflecties en feedback.",
   },
   {
-    href: "#",
+    href: "/challenges",
     icon: "🏆",
     title: "Challenges",
     desc: "Deelname, scores en klassement.",
   },
   {
-    href: "#",
+    href: "/reservaties",
     icon: "📅",
     title: "Reservaties",
     desc: "Fitness, pingpong en materiaal.",
   },
   {
-    href: "#",
-    icon: "📝",
-    title: "Huiswerk",
-    desc: "Ingevuld, ontbrekend en opmerkingen.",
+    href: "/leerkrachten-lo/klasgroepen",
+    icon: "👥",
+    title: "Klasgroepen",
+    desc: "Mijn klasgroepen maken met klassen.",
   },
   {
     href: "#",
@@ -79,6 +79,15 @@ function normalizeRole(value: unknown) {
     .toLowerCase()
     .replace(/\s+/g, "_")
     .replace(/-/g, "_");
+}
+
+function isAllowedRole(rol: string) {
+  return (
+    rol === "leerkracht_lo" ||
+    rol === "lo_leerkracht" ||
+    rol === "administratief_personeel" ||
+    rol === "admin"
+  );
 }
 
 export default function LeerkrachtenLOPage() {
@@ -109,7 +118,7 @@ export default function LeerkrachtenLOPage() {
       const rol = normalizeRole(profielData?.rol);
 
       setProfiel(profielData as Profiel | null);
-      setAllowed(rol === "lo_leerkracht" || rol === "admin");
+      setAllowed(isAllowedRole(rol));
       setLoading(false);
     };
 
@@ -247,3 +256,4 @@ function injectResponsiveCSS() {
 
   document.head.appendChild(style);
 }
+
