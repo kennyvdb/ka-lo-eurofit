@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
-import { SquareTile, ui } from "../_ui";
+import { ui } from "../_ui";
 
 export default function AfsprakenLOPage() {
   return (
@@ -106,48 +106,6 @@ export default function AfsprakenLOPage() {
             title="Respect"
             text="We hebben respect voor elkaar, de leerkracht, het materiaal en de accommodatie."
             accent="green"
-          />
-        </div>
-      </section>
-
-      {/* =========================================================
-          LINKS NAAR ANDERE LO-ONDERDELEN
-      ========================================================= */}
-      <section className="section">
-        <div className="section-heading compact">
-          <div>
-            <div className="eyebrow">LES LO</div>
-            <h2>Meer informatie</h2>
-          </div>
-        </div>
-
-        <div className="tile-grid">
-          <SquareTile
-            href="/les-lo/kijkwijzers"
-            icon="👀"
-            title="Kijkwijzers"
-            desc="Waarop letten tijdens de les"
-          />
-
-          <SquareTile
-            href="/les-lo/rollen"
-            icon="🎭"
-            title="Rollenkaarten"
-            desc="Coach, helper, scheidsrechter…"
-          />
-
-          <SquareTile
-            href="/les-lo/jaarplanning"
-            icon="🗓️"
-            title="Jaarplanning"
-            desc="Bekijk de planning"
-          />
-
-          <SquareTile
-            href="/les-lo/evaluaties"
-            icon="✅"
-            title="Evaluaties"
-            desc="Rubrics & feedback"
           />
         </div>
       </section>
@@ -704,10 +662,6 @@ export default function AfsprakenLOPage() {
           margin-bottom: 14px;
         }
 
-        .section-heading.compact {
-          align-items: center;
-        }
-
         .section-heading h2 {
           margin: 3px 0 0;
           color: ${ui.text};
@@ -735,12 +689,6 @@ export default function AfsprakenLOPage() {
           display: grid;
           grid-template-columns: repeat(2, minmax(0, 1fr));
           gap: 12px;
-        }
-
-        .tile-grid {
-          display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 14px;
         }
 
         .vision-grid {
@@ -1061,10 +1009,6 @@ export default function AfsprakenLOPage() {
         }
 
         @media (min-width: 900px) {
-          .tile-grid {
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-          }
-
           .vision-grid {
             grid-template-columns: repeat(4, minmax(0, 1fr));
           }
