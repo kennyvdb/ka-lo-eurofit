@@ -1,736 +1,943 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
-import React, {
-  useEffect,
-  useState,
-} from "react";
+import BaseHero from "@/components/heroes/BaseHero";
+import Link from "next/link";
+import React, { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-const supabase =
-  createClient();
+const supabase = createClient();
 
-const SCHOOLJAAR =
-  "2026-2027";
+/* =========================================================
+   CONSTANTEN
+========================================================= */
 
-const LEERJAREN_MET_KEUZE =
-  [3, 5, 6, 7];
+const SCHOOLJAAR_SPORTDAG = "2026-2027";
 
-type Profiel = {
-  id: string;
+const LEERJAREN_MET_VERVOERSKEUZE = [3, 5, 6, 7];
+
+/* =========================================================
+   TYPES
+========================================================= */
+
+type MijnProfiel = {
   volledige_naam: string | null;
-  email: string | null;
   rol: string | null;
-  leerjaar:
-    | number
-    | string
-    | null;
+};
+
+type SmartschoolLeerling = {
+  email: string | null;
+  given_name: string | null;
+  family_name: string | null;
+  volledige_naam: string | null;
+  username: string | null;
   klas_naam: string | null;
+  lo_groepen: string | null;
+  profiel_id: string | null;
+  schooljaar: string | null;
 };
 
 type VervoersKeuze = {
   leerling_id: string;
   leerjaar: number;
-  heen:
-    | "fiets"
-    | "eigen_vervoer";
-  terug:
-    | "fiets"
-    | "eigen_vervoer";
+  heen: "fiets" | "eigen_vervoer";
+  terug: "fiets" | "eigen_vervoer";
   updated_at: string;
 };
 
-function getLeerjaar(
-  value:
-    | number
-    | string
-    | null
-    | undefined
-) {
-  if (
-    typeof value ===
-    "number"
-  ) {
-    return value;
-  }
+/* =========================================================
+   UI
+========================================================= */
 
-  if (!value) {
-    return null;
-  }
+const ui = {
+  text: "rgba(234,240,255,0.92)",
+  muted: "rgba(234,240,255,0.72)",
+  border: "rgba(255,255,255,0.12)",
+  border2: "rgba(255,255,255,0.18)",
+  glass: "rgba(6, 12, 20, 0.42)",
+  glass2: "rgba(6, 12, 20, 0.58)",
+};
 
-  const parsed =
-    Number.parseInt(
-      String(value),
-      10
-    );
+/* =========================================================
+   HELPERS
+========================================================= */
 
-  return Number.isNaN(
-    parsed
-  )
-    ? null
-    : parsed;
+function normalizeRole(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
 }
 
+function isAllowedRole(role: string) {
+  return (
+    role === "leerkracht_lo" ||
+    role === "lo_leerkracht" ||
+    role === "administratief_personeel" ||
+    role === "admin"
+  );
+}
+
+/**
+ * Voorbeelden:
+ *
+ * "1 A A"      -> 1
+ * "2 STEM D"   -> 2
+ * "3 HUM A"    -> 3
+ * "6 WEWI"     -> 6
+ * "7 ..."      -> 7
+ */
+function getLeerjaarUitKlas(klasNaam: string | null) {
+  if (!klasNaam) return null;
+
+  const match = klasNaam.trim().match(/^([1-7])/);
+
+  if (!match) return null;
+
+  const leerjaar = Number(match[1]);
+
+  return Number.isNaN(leerjaar) ? null : leerjaar;
+}
+
+function getNaam(leerling: SmartschoolLeerling) {
+  if (leerling.volledige_naam?.trim()) {
+    return leerling.volledige_naam.trim();
+  }
+
+  const naam = [
+    leerling.given_name?.trim(),
+    leerling.family_name?.trim(),
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  if (naam) return naam;
+
+  if (leerling.email) return leerling.email;
+
+  return "Onbekende leerling";
+}
+
+function formatTransport(value: VervoersKeuze["heen"]) {
+  if (value === "fiets") {
+    return "Fiets";
+  }
+
+  return "Eigen vervoer";
+}
+
+function formatDate(value: string) {
+  try {
+    return new Intl.DateTimeFormat("nl-BE", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(value));
+  } catch {
+    return "";
+  }
+}
+
+/* =========================================================
+   PAGE
+========================================================= */
+
 export default function SportdagenBeheerPage() {
-  const [
-    mijnProfiel,
-    setMijnProfiel,
-  ] =
-    useState<Profiel | null>(
-      null
-    );
+  const [loading, setLoading] = useState(true);
 
-  const [
-    leerlingen,
-    setLeerlingen,
-  ] =
-    useState<Profiel[]>([]);
+  const [profiel, setProfiel] = useState<MijnProfiel | null>(null);
 
-  const [
-    keuzes,
-    setKeuzes,
-  ] =
-    useState<
-      VervoersKeuze[]
-    >([]);
+  const [allowed, setAllowed] = useState(false);
 
-  const [
-    loading,
-    setLoading,
-  ] =
-    useState(true);
+  const [smartschoolLeerlingen, setSmartschoolLeerlingen] = useState<
+    SmartschoolLeerling[]
+  >([]);
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  const [vervoersKeuzes, setVervoersKeuzes] = useState<VervoersKeuze[]>([]);
+
+  const [smartschoolSchooljaar, setSmartschoolSchooljaar] =
+    useState<string | null>(null);
+
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  /* =======================================================
+     DATA LADEN
+  ======================================================= */
 
   async function loadData() {
     setLoading(true);
+    setErrorMessage(null);
 
     try {
+      /* ---------------------------------------------------
+         1. INGelogde gebruiker
+      --------------------------------------------------- */
+
       const {
         data: { user },
-      } =
-        await supabase.auth.getUser();
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) {
+        console.error("Gebruiker laden mislukt:", userError);
+
+        setErrorMessage("De ingelogde gebruiker kon niet worden geladen.");
+        return;
+      }
 
       if (!user) {
+        setErrorMessage("Je bent niet aangemeld.");
         return;
       }
 
-      const {
-        data: profile,
-        error:
-          profileError,
-      } = await supabase
+      /* ---------------------------------------------------
+         2. PROFIEL / ROL
+      --------------------------------------------------- */
+
+      const { data: profielData, error: profielError } = await supabase
         .from("profielen")
+        .select("volledige_naam, rol")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (profielError) {
+        console.error("Profiel laden mislukt:", profielError);
+
+        setErrorMessage("Je profiel kon niet worden geladen.");
+        return;
+      }
+
+      const mijnProfiel = profielData as MijnProfiel | null;
+
+      setProfiel(mijnProfiel);
+
+      const role = normalizeRole(mijnProfiel?.rol);
+
+      const magBeheren = isAllowedRole(role);
+
+      setAllowed(magBeheren);
+
+      if (!magBeheren) {
+        return;
+      }
+
+      /* ---------------------------------------------------
+         3. SMARTSCHOOL LEERLINGEN
+      --------------------------------------------------- */
+
+      const { data: smartschoolData, error: smartschoolError } =
+        await supabase
+          .from("eurofit_class_students_view")
+          .select(
+            `
+              email,
+              given_name,
+              family_name,
+              volledige_naam,
+              username,
+              klas_naam,
+              lo_groepen,
+              profiel_id,
+              schooljaar
+            `
+          );
+
+      if (smartschoolError) {
+        console.error(
+          "Smartschool leerlingen laden mislukt:",
+          smartschoolError
+        );
+
+        setErrorMessage(
+          "De leerlingen konden niet uit Smartschool worden geladen."
+        );
+
+        return;
+      }
+
+      const alleRijen = (smartschoolData ??
+        []) as SmartschoolLeerling[];
+
+      /* ---------------------------------------------------
+         4. ACTIEF SMARTSCHOOL-SCHOOLJAAR BEPALEN
+
+         Eerst proberen we 2026-2027.
+
+         Bestaat dit nog niet in de view, dan gebruiken we
+         automatisch het meest recente beschikbare schooljaar.
+      --------------------------------------------------- */
+
+      const schooljaren = Array.from(
+        new Set(
+          alleRijen
+            .map((row) => row.schooljaar)
+            .filter((value): value is string => Boolean(value))
+        )
+      ).sort((a, b) => b.localeCompare(a));
+
+      let gekozenSchooljaar: string | null = null;
+
+      if (schooljaren.includes(SCHOOLJAAR_SPORTDAG)) {
+        gekozenSchooljaar = SCHOOLJAAR_SPORTDAG;
+      } else {
+        gekozenSchooljaar = schooljaren[0] ?? null;
+      }
+
+      setSmartschoolSchooljaar(gekozenSchooljaar);
+
+      /* ---------------------------------------------------
+         5. ENKEL RIJEN VAN HET GEKOZEN SCHOOLJAAR
+      --------------------------------------------------- */
+
+      let actieveRijen = gekozenSchooljaar
+        ? alleRijen.filter((row) => row.schooljaar === gekozenSchooljaar)
+        : alleRijen;
+
+      /* ---------------------------------------------------
+         6. DUBBELE LEERLINGEN VERWIJDEREN
+
+         We gebruiken e-mail als unieke sleutel.
+         Zo telt een leerling nooit twee keer mee.
+      --------------------------------------------------- */
+
+      const uniekeLeerlingen = new Map<string, SmartschoolLeerling>();
+
+      for (const leerling of actieveRijen) {
+        const key =
+          leerling.email?.trim().toLowerCase() ||
+          leerling.username?.trim().toLowerCase();
+
+        if (!key) {
+          continue;
+        }
+
+        const bestaande = uniekeLeerlingen.get(key);
+
+        if (!bestaande) {
+          uniekeLeerlingen.set(key, leerling);
+
+          continue;
+        }
+
+        /*
+          Als dezelfde leerling meerdere keren voorkomt,
+          verkiezen we de rij met profiel_id.
+        */
+
+        if (!bestaande.profiel_id && leerling.profiel_id) {
+          uniekeLeerlingen.set(key, leerling);
+        }
+      }
+
+      actieveRijen = Array.from(uniekeLeerlingen.values());
+
+      setSmartschoolLeerlingen(actieveRijen);
+
+      /* ---------------------------------------------------
+         7. VERVOERSKEUZES
+      --------------------------------------------------- */
+
+      const { data: vervoerData, error: vervoerError } = await supabase
+        .from("sportdag_vervoer")
         .select(
           `
-          id,
-          volledige_naam,
-          email,
-          rol,
-          leerjaar,
-          klas_naam
+            leerling_id,
+            leerjaar,
+            heen,
+            terug,
+            updated_at
           `
         )
-        .eq(
-          "id",
-          user.id
-        )
-        .single();
+        .eq("schooljaar", SCHOOLJAAR_SPORTDAG);
 
-      if (
-        profileError ||
-        !profile
-      ) {
-        console.error(
-          profileError
+      if (vervoerError) {
+        console.error("Vervoerskeuzes laden mislukt:", vervoerError);
+
+        setErrorMessage(
+          "De vervoerskeuzes konden niet worden geladen."
         );
 
         return;
       }
 
-      setMijnProfiel(
-        profile
+      setVervoersKeuzes(
+        (vervoerData ?? []) as VervoersKeuze[]
       );
+    } catch (error) {
+      console.error("Sportdagenoverzicht laden mislukt:", error);
 
-      const toegestaan =
-        profile.rol ===
-          "lo_leerkracht" ||
-        profile.rol ===
-          "admin";
-
-      if (!toegestaan) {
-        return;
-      }
-
-      const [
-        leerlingenRes,
-        keuzesRes,
-      ] =
-        await Promise.all([
-          supabase
-            .from(
-              "profielen"
-            )
-            .select(
-              `
-              id,
-              volledige_naam,
-              email,
-              rol,
-              leerjaar,
-              klas_naam
-              `
-            )
-            .eq(
-              "rol",
-              "leerling"
-            ),
-
-          supabase
-            .from(
-              "sportdag_vervoer"
-            )
-            .select(
-              `
-              leerling_id,
-              leerjaar,
-              heen,
-              terug,
-              updated_at
-              `
-            )
-            .eq(
-              "schooljaar",
-              SCHOOLJAAR
-            ),
-        ]);
-
-      if (
-        leerlingenRes.error
-      ) {
-        console.error(
-          leerlingenRes.error
-        );
-      }
-
-      if (
-        keuzesRes.error
-      ) {
-        console.error(
-          keuzesRes.error
-        );
-      }
-
-      setLeerlingen(
-        leerlingenRes.data ??
-          []
-      );
-
-      setKeuzes(
-        (keuzesRes.data ??
-          []) as VervoersKeuze[]
+      setErrorMessage(
+        "Er ging iets mis tijdens het laden van het sportdagenoverzicht."
       );
     } finally {
       setLoading(false);
     }
   }
 
-  function getLeerlingen(
-    leerjaar: number
-  ) {
-    return leerlingen
-      .filter(
-        (leerling) =>
-          getLeerjaar(
-            leerling.leerjaar
-          ) === leerjaar
-      )
-      .sort((a, b) =>
-        (
-          a.volledige_naam ??
-          ""
-        ).localeCompare(
-          b.volledige_naam ??
-            "",
-          "nl"
-        )
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  /* =======================================================
+     ALLE LEERLINGEN PER LEERJAAR
+  ======================================================= */
+
+  const leerlingenPerLeerjaar = useMemo(() => {
+    const result: Record<number, SmartschoolLeerling[]> = {
+      3: [],
+      5: [],
+      6: [],
+      7: [],
+    };
+
+    for (const leerling of smartschoolLeerlingen) {
+      const leerjaar = getLeerjaarUitKlas(leerling.klas_naam);
+
+      if (!leerjaar) continue;
+
+      if (!LEERJAREN_MET_VERVOERSKEUZE.includes(leerjaar)) {
+        continue;
+      }
+
+      result[leerjaar].push(leerling);
+    }
+
+    for (const leerjaar of LEERJAREN_MET_VERVOERSKEUZE) {
+      result[leerjaar].sort((a, b) =>
+        getNaam(a).localeCompare(getNaam(b), "nl")
       );
-  }
+    }
 
-  function getKeuzes(
-    leerjaar: number
-  ) {
-    return keuzes.filter(
-      (keuze) =>
-        keuze.leerjaar ===
-        leerjaar
-    );
-  }
+    return result;
+  }, [smartschoolLeerlingen]);
 
-  function getOntbrekend(
-    leerjaar: number
-  ) {
-    const lln =
-      getLeerlingen(
-        leerjaar
-      );
-
-    const ids =
-      new Set(
-        getKeuzes(
-          leerjaar
-        ).map(
-          (keuze) =>
-            keuze.leerling_id
-        )
-      );
-
-    return lln.filter(
-      (leerling) =>
-        !ids.has(
-          leerling.id
-        )
-    );
-  }
-
-  const toegestaan =
-    mijnProfiel?.rol ===
-      "lo_leerkracht" ||
-    mijnProfiel?.rol ===
-      "admin";
+  /* =======================================================
+     LOADING
+  ======================================================= */
 
   if (loading) {
     return (
       <AppShell
-        title="KA LO App"
-        subtitle="GO! Atheneum Avelgem"
-        userName={null}
+        title="LO App"
+        subtitle="Sportdagen"
+        userName={profiel?.volledige_naam ?? null}
       >
         <style>{css}</style>
 
-        <div className="loading">
-          Overzicht laden...
+        <div className="loading-state">
+          <div className="loading-icon">🏆</div>
+
+          <strong>Sportdagen laden...</strong>
+
+          <span>Smartschoolgegevens worden opgehaald.</span>
         </div>
       </AppShell>
     );
   }
 
-  if (!toegestaan) {
+  /* =======================================================
+     GEEN TOEGANG
+  ======================================================= */
+
+  if (!allowed) {
     return (
       <AppShell
-        title="KA LO App"
-        subtitle="GO! Atheneum Avelgem"
-        userName={
-          mijnProfiel
-            ?.volledige_naam ??
-          null
-        }
+        title="LO App"
+        subtitle="Geen toegang"
+        userName={profiel?.volledige_naam ?? null}
       >
         <style>{css}</style>
 
-        <div className="access">
-          Geen toegang tot
-          deze pagina.
-        </div>
+        <section className="access-card">
+          <div className="access-icon">🔒</div>
+
+          <h1>Geen toegang</h1>
+
+          <p>
+            Deze pagina is alleen toegankelijk voor LO-leerkrachten en admins.
+          </p>
+
+          <Link
+            href="/dashboard"
+            className="back-button"
+          >
+            ← Terug naar dashboard
+          </Link>
+        </section>
       </AppShell>
     );
   }
+
+  /* =======================================================
+     PAGE
+  ======================================================= */
 
   return (
     <AppShell
-      title="KA LO App"
-      subtitle="GO! Atheneum Avelgem"
-      userName={
-        mijnProfiel
-          ?.volledige_naam ??
-        null
-      }
+      title="LO App"
+      subtitle="Sportdagen"
+      userName={profiel?.volledige_naam ?? null}
     >
       <style>{css}</style>
 
-      <main className="beheer-page">
+      <main className="page">
         {/* HERO */}
 
-        <section className="hero">
-          <div className="hero-icon">
-            🚲
+        <BaseHero
+          label="EXTRAMURALE SPORTACTIVITEITEN"
+          title={
+            <>
+              Beheer{" "}
+              <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
+                sportdagen
+              </span>
+            </>
+          }
+          description="Bekijk per leerjaar wie zijn vervoerskeuze al heeft ingevuld en wie nog ontbreekt."
+          imageSrc="/lo/LO.png"
+          imageAlt="Sportdagen"
+          quoteTitle="Sportdagen"
+          quote="Alle vervoerskeuzes overzichtelijk per leerjaar."
+          quoteAuthor="LO team"
+          actions={
+            <div className="hero-actions">
+              <Link
+                href="/leerkrachten-lo/extramurale-sportactiviteiten"
+                className="hero-button"
+              >
+                ← Terug
+              </Link>
+
+              <button
+                type="button"
+                className="hero-button"
+                onClick={loadData}
+              >
+                ↻ Vernieuwen
+              </button>
+            </div>
+          }
+        />
+
+        {/* SMARTSCHOOL INFO */}
+
+        <section className="source-bar">
+          <div className="source-left">
+            <span className="source-dot" />
+
+            <div>
+              <strong>Leerlingen uit Smartschool</strong>
+
+              <span>
+                {smartschoolLeerlingen.length} leerlingen geladen
+                {smartschoolSchooljaar
+                  ? ` • schooljaar ${smartschoolSchooljaar}`
+                  : ""}
+              </span>
+            </div>
           </div>
 
-          <div>
-            <span className="eyebrow">
-              LEERKRACHTEN LO
-            </span>
-
-            <h1>
-              Sportdagen
-            </h1>
-
-            <p>
-              Overzicht van de
-              vervoerskeuzes voor
-              de sportdagen.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            className="refresh-button"
-            onClick={
-              loadData
-            }
-          >
-            ↻ Vernieuwen
-          </button>
+          {smartschoolSchooljaar &&
+            smartschoolSchooljaar !== SCHOOLJAAR_SPORTDAG && (
+              <div className="schoolyear-warning">
+                ⚠️ Smartschool bevat momenteel nog{" "}
+                {smartschoolSchooljaar}
+              </div>
+            )}
         </section>
+
+        {errorMessage && (
+          <section className="error-card">
+            ⚠️ {errorMessage}
+          </section>
+        )}
 
         {/* LEERJAREN */}
 
-        <div className="year-grid">
-          {LEERJAREN_MET_KEUZE.map(
-            (leerjaar) => {
-              const lln =
-                getLeerlingen(
-                  leerjaar
-                );
+        <section className="year-grid">
+          {LEERJAREN_MET_VERVOERSKEUZE.map((leerjaar) => {
+            const leerlingen =
+              leerlingenPerLeerjaar[leerjaar] ?? [];
 
-              const jaarKeuzes =
-                getKeuzes(
-                  leerjaar
-                );
+            /*
+              Keuzes van dit leerjaar.
+            */
 
-              const ontbrekend =
-                getOntbrekend(
-                  leerjaar
-                );
+            const keuzesVanLeerjaar = vervoersKeuzes.filter(
+              (keuze) => keuze.leerjaar === leerjaar
+            );
 
-              const fietsHeen =
-                jaarKeuzes.filter(
-                  (keuze) =>
-                    keuze.heen ===
-                    "fiets"
-                ).length;
+            /*
+              Koppel vervoerskeuze aan profiel_id uit
+              Smartschool-view.
 
-              const eigenHeen =
-                jaarKeuzes.filter(
-                  (keuze) =>
-                    keuze.heen ===
-                    "eigen_vervoer"
-                ).length;
+              Leerlingen zonder profiel_id kunnen onmogelijk
+              al een keuze hebben opgeslagen en zijn dus
+              automatisch 'ontbrekend'.
+            */
 
-              const fietsTerug =
-                jaarKeuzes.filter(
-                  (keuze) =>
-                    keuze.terug ===
-                    "fiets"
-                ).length;
+            const ingevuldeLeerlingen = leerlingen.filter((leerling) => {
+              if (!leerling.profiel_id) {
+                return false;
+              }
 
-              const eigenTerug =
-                jaarKeuzes.filter(
-                  (keuze) =>
-                    keuze.terug ===
-                    "eigen_vervoer"
-                ).length;
+              return keuzesVanLeerjaar.some(
+                (keuze) => keuze.leerling_id === leerling.profiel_id
+              );
+            });
 
-              const percentage =
-                lln.length > 0
-                  ? Math.round(
-                      (jaarKeuzes.length /
-                        lln.length) *
-                        100
-                    )
-                  : 0;
+            const ontbrekendeLeerlingen = leerlingen.filter((leerling) => {
+              if (!leerling.profiel_id) {
+                return true;
+              }
 
-              return (
-                <section
-                  key={
-                    leerjaar
-                  }
-                  className="year-card"
-                >
-                  <div className="year-head">
-                    <div>
-                      <span className="year-label">
-                        SPORTDAG
-                      </span>
+              return !keuzesVanLeerjaar.some(
+                (keuze) => keuze.leerling_id === leerling.profiel_id
+              );
+            });
 
-                      <h2>
-                        {
-                          leerjaar
-                        }
-                        e jaar
-                      </h2>
-                    </div>
+            const fietsHeen = ingevuldeLeerlingen.filter((leerling) => {
+              const keuze = keuzesVanLeerjaar.find(
+                (item) => item.leerling_id === leerling.profiel_id
+              );
 
-                    <div className="year-percentage">
-                      {
-                        percentage
-                      }
-                      %
-                    </div>
+              return keuze?.heen === "fiets";
+            }).length;
+
+            const eigenHeen = ingevuldeLeerlingen.filter((leerling) => {
+              const keuze = keuzesVanLeerjaar.find(
+                (item) => item.leerling_id === leerling.profiel_id
+              );
+
+              return keuze?.heen === "eigen_vervoer";
+            }).length;
+
+            const fietsTerug = ingevuldeLeerlingen.filter((leerling) => {
+              const keuze = keuzesVanLeerjaar.find(
+                (item) => item.leerling_id === leerling.profiel_id
+              );
+
+              return keuze?.terug === "fiets";
+            }).length;
+
+            const eigenTerug = ingevuldeLeerlingen.filter((leerling) => {
+              const keuze = keuzesVanLeerjaar.find(
+                (item) => item.leerling_id === leerling.profiel_id
+              );
+
+              return keuze?.terug === "eigen_vervoer";
+            }).length;
+
+            const percentage =
+              leerlingen.length > 0
+                ? Math.round(
+                    (ingevuldeLeerlingen.length / leerlingen.length) * 100
+                  )
+                : 0;
+
+            return (
+              <article
+                key={leerjaar}
+                className="year-card"
+              >
+                {/* HEADER */}
+
+                <div className="year-header">
+                  <div>
+                    <span className="year-label">SPORTDAG</span>
+
+                    <h2>{leerjaar}e jaar</h2>
                   </div>
 
-                  {/* HOOFDSTATISTIEKEN */}
-
-                  <div className="stats">
-                    <Stat
-                      label="Leerlingen"
-                      value={
-                        lln.length
-                      }
-                    />
-
-                    <Stat
-                      label="Ingevuld"
-                      value={
-                        jaarKeuzes.length
-                      }
-                      type="success"
-                    />
-
-                    <Stat
-                      label="Ontbrekend"
-                      value={
-                        ontbrekend.length
-                      }
-                      type={
-                        ontbrekend.length >
-                        0
-                          ? "warning"
-                          : "success"
-                      }
-                    />
+                  <div className="percentage">
+                    {percentage}%
                   </div>
+                </div>
 
-                  {/* PROGRESS */}
+                {/* COUNTERS */}
 
-                  <div className="progress">
-                    <div
-                      className="progress-value"
-                      style={{
-                        width: `${percentage}%`,
-                      }}
-                    />
+                <div className="stats-grid">
+                  <StatCard
+                    value={leerlingen.length}
+                    label="Leerlingen"
+                    icon="👥"
+                  />
+
+                  <StatCard
+                    value={ingevuldeLeerlingen.length}
+                    label="Ingevuld"
+                    icon="✓"
+                    variant="success"
+                  />
+
+                  <StatCard
+                    value={ontbrekendeLeerlingen.length}
+                    label="Ontbrekend"
+                    icon="!"
+                    variant={
+                      ontbrekendeLeerlingen.length > 0
+                        ? "warning"
+                        : "success"
+                    }
+                  />
+                </div>
+
+                {/* PROGRESS */}
+
+                <div className="progress-track">
+                  <div
+                    className="progress-bar"
+                    style={{
+                      width: `${percentage}%`,
+                    }}
+                  />
+                </div>
+
+                {/* VERVOER */}
+
+                <div className="transport-title">
+                  Vervoerskeuzes
+                </div>
+
+                <div className="transport-grid">
+                  <TransportCounter
+                    emoji="🚲"
+                    value={fietsHeen}
+                    label="Fiets heen"
+                  />
+
+                  <TransportCounter
+                    emoji="🚗"
+                    value={eigenHeen}
+                    label="Eigen vervoer heen"
+                  />
+
+                  <TransportCounter
+                    emoji="🚲"
+                    value={fietsTerug}
+                    label="Fiets terug"
+                  />
+
+                  <TransportCounter
+                    emoji="🚗"
+                    value={eigenTerug}
+                    label="Eigen vervoer terug"
+                  />
+                </div>
+
+                {/* GEEN LEERLINGEN */}
+
+                {leerlingen.length === 0 && (
+                  <div className="no-students">
+                    <strong>
+                      Geen leerlingen gevonden
+                    </strong>
+
+                    <span>
+                      Voor het {leerjaar}e jaar werden geen
+                      Smartschool-leerlingen gevonden.
+                    </span>
                   </div>
+                )}
 
-                  {/* VERVOER */}
+                {/* ONTBREKEND */}
 
-                  <div className="transport-grid">
-                    <TransportStat
-                      emoji="🚲"
-                      label="Fiets heen"
-                      value={
-                        fietsHeen
-                      }
-                    />
-
-                    <TransportStat
-                      emoji="🚗"
-                      label="Eigen vervoer heen"
-                      value={
-                        eigenHeen
-                      }
-                    />
-
-                    <TransportStat
-                      emoji="🚲"
-                      label="Fiets terug"
-                      value={
-                        fietsTerug
-                      }
-                    />
-
-                    <TransportStat
-                      emoji="🚗"
-                      label="Eigen vervoer terug"
-                      value={
-                        eigenTerug
-                      }
-                    />
-                  </div>
-
-                  {/* ONTBREKENDE LEERLINGEN */}
-
-                  {ontbrekend.length >
-                  0 ? (
+                {leerlingen.length > 0 &&
+                  ontbrekendeLeerlingen.length > 0 && (
                     <div className="missing-card">
-                      <div className="missing-head">
+                      <div className="missing-header">
                         <div>
-                          <span className="warning-icon">
-                            ⚠️
-                          </span>
+                          <span>⚠️</span>
 
                           <strong>
-                            Nog niet
-                            ingevuld
+                            Nog niet ingevuld
                           </strong>
                         </div>
 
-                        <span className="missing-count">
-                          {
-                            ontbrekend.length
-                          }
+                        <span className="missing-badge">
+                          {ontbrekendeLeerlingen.length}
                         </span>
                       </div>
 
-                      <div className="missing-list">
-                        {ontbrekend.map(
-                          (
-                            leerling
-                          ) => (
-                            <div
-                              key={
-                                leerling.id
-                              }
-                              className="missing-row"
-                            >
-                              <div>
-                                <strong>
-                                  {leerling.volledige_naam ??
-                                    leerling.email ??
-                                    "Onbekende leerling"}
-                                </strong>
+                      <div className="student-list">
+                        {ontbrekendeLeerlingen.map((leerling) => (
+                          <div
+                            key={
+                              leerling.email ??
+                              leerling.username ??
+                              getNaam(leerling)
+                            }
+                            className="student-row"
+                          >
+                            <div className="student-avatar">
+                              {getNaam(leerling)
+                                .charAt(0)
+                                .toUpperCase()}
+                            </div>
 
-                                <small>
-                                  {leerling.klas_naam ??
-                                    "Geen klas"}
-                                </small>
-                              </div>
+                            <div className="student-main">
+                              <strong>
+                                {getNaam(leerling)}
+                              </strong>
 
-                              <span className="not-done">
-                                Niet ingevuld
+                              <span>
+                                {leerling.klas_naam ?? "Geen klas"}
                               </span>
                             </div>
-                          )
-                        )}
+
+                            {!leerling.profiel_id && (
+                              <span className="profile-badge">
+                                Nog niet ingelogd
+                              </span>
+                            )}
+                          </div>
+                        ))}
                       </div>
 
-                      <div className="automatic-reminder-info">
-                        🔔 Vanaf
-                        8 september
-                        verschijnt
-                        automatisch een
-                        reminder in de
-                        app bij deze
-                        leerlingen.
+                      <div className="reminder-info">
+                        🔔 Vanaf 8 september krijgen leerlingen die nog
+                        niets hebben ingevuld automatisch een reminder in
+                        de app.
                       </div>
-                    </div>
-                  ) : (
-                    <div className="complete-card">
-                      ✓ Alle
-                      leerlingen
-                      hebben hun
-                      vervoerskeuze
-                      ingevuld.
                     </div>
                   )}
 
-                  {/* INGEVULDE KEUZES */}
+                {/* ALLES INGEVULD */}
 
-                  {jaarKeuzes.length >
-                    0 && (
-                    <details className="filled-details">
-                      <summary>
-                        Bekijk
-                        ingevulde
-                        keuzes
-                      </summary>
+                {leerlingen.length > 0 &&
+                  ontbrekendeLeerlingen.length === 0 && (
+                    <div className="complete-card">
+                      <span className="complete-icon">✓</span>
 
-                      <div className="filled-list">
-                        {jaarKeuzes.map(
-                          (
-                            keuze
-                          ) => {
-                            const leerling =
-                              lln.find(
-                                (
-                                  leerling
-                                ) =>
-                                  leerling.id ===
-                                  keuze.leerling_id
-                              );
+                      <div>
+                        <strong>
+                          Alle leerlingen hebben hun vervoerskeuze ingevuld.
+                        </strong>
 
-                            return (
-                              <div
-                                key={
-                                  keuze.leerling_id
-                                }
-                                className="filled-row"
-                              >
-                                <div className="student">
+                        <span>
+                          {leerlingen.length} van {leerlingen.length} leerlingen
+                          zijn in orde.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                {/* INGEVULDE KEUZES */}
+
+                {ingevuldeLeerlingen.length > 0 && (
+                  <details className="filled-details">
+                    <summary>
+                      <span>
+                        ✓ Bekijk ingevulde keuzes
+                      </span>
+
+                      <span className="summary-count">
+                        {ingevuldeLeerlingen.length}
+                      </span>
+                    </summary>
+
+                    <div className="filled-list">
+                      {ingevuldeLeerlingen.map((leerling) => {
+                        const keuze = keuzesVanLeerjaar.find(
+                          (item) => item.leerling_id === leerling.profiel_id
+                        );
+
+                        if (!keuze) return null;
+
+                        return (
+                          <div
+                            key={leerling.profiel_id ?? leerling.email ?? ""}
+                            className="filled-row"
+                          >
+                            <div className="filled-student">
+                              <strong>
+                                {getNaam(leerling)}
+                              </strong>
+
+                              <span>
+                                {leerling.klas_naam ?? "Geen klas"}
+                              </span>
+                            </div>
+
+                            <div className="filled-choices">
+                              <div className="choice-pill">
+                                <span>
+                                  {keuze.heen === "fiets" ? "🚲" : "🚗"}
+                                </span>
+
+                                <div>
+                                  <small>HEEN</small>
+
                                   <strong>
-                                    {leerling?.volledige_naam ??
-                                      leerling?.email ??
-                                      "Leerling"}
+                                    {formatTransport(keuze.heen)}
                                   </strong>
-
-                                  <small>
-                                    {leerling?.klas_naam ??
-                                      ""}
-                                  </small>
-                                </div>
-
-                                <div className="choices">
-                                  <span>
-                                    {keuze.heen ===
-                                    "fiets"
-                                      ? "🚲"
-                                      : "🚗"}{" "}
-                                    heen
-                                  </span>
-
-                                  <span>
-                                    {keuze.terug ===
-                                    "fiets"
-                                      ? "🚲"
-                                      : "🚗"}{" "}
-                                    terug
-                                  </span>
                                 </div>
                               </div>
-                            );
-                          }
-                        )}
-                      </div>
-                    </details>
-                  )}
-                </section>
-              );
-            }
-          )}
-        </div>
+
+                              <div className="choice-pill">
+                                <span>
+                                  {keuze.terug === "fiets" ? "🚲" : "🚗"}
+                                </span>
+
+                                <div>
+                                  <small>TERUG</small>
+
+                                  <strong>
+                                    {formatTransport(keuze.terug)}
+                                  </strong>
+                                </div>
+                              </div>
+                            </div>
+
+                            <span className="updated">
+                              {formatDate(keuze.updated_at)}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </details>
+                )}
+              </article>
+            );
+          })}
+        </section>
       </main>
     </AppShell>
   );
 }
 
 /* =========================================================
-   STAT
+   STAT CARD
 ========================================================= */
 
-function Stat({
-  label,
+function StatCard({
   value,
-  type,
+  label,
+  icon,
+  variant = "default",
 }: {
-  label: string;
   value: number;
-  type?:
-    | "success"
-    | "warning";
+  label: string;
+  icon: string;
+  variant?: "default" | "success" | "warning";
 }) {
   return (
-    <div
-      className={`stat ${
-        type ?? ""
-      }`}
-    >
-      <strong>
-        {value}
-      </strong>
+    <div className={`stat-card ${variant}`}>
+      <div className="stat-top">
+        <span className="stat-icon">
+          {icon}
+        </span>
 
-      <span>
+        <strong>
+          {value}
+        </strong>
+      </div>
+
+      <span className="stat-label">
         {label}
       </span>
     </div>
@@ -738,23 +945,23 @@ function Stat({
 }
 
 /* =========================================================
-   TRANSPORT STAT
+   TRANSPORT COUNTER
 ========================================================= */
 
-function TransportStat({
+function TransportCounter({
   emoji,
-  label,
   value,
+  label,
 }: {
   emoji: string;
-  label: string;
   value: number;
+  label: string;
 }) {
   return (
-    <div className="transport-stat">
-      <div className="transport-stat-icon">
+    <div className="transport-counter">
+      <span className="transport-icon">
         {emoji}
-      </div>
+      </span>
 
       <div>
         <strong>
@@ -778,92 +985,188 @@ const css = `
     box-sizing: border-box;
   }
 
-  .loading,
-  .access {
-    min-height: 55vh;
-    display: grid;
-    place-items: center;
-    color: rgba(234,240,255,0.70);
-  }
-
-  .beheer-page {
+  .page {
     width: 100%;
     max-width: 1250px;
     margin: 0 auto;
-    padding: 24px 18px 60px;
-    color: rgba(234,240,255,0.94);
+    padding-bottom: 50px;
+    color: ${ui.text};
   }
 
-  /* HERO */
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
 
-  .hero {
-    padding: 28px;
-    border-radius: 28px;
-    border: 1px solid rgba(255,255,255,0.12);
-    background:
-      radial-gradient(
-        500px 220px at 100% 0%,
-        rgba(137,194,170,0.15),
-        transparent 70%
-      ),
-      linear-gradient(
-        135deg,
-        rgba(37,89,113,0.48),
-        rgba(75,142,141,0.26)
-      );
+  .hero-button {
+    min-height: 44px;
+    padding: 0 15px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 16px;
+    border: 1px solid rgba(148,163,184,0.20);
+    background: rgba(0,0,0,0.35);
+    color: ${ui.text};
+    font-size: 13px;
+    font-weight: 950;
+    text-decoration: none;
+    cursor: pointer;
+    transition:
+      transform 150ms ease,
+      border-color 150ms ease,
+      background 150ms ease;
+  }
+
+  .hero-button:hover {
+    transform: translateY(-1px);
+    border-color: rgba(203,213,225,0.30);
+    background: rgba(0,0,0,0.45);
+  }
+
+  /* LOADING */
+
+  .loading-state {
+    min-height: 55vh;
     display: flex;
     align-items: center;
-    gap: 18px;
+    justify-content: center;
+    flex-direction: column;
+    color: ${ui.text};
   }
 
-  .hero-icon {
-    width: 68px;
-    height: 68px;
-    flex: 0 0 auto;
-    border-radius: 21px;
+  .loading-icon {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 14px;
     display: grid;
     place-items: center;
-    font-size: 32px;
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.13);
+    border-radius: 20px;
+    border: 1px solid ${ui.border};
+    background: ${ui.glass};
+    font-size: 29px;
   }
 
-  .eyebrow,
-  .year-label {
-    color: rgba(137,194,170,0.92);
-    font-size: 10px;
-    font-weight: 1000;
-    letter-spacing: 1.4px;
+  .loading-state strong {
+    font-size: 15px;
   }
 
-  .hero h1 {
-    margin: 3px 0 0;
-    font-size: 36px;
+  .loading-state span {
+    margin-top: 5px;
+    color: ${ui.muted};
+    font-size: 12px;
   }
 
-  .hero p {
-    margin: 7px 0 0;
-    color: rgba(234,240,255,0.70);
+  /* ACCESS */
+
+  .access-card {
+    max-width: 650px;
+    margin: 30px auto;
+    padding: 28px;
+    border-radius: 26px;
+    border: 1px solid ${ui.border};
+    background: ${ui.glass};
+    color: ${ui.text};
   }
 
-  .refresh-button {
-    margin-left: auto;
-    min-height: 42px;
-    padding: 0 15px;
-    border-radius: 14px;
-    border: 1px solid rgba(255,255,255,0.13);
+  .access-icon {
+    width: 55px;
+    height: 55px;
+    display: grid;
+    place-items: center;
+    border-radius: 18px;
     background: rgba(255,255,255,0.05);
-    color: white;
-    font-weight: 900;
-    cursor: pointer;
+    border: 1px solid ${ui.border};
+    font-size: 25px;
   }
 
-  /* GRID */
+  .access-card h1 {
+    margin: 14px 0 0;
+    font-size: 25px;
+  }
+
+  .access-card p {
+    color: ${ui.muted};
+    line-height: 1.6;
+  }
+
+  .back-button {
+    color: ${ui.text};
+    font-weight: 900;
+    text-decoration: none;
+  }
+
+  /* SOURCE */
+
+  .source-bar {
+    margin-top: 16px;
+    padding: 14px 16px;
+    border-radius: 18px;
+    border: 1px solid rgba(137,194,170,0.16);
+    background: rgba(137,194,170,0.055);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .source-left {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .source-dot {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: #86efac;
+    box-shadow: 0 0 0 5px rgba(134,239,172,0.08);
+  }
+
+  .source-left strong,
+  .source-left span {
+    display: block;
+  }
+
+  .source-left strong {
+    font-size: 12px;
+  }
+
+  .source-left span {
+    margin-top: 2px;
+    color: ${ui.muted};
+    font-size: 10px;
+  }
+
+  .schoolyear-warning {
+    padding: 7px 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(251,191,36,0.16);
+    background: rgba(251,191,36,0.06);
+    color: #fde68a;
+    font-size: 10px;
+    font-weight: 800;
+  }
+
+  .error-card {
+    margin-top: 12px;
+    padding: 13px;
+    border-radius: 15px;
+    border: 1px solid rgba(248,113,113,0.20);
+    background: rgba(248,113,113,0.07);
+    color: #fecaca;
+    font-size: 12px;
+  }
+
+  /* YEARS */
 
   .year-grid {
-    margin-top: 18px;
+    margin-top: 16px;
     display: grid;
-    grid-template-columns: repeat(2,minmax(0,1fr));
+    grid-template-columns: repeat(2, minmax(0,1fr));
     gap: 16px;
     align-items: start;
   }
@@ -871,341 +1174,513 @@ const css = `
   .year-card {
     min-width: 0;
     padding: 20px;
-    border-radius: 24px;
-    border: 1px solid rgba(255,255,255,0.12);
+    overflow: hidden;
+    border-radius: 25px;
+    border: 1px solid ${ui.border};
     background:
       radial-gradient(
-        500px 200px at 100% 0%,
-        rgba(75,142,141,0.07),
-        transparent 70%
+        500px 220px at 100% 0%,
+        rgba(75,142,141,0.09),
+        transparent 72%
       ),
-      rgba(6,12,20,0.48);
+      ${ui.glass};
+    box-shadow: 0 16px 42px rgba(0,0,0,0.16);
   }
 
-  .year-head {
+  .year-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    gap: 10px;
   }
 
-  .year-head h2 {
+  .year-label {
+    color: rgba(137,194,170,0.88);
+    font-size: 10px;
+    font-weight: 1000;
+    letter-spacing: 1.3px;
+  }
+
+  .year-header h2 {
     margin: 3px 0 0;
-    font-size: 23px;
+    font-size: 26px;
+    line-height: 1.1;
   }
 
-  .year-percentage {
-    width: 52px;
-    height: 52px;
-    border-radius: 16px;
+  .percentage {
+    width: 55px;
+    height: 55px;
+    flex: 0 0 auto;
     display: grid;
     place-items: center;
-    border: 1px solid rgba(137,194,170,0.20);
+    border-radius: 17px;
+    border: 1px solid rgba(137,194,170,0.18);
     background: rgba(137,194,170,0.07);
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 1000;
   }
 
   /* STATS */
 
-  .stats {
-    margin-top: 18px;
+  .stats-grid {
+    margin-top: 17px;
     display: grid;
     grid-template-columns: repeat(3,1fr);
     gap: 8px;
   }
 
-  .stat {
+  .stat-card {
     min-width: 0;
-    padding: 13px;
+    padding: 12px;
     border-radius: 15px;
-    background: rgba(255,255,255,0.04);
-    border: 1px solid rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.075);
+    background: rgba(255,255,255,0.035);
   }
 
-  .stat strong,
-  .stat span {
+  .stat-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .stat-top strong {
+    font-size: 23px;
+    line-height: 1;
+  }
+
+  .stat-icon {
+    color: rgba(234,240,255,0.56);
+    font-size: 12px;
+    font-weight: 1000;
+  }
+
+  .stat-label {
     display: block;
+    margin-top: 6px;
+    color: ${ui.muted};
+    font-size: 10px;
   }
 
-  .stat strong {
-    font-size: 22px;
-  }
-
-  .stat span {
-    margin-top: 2px;
-    color: rgba(234,240,255,0.64);
-    font-size: 11px;
-  }
-
-  .stat.success strong {
+  .stat-card.success .stat-top strong,
+  .stat-card.success .stat-icon {
     color: #86efac;
   }
 
-  .stat.warning strong {
+  .stat-card.warning .stat-top strong,
+  .stat-card.warning .stat-icon {
     color: #fcd34d;
   }
 
   /* PROGRESS */
 
-  .progress {
+  .progress-track {
     height: 7px;
     margin-top: 10px;
     overflow: hidden;
     border-radius: 999px;
-    background: rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.055);
   }
 
-  .progress-value {
+  .progress-bar {
     height: 100%;
     border-radius: inherit;
-    background:
-      linear-gradient(
-        90deg,
-        rgba(75,142,141,0.75),
-        rgba(137,194,170,0.90)
-      );
+    background: linear-gradient(
+      90deg,
+      #4B8E8D,
+      #89C2AA
+    );
     transition: width 300ms ease;
   }
 
   /* TRANSPORT */
 
+  .transport-title {
+    margin-top: 18px;
+    color: ${ui.muted};
+    font-size: 10px;
+    font-weight: 950;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+  }
+
   .transport-grid {
-    margin-top: 12px;
+    margin-top: 8px;
     display: grid;
     grid-template-columns: repeat(2,1fr);
     gap: 8px;
   }
 
-  .transport-stat {
-    padding: 12px;
+  .transport-counter {
+    min-width: 0;
+    padding: 11px;
     border-radius: 14px;
-    background: rgba(255,255,255,0.035);
-    border: 1px solid rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.065);
+    background: rgba(255,255,255,0.03);
     display: flex;
     align-items: center;
     gap: 9px;
   }
 
-  .transport-stat-icon {
-    width: 35px;
-    height: 35px;
+  .transport-icon {
+    width: 34px;
+    height: 34px;
     flex: 0 0 auto;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
     display: grid;
     place-items: center;
-    border-radius: 11px;
-    background: rgba(255,255,255,0.04);
+    font-size: 17px;
   }
 
-  .transport-stat strong,
-  .transport-stat span {
+  .transport-counter strong,
+  .transport-counter span {
     display: block;
   }
 
-  .transport-stat strong {
+  .transport-counter strong {
     font-size: 16px;
   }
 
-  .transport-stat span {
+  .transport-counter div > span {
     margin-top: 1px;
-    color: rgba(234,240,255,0.64);
-    font-size: 10px;
+    color: ${ui.muted};
+    font-size: 9px;
   }
 
   /* MISSING */
 
   .missing-card {
-    margin-top: 14px;
+    margin-top: 15px;
     padding: 14px;
     border-radius: 17px;
-    border: 1px solid rgba(251,191,36,0.18);
-    background: rgba(251,191,36,0.055);
+    border: 1px solid rgba(251,191,36,0.17);
+    background: rgba(251,191,36,0.05);
   }
 
-  .missing-head {
+  .missing-header {
     display: flex;
+    align-items: center;
     justify-content: space-between;
-    align-items: center;
+    gap: 10px;
   }
 
-  .missing-head > div {
+  .missing-header > div {
     display: flex;
-    gap: 7px;
     align-items: center;
+    gap: 7px;
   }
 
-  .missing-head strong {
+  .missing-header strong {
     color: #fde68a;
-    font-size: 13px;
+    font-size: 12px;
   }
 
-  .missing-count {
-    min-width: 30px;
-    height: 30px;
+  .missing-badge {
+    min-width: 28px;
+    height: 28px;
     padding: 0 7px;
+    border-radius: 9px;
     display: grid;
     place-items: center;
-    border-radius: 10px;
-    color: #fde68a;
     background: rgba(251,191,36,0.09);
+    color: #fde68a;
+    font-size: 11px;
     font-weight: 950;
   }
 
-  .missing-list {
-    margin-top: 9px;
-    max-height: 220px;
+  .student-list {
+    margin-top: 8px;
+    max-height: 300px;
     overflow-y: auto;
   }
 
-  .missing-row {
+  .student-row {
     padding: 9px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255,255,255,0.055);
     display: flex;
-    justify-content: space-between;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .student-row:last-child {
+    border-bottom: 0;
+  }
+
+  .student-avatar {
+    width: 31px;
+    height: 31px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    font-size: 11px;
+    font-weight: 1000;
+  }
+
+  .student-main {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .student-main strong,
+  .student-main span {
+    display: block;
+  }
+
+  .student-main strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+  }
+
+  .student-main span {
+    margin-top: 2px;
+    color: ${ui.muted};
+    font-size: 9px;
+  }
+
+  .profile-badge {
+    flex: 0 0 auto;
+    padding: 5px 7px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    color: ${ui.muted};
+    font-size: 8px;
+    font-weight: 800;
+  }
+
+  .reminder-info {
+    margin-top: 9px;
+    padding: 9px;
+    border-radius: 11px;
+    background: rgba(0,0,0,0.11);
+    color: rgba(253,230,138,0.78);
+    font-size: 9px;
+    line-height: 1.5;
+  }
+
+  /* COMPLETE */
+
+  .complete-card {
+    margin-top: 15px;
+    padding: 13px;
+    border-radius: 15px;
+    border: 1px solid rgba(34,197,94,0.18);
+    background: rgba(34,197,94,0.065);
+    display: flex;
     align-items: center;
     gap: 10px;
   }
 
-  .missing-row:last-child {
-    border-bottom: 0;
+  .complete-icon {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: rgba(34,197,94,0.09);
+    color: #86efac;
+    font-weight: 1000;
   }
 
-  .missing-row strong,
-  .missing-row small {
+  .complete-card strong,
+  .complete-card span {
     display: block;
   }
 
-  .missing-row strong {
+  .complete-card strong {
+    color: #86efac;
     font-size: 11px;
   }
 
-  .missing-row small {
+  .complete-card div > span {
     margin-top: 2px;
-    color: rgba(234,240,255,0.55);
-  }
-
-  .not-done {
-    white-space: nowrap;
-    color: #fcd34d;
+    color: rgba(134,239,172,0.65);
     font-size: 9px;
-    font-weight: 900;
   }
 
-  .automatic-reminder-info {
-    margin-top: 10px;
-    padding: 9px;
-    border-radius: 11px;
-    background: rgba(0,0,0,0.10);
-    color: rgba(253,230,138,0.78);
-    font-size: 10px;
-    line-height: 1.45;
-  }
+  /* NO STUDENTS */
 
-  .complete-card {
-    margin-top: 14px;
+  .no-students {
+    margin-top: 15px;
     padding: 13px;
     border-radius: 15px;
-    border: 1px solid rgba(34,197,94,0.18);
-    background: rgba(34,197,94,0.07);
-    color: #86efac;
-    font-size: 12px;
-    font-weight: 900;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.03);
+  }
+
+  .no-students strong,
+  .no-students span {
+    display: block;
+  }
+
+  .no-students strong {
+    font-size: 11px;
+  }
+
+  .no-students span {
+    margin-top: 3px;
+    color: ${ui.muted};
+    font-size: 9px;
   }
 
   /* FILLED */
 
   .filled-details {
-    margin-top: 12px;
-    border-top: 1px solid rgba(255,255,255,0.07);
+    margin-top: 13px;
+    border-top: 1px solid rgba(255,255,255,0.065);
     padding-top: 12px;
   }
 
   .filled-details summary {
-    color: rgba(234,240,255,0.70);
-    font-size: 11px;
-    font-weight: 900;
+    list-style: none;
     cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: ${ui.muted};
+    font-size: 10px;
+    font-weight: 900;
+  }
+
+  .filled-details summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .summary-count {
+    min-width: 25px;
+    height: 25px;
+    padding: 0 6px;
+    display: grid;
+    place-items: center;
+    border-radius: 8px;
+    background: rgba(137,194,170,0.07);
+    color: #a7d9c3;
   }
 
   .filled-list {
-    margin-top: 8px;
+    margin-top: 10px;
   }
 
   .filled-row {
-    padding: 9px 0;
+    padding: 10px 0;
     border-bottom: 1px solid rgba(255,255,255,0.055);
-    display: flex;
-    justify-content: space-between;
-    gap: 10px;
   }
 
-  .student strong,
-  .student small {
+  .filled-row:last-child {
+    border-bottom: 0;
+  }
+
+  .filled-student strong,
+  .filled-student span {
     display: block;
   }
 
-  .student strong {
+  .filled-student strong {
     font-size: 11px;
   }
 
-  .student small {
-    color: rgba(234,240,255,0.54);
+  .filled-student span {
+    margin-top: 2px;
+    color: ${ui.muted};
     font-size: 9px;
   }
 
-  .choices {
+  .filled-choices {
+    margin-top: 7px;
+    display: grid;
+    grid-template-columns: repeat(2,1fr);
+    gap: 6px;
+  }
+
+  .choice-pill {
+    padding: 8px;
+    border-radius: 11px;
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.025);
     display: flex;
-    gap: 8px;
+    align-items: center;
+    gap: 7px;
   }
 
-  .choices span {
-    padding: 5px 7px;
-    border-radius: 8px;
-    background: rgba(255,255,255,0.04);
-    color: rgba(234,240,255,0.72);
+  .choice-pill > span {
+    font-size: 17px;
+  }
+
+  .choice-pill small,
+  .choice-pill strong {
+    display: block;
+  }
+
+  .choice-pill small {
+    color: ${ui.muted};
+    font-size: 7px;
+    font-weight: 900;
+  }
+
+  .choice-pill strong {
+    margin-top: 1px;
     font-size: 9px;
-    white-space: nowrap;
+  }
+
+  .updated {
+    display: block;
+    margin-top: 6px;
+    color: rgba(234,240,255,0.40);
+    font-size: 8px;
   }
 
   /* RESPONSIVE */
 
-  @media(max-width: 850px) {
+  @media(max-width: 900px) {
     .year-grid {
       grid-template-columns: 1fr;
     }
   }
 
-  @media(max-width: 600px) {
-    .beheer-page {
-      padding: 14px 12px 45px;
-    }
-
-    .hero {
-      padding: 20px 17px;
+  @media(max-width: 640px) {
+    .source-bar {
       align-items: flex-start;
-      flex-wrap: wrap;
+      flex-direction: column;
     }
 
-    .hero-icon {
-      width: 54px;
-      height: 54px;
-      font-size: 25px;
-    }
-
-    .hero h1 {
-      font-size: 29px;
-    }
-
-    .refresh-button {
+    .schoolyear-warning {
       width: 100%;
-      margin-left: 0;
+    }
+
+    .year-card {
+      padding: 16px;
+      border-radius: 21px;
+    }
+
+    .year-header h2 {
+      font-size: 23px;
+    }
+
+    .stats-grid {
+      gap: 6px;
+    }
+
+    .stat-card {
+      padding: 10px 8px;
+    }
+
+    .stat-top strong {
+      font-size: 20px;
     }
 
     .transport-grid {
       grid-template-columns: 1fr 1fr;
     }
 
-    .filled-row {
-      flex-direction: column;
+    .profile-badge {
+      display: none;
     }
   }
 `;
