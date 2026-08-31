@@ -9,10 +9,18 @@ import { createClient } from "@/lib/supabase/client";
 
 const supabase = createClient();
 
+/* =========================================================
+   TYPES
+========================================================= */
+
 type Profiel = {
   volledige_naam: string | null;
   rol: string | null;
 };
+
+/* =========================================================
+   UI
+========================================================= */
 
 const ui = {
   text: "rgba(234,240,255,0.92)",
@@ -28,63 +36,15 @@ const ui = {
 
 const modules = [
   {
-    href: "/eurofittest",
-    icon: "🏃",
-    title: "Eurofittest",
-    desc: "Ingevuld, niet ingevuld, automatische evaluatie en resultaten.",
-  },
-  {
-    href: "/functional-fitheidstest",
-    icon: "💪",
-    title: "Functional Fitheidstest",
-    desc: "Ingevuld, niet ingevuld, automatische evaluatie en resultaten.",
-  },
-  {
-    href: "/sportfolio",
-    icon: "📁",
-    title: "Sportfolio",
-    desc: "Bewijsstukken, reflecties en feedback.",
-  },
-  {
-    href: "/leerkrachten-lo/challenges",
+    href: "/leerkrachten-lo/extramurale-sportactiviteiten/sportdagen",
     icon: "🏆",
-    title: "Challenges",
-    desc: "Scores invoeren, deelnemers beheren en klassementen opvolgen.",
-  },
-  {
-    href: "/leerkrachten-lo/extramurale-sportactiviteiten",
-    icon: "🚌",
-    title: "Extramurale sportactiviteiten",
-    desc: "Sportdagen, uitstappen en andere sportactiviteiten buiten de school.",
-  },
-  {
-    href: "/reservaties",
-    icon: "📅",
-    title: "Reservaties",
-    desc: "Fitness, pingpong en materiaal.",
-  },
-  {
-    href: "/leerkrachten-lo/klasgroepen",
-    icon: "👥",
-    title: "Klasgroepen",
-    desc: "Mijn klasgroepen maken met klassen.",
-  },
-  {
-    href: "#",
-    icon: "✅",
-    title: "Evaluaties",
-    desc: "Opvolging, feedback en evaluatieoverzichten.",
-  },
-  {
-    href: "#",
-    icon: "📊",
-    title: "Statistieken",
-    desc: "Grafieken, gemiddelden en evoluties.",
+    title: "Sportdagen",
+    desc: "Praktische informatie, vervoerskeuzes en opvolging per leerjaar.",
   },
 ];
 
 /* =========================================================
-   ROLE HELPERS
+   HELPERS
 ========================================================= */
 
 function normalizeRole(value: unknown) {
@@ -108,7 +68,7 @@ function isAllowedRole(rol: string) {
    PAGE
 ========================================================= */
 
-export default function LeerkrachtenLOPage() {
+export default function ExtramuraleSportactiviteitenPage() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
   const [profiel, setProfiel] = useState<Profiel | null>(null);
@@ -145,8 +105,6 @@ export default function LeerkrachtenLOPage() {
 
         setProfiel(profielData as Profiel | null);
         setAllowed(isAllowedRole(rol));
-      } catch (error) {
-        console.error("Fout bij laden leerkrachtenpagina:", error);
       } finally {
         setLoading(false);
       }
@@ -161,16 +119,9 @@ export default function LeerkrachtenLOPage() {
 
   if (loading) {
     return (
-      <AppShell title="LO App" subtitle="Leerkrachten LO">
+      <AppShell title="LO App" subtitle="Extramurale sportactiviteiten">
         <section style={styles.panel}>
-          <p
-            style={{
-              margin: 0,
-              color: ui.text,
-            }}
-          >
-            Laden...
-          </p>
+          <p style={{ margin: 0, color: ui.text }}>Laden...</p>
         </section>
       </AppShell>
     );
@@ -222,39 +173,39 @@ export default function LeerkrachtenLOPage() {
   }
 
   /* =======================================================
-     DASHBOARD
+     PAGINA
   ======================================================= */
 
   return (
     <AppShell
       title="LO App"
-      subtitle="Leerkrachten LO"
+      subtitle="Extramurale sportactiviteiten"
       userName={profiel?.volledige_naam ?? null}
     >
       {/* HERO */}
 
       <BaseHero
-        label="GO! Atheneum Avelgem"
+        label="LEERKRACHTEN LO"
         title={
           <>
-            Leerkrachten{" "}
+            Extramurale{" "}
             <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
-              LO
+              sportactiviteiten
             </span>
           </>
         }
-        description="Centraal dashboard voor alles wat met leerlingen in lichamelijke opvoeding te maken heeft."
+        description="Beheer en opvolging van sportdagen, sportuitstappen en andere activiteiten buiten de school."
         imageSrc="/lo/LO.png"
-        imageAlt="Leerkrachten LO dashboard"
-        quoteTitle="LO-dashboard"
-        quote="Eén centrale plek voor opvolging, modules en statistieken."
+        imageAlt="Extramurale sportactiviteiten"
+        quoteTitle="Buiten de school"
+        quote="Alle praktische informatie en opvolging van extramurale sportactiviteiten op één plaats."
         quoteAuthor="LO team"
         actions={
           <Link
-            href="/dashboard"
+            href="/leerkrachten-lo"
             className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
           >
-            🏠 Terug naar dashboard
+            ← Terug naar Leerkrachten LO
           </Link>
         }
       />
@@ -264,15 +215,19 @@ export default function LeerkrachtenLOPage() {
       <section style={{ marginTop: 16 }}>
         <div style={styles.sectionHeader}>
           <div>
-            <div style={styles.sectionTitle}>Modules</div>
+            <div style={styles.sectionTitle}>Activiteiten</div>
 
             <p style={styles.sectionDescription}>
-              Kies een onderdeel om de leerlingen en activiteiten op te volgen.
+              Kies een onderdeel om de praktische informatie en opvolging te
+              bekijken.
             </p>
           </div>
         </div>
 
-        <div className="lo-module-grid" style={styles.moduleGrid}>
+        <div
+          className="extramurale-module-grid"
+          style={styles.moduleGrid}
+        >
           {modules.map((module) => (
             <BaseTile
               key={module.title}
@@ -337,7 +292,7 @@ const styles: Record<string, React.CSSProperties> = {
 function injectResponsiveCSS() {
   if (typeof window === "undefined") return;
 
-  const id = "leerkrachten-lo-dashboard-responsive-css";
+  const id = "extramurale-sportactiviteiten-responsive-css";
 
   if (document.getElementById(id)) return;
 
@@ -346,20 +301,14 @@ function injectResponsiveCSS() {
   style.id = id;
 
   style.innerHTML = `
-    @media (max-width: 1100px) {
-      .lo-module-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-      }
-    }
-
     @media (max-width: 900px) {
-      .lo-module-grid {
+      .extramurale-module-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       }
     }
 
     @media (max-width: 640px) {
-      .lo-module-grid {
+      .extramurale-module-grid {
         grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
       }
     }
