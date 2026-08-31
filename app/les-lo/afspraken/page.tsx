@@ -165,11 +165,7 @@ export default function AfsprakenLOPage() {
           icon="🎒"
         >
           <div className="content-grid two">
-            <InfoBlock
-              icon="🩺"
-              title="Niet kunnen deelnemen"
-              important
-            >
+            <InfoBlock icon="🩺" title="Niet kunnen deelnemen" important>
               <p>
                 Kun je door een blessure of medische reden niet deelnemen aan
                 de les? Meld dit vóór de sportles aan je leerkracht.
@@ -212,6 +208,37 @@ export default function AfsprakenLOPage() {
               <Callout>
                 Zorg dat al je sportkledij genaamtekend is.
               </Callout>
+
+              <div style={shirtShopStyle}>
+                <div style={shirtShopHeaderStyle}>
+                  <div style={shirtShopIconStyle}>🛒</div>
+
+                  <div>
+                    <div style={shirtShopLabelStyle}>LO-T-SHIRT</div>
+                    <div style={shirtShopTitleStyle}>
+                      Nieuw LO-T-shirt nodig?
+                    </div>
+                  </div>
+                </div>
+
+                <p style={shirtShopTextStyle}>
+                  Een nieuw LO-T-shirt kan je aankopen via de webshop van de
+                  school. Na de aankoop toon je het aankoopbewijs aan je
+                  LO-leerkracht. De leerkracht bezorgt je vervolgens jouw
+                  nieuwe T-shirt.
+                </p>
+
+                <a
+                  href="https://go-atheneumavelgem.be/webshop/#!/products/t-shirt-lo"
+                  target="_blank"
+                  rel="noreferrer"
+                  style={shirtShopButtonStyle}
+                >
+                  <span>🛒</span>
+                  <span>Bestel een nieuw LO-T-shirt</span>
+                  <span style={{ opacity: 0.65 }}>↗</span>
+                </a>
+              </div>
             </InfoBlock>
           </div>
 
@@ -281,9 +308,7 @@ export default function AfsprakenLOPage() {
                   Vuile schoenen worden uitgedaan bij het binnenkomen van het
                   gebouw.
                 </li>
-                <li>
-                  Na het belsignaal komt iedereen mee naar binnen.
-                </li>
+                <li>Na het belsignaal komt iedereen mee naar binnen.</li>
               </ul>
             </InfoBlock>
 
@@ -1553,6 +1578,68 @@ const calloutStyle: CSSProperties = {
   fontSize: 12.5,
   fontWeight: 750,
   lineHeight: 1.5,
+};
+
+const shirtShopStyle: CSSProperties = {
+  marginTop: 14,
+  padding: 14,
+  borderRadius: 17,
+  border: "1px solid rgba(59,130,246,0.16)",
+  background:
+    "linear-gradient(135deg, rgba(59,130,246,0.07), rgba(59,130,246,0.025))",
+};
+
+const shirtShopHeaderStyle: CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+};
+
+const shirtShopIconStyle: CSSProperties = {
+  display: "grid",
+  width: 39,
+  height: 39,
+  flex: "0 0 39px",
+  placeItems: "center",
+  borderRadius: 12,
+  background: "rgba(59,130,246,0.11)",
+  fontSize: 18,
+};
+
+const shirtShopLabelStyle: CSSProperties = {
+  color: "rgba(147,197,253,0.72)",
+  fontSize: 9,
+  fontWeight: 950,
+  letterSpacing: "0.12em",
+};
+
+const shirtShopTitleStyle: CSSProperties = {
+  marginTop: 1,
+  color: ui.text,
+  fontSize: 13.5,
+  fontWeight: 950,
+};
+
+const shirtShopTextStyle: CSSProperties = {
+  margin: "10px 0 0",
+  color: "rgba(255,255,255,0.66)",
+  fontSize: 12.5,
+  lineHeight: 1.6,
+};
+
+const shirtShopButtonStyle: CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 8,
+  marginTop: 12,
+  padding: "10px 13px",
+  borderRadius: 12,
+  border: "1px solid rgba(59,130,246,0.2)",
+  background: "rgba(59,130,246,0.1)",
+  color: "#bfdbfe",
+  fontSize: 12,
+  fontWeight: 900,
+  textDecoration: "none",
 };
 
 const respectCardStyle: CSSProperties = {

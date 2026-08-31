@@ -13,13 +13,49 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "LO App",
-  description: "LO platform - GO! Atheneum Avelgem",
-  applicationName: "LO App",
+  title: {
+    default: "LOOP",
+    template: "%s | LOOP",
+  },
+  description:
+    "LOOP — Lichamelijke Opvoeding Online Platform van GO! Atheneum Avelgem.",
+  applicationName: "LOOP",
+
+  icons: {
+    icon: [
+      {
+        url: "/favicon.ico",
+      },
+      {
+        url: "/icon-192.png",
+        type: "image/png",
+        sizes: "192x192",
+      },
+      {
+        url: "/icon-512.png",
+        type: "image/png",
+        sizes: "512x512",
+      },
+    ],
+    apple: [
+      {
+        url: "/apple-touch-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+      },
+    ],
+  },
+
+  manifest: "/manifest.webmanifest",
+
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "LO App",
+    title: "LOOP",
+  },
+
+  formatDetection: {
+    telephone: false,
   },
 };
 
@@ -28,13 +64,14 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="nl" className="h-full">
       <body

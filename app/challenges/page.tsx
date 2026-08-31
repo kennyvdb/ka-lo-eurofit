@@ -179,12 +179,13 @@ export default function Page() {
             />
 
             <ChallengeCard
-              href="/challenges/roeichallenge"
-              emoji="🚣"
-              subtitle="Binnenkort"
-              title="Roeichallenge"
-              description="Een challenge rond afstand, snelheid of uithouding op de roeimachine."
-              status="Binnenkort"
+               href="/challenges/roeichallenge"
+               emoji="🚣"
+               subtitle="Row Cup 2026"
+               title="Roeichallenge"
+               description="Vorm een team van 3 roeiers en probeer samen in 6 minuten zoveel mogelijk meters af te leggen."
+               status="Binnenkort"
+               clickable={true}
             />
 
             <ChallengeCard

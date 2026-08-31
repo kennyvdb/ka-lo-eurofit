@@ -42,10 +42,10 @@ const modules = [
     desc: "Bewijsstukken, reflecties en feedback.",
   },
   {
-    href: "/challenges",
+    href: "/leerkrachten-lo/challenges",
     icon: "🏆",
     title: "Challenges",
-    desc: "Deelname, scores en klassement.",
+    desc: "Scores invoeren, deelnemers beheren en klassementen opvolgen.",
   },
   {
     href: "/reservaties",

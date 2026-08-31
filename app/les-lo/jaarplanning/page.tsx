@@ -1,12 +1,13 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { PageHero, ui } from "../_ui";
 
 /* ===============================
-   BRAND COLORS (logo)
+   BRAND COLORS
 ================================ */
+
 const brand = {
   blue: "#255971",
   teal: "#4B8E8D",
@@ -14,77 +15,290 @@ const brand = {
 };
 
 /* ===============================
-   JAARPLANNING DATA
+   TYPES
 ================================ */
 
 type TeacherKey = "lien" | "kenny" | "tine";
 
-const teachers: Record<TeacherKey, string> = {
-  lien: "Mevr. Vandermeersch",
-  kenny: "Mr. Vandeborre",
-  tine: "Mevr. Desmet",
-};
+type SpecialType = "vakantie" | "examens";
 
 type WeekRow = {
   week: string;
-  type?: "vakantie" | "examens" | "gwp";
+  type?: SpecialType;
+
   lien?: string;
   kenny?: string;
   tine?: string;
+
+  note?: string;
 };
 
+/* ===============================
+   LEERKRACHTEN
+================================ */
+
+const teachers: Record<
+  TeacherKey,
+  {
+    label: string;
+    short: string;
+    emoji: string;
+  }
+> = {
+  lien: {
+    label: "Mevr. Vandermeersch",
+    short: "Mevr. Vandermeersch",
+    emoji: "🏃‍♀️",
+  },
+  kenny: {
+    label: "Mr. Vandeborre",
+    short: "Mr. Vandeborre",
+    emoji: "🏃‍♂️",
+  },
+  tine: {
+    label: "Mevr. Desmet",
+    short: "Mevr. Desmet",
+    emoji: "🤸‍♀️",
+  },
+};
+
+/* ===============================
+   JAARPLANNING 2026 - 2027
+================================ */
+
 const planning: WeekRow[] = [
-  { week: "week 1", lien: "afspraken", kenny: "afspraken en conditie", tine: "Afspraken" },
-  { week: "week 2", lien: "conditie", kenny: "Eurofittest", tine: "Legertest + Ver" },
-  { week: "week 3", lien: "conditie", kenny: "Legertest", tine: "Conditie / oriëntatie binnen" },
-  { week: "week 4", lien: "legertest + conditie", kenny: "badm/rugby", tine: "Conditie / oriëntatie ster" },
-  { week: "week 5", lien: "conditie", kenny: "badm/rugby", tine: "Test conditie/orientatie/eurofit" },
-  { week: "week 6", lien: "eurofit", kenny: "badm/rugby", tine: "Ver" },
-  { week: "week 7", lien: "ver", kenny: "badm/rugby", tine: "Eurofittest" },
-  { week: "week 8", lien: "sportshopping", kenny: "sportshopping", tine: "Sportshopping" },
+  {
+    week: "week 1",
+    lien: "Afspraken",
+    kenny: "Afspraken",
+    tine: "Afspraken",
+    note: "Begint op dinsdag",
+  },
+  {
+    week: "week 2",
+    lien: "Conditie",
+    kenny: "Racketlon / badminton",
+    tine: "Conditie + kogelstoten",
+  },
+  {
+    week: "week 3",
+    lien: "Conditie",
+    kenny: "Racketlon / badminton",
+    tine: "Conditie + kogelstoten",
+    note: "Op dinsdag sportdag",
+  },
+  {
+    week: "week 4",
+    lien: "Conditie",
+    kenny: "Racketlon / badminton",
+    tine: "VMA-test",
+  },
+  {
+    week: "week 5",
+    lien: "Kogelstoten",
+    kenny: "Racketlon / badminton",
+    tine: "Functional Fitness Test",
+  },
+  {
+    week: "week 6",
+    lien: "VMA",
+    kenny: "VMA",
+    tine: "Conditie",
+  },
+  {
+    week: "week 7",
+    lien: "Conditietest",
+    kenny: "Functional Fitness Test",
+    tine: "Conditietest",
+  },
+  {
+    week: "week 8",
+    lien: "Functional Fitness Test",
+    kenny: "Sprint + kogelstoten",
+  },
+  {
+    week: "week 9",
+    note: "Klassenraden en rapport",
+  },
 
-  { week: "HERFSTVAKANTIE", type: "vakantie" },
+  {
+    week: "HERFSTVAKANTIE",
+    type: "vakantie",
+  },
 
-  { week: "week 9", lien: "korfbal", kenny: "korfbal", tine: "korfbal" },
-  { week: "week 10", lien: "korfbal", kenny: "korfbal", tine: "korfbal" },
-  { week: "week 11", lien: "korfbal", kenny: "korfbal", tine: "korfbal" },
-  { week: "week 12", lien: "korfbal / sportshopping", kenny: "korfbal / sportshopping", tine: "korfbal / sportshopping" },
-  { week: "week 13", lien: "examens", kenny: "examens", tine: "examens" },
+  {
+    week: "week 10",
+    lien: "Hockey / volleybal",
+    kenny: "Hockey / volleybal",
+    tine: "Hockey / volleybal",
+    note: "Woensdag Wapenstilstand",
+  },
+  {
+    week: "week 11",
+    lien: "Hockey / volleybal",
+    kenny: "Hockey / volleybal",
+    tine: "Hockey / volleybal",
+  },
+  {
+    week: "week 12",
+    lien: "Hockey / volleybal",
+    kenny: "Hockey / volleybal",
+    tine: "Hockey / volleybal",
+  },
+  {
+    week: "week 13",
+    lien: "Sportshopping",
+    kenny: "Sportshopping",
+    tine: "Sportshopping",
+    note: "Dinsdagnamiddag geen les meer / woensdag start examens",
+  },
 
-  { week: "EXAMENS en KLASSENRADEN", type: "examens" },
+  {
+    week: "EXAMENS EN KLASSENRADEN",
+    type: "examens",
+  },
 
-  { week: "KERSTVAKANTIE", type: "vakantie" },
+  {
+    week: "KERSTVAKANTIE",
+    type: "vakantie",
+  },
 
-  { week: "week 15", lien: "handbal", kenny: "Gym", tine: "Ritmiek / badminton 6M" },
-  { week: "week 16", lien: "handbal", kenny: "Gym", tine: "Ritmiek / badminton 6M" },
-  { week: "week 17", lien: "handbal", kenny: "Gym", tine: "Ritmiek / badminton 6M" },
-  { week: "week 18", lien: "badminton / racket", kenny: "Gym", tine: "Handbal" },
-  { week: "week 19", lien: "badminton / racket", kenny: "Gym", tine: "Handbal" },
-  { week: "week 20", lien: "badminton / racket", kenny: "Gym", tine: "Handbal" },
+  {
+    week: "week 14",
+    lien: "Basketbal",
+    kenny: "Gym",
+    tine: "Ritmiek",
+  },
+  {
+    week: "week 15",
+    lien: "Basketbal",
+    kenny: "Gym",
+    tine: "Ritmiek",
+  },
+  {
+    week: "week 16",
+    lien: "Basketbal",
+    kenny: "Gym",
+    tine: "Ritmiek",
+  },
+  {
+    week: "week 17",
+    lien: "Zelfverdediging",
+    kenny: "Gym",
+    tine: "Ritmiek",
+  },
+  {
+    week: "week 18",
+    lien: "Zelfverdediging",
+    tine: "Sportshopping",
+  },
 
-  { week: "KROKUSVAKANTIE", type: "vakantie" },
+  {
+    week: "KROKUSVAKANTIE",
+    type: "vakantie",
+  },
 
-  { week: "week 21", lien: "ritmiek", kenny: "Ritmiek", tine: "Gym / Ritmiek 6M" },
-  { week: "week 22", lien: "ritmiek", kenny: "Ritmiek", tine: "Gym / Ritmiek 6M" },
-  { week: "week 23", lien: "ritmiek", kenny: "Ritmiek", tine: "Gym / Ritmiek 6M" },
-  { week: "week 24", lien: "spurt", kenny: "Orientatielopen binnen", tine: "Gym" },
-  { week: "week 25", lien: "spurt" },
+  {
+    week: "week 19",
+    lien: "Ritmiek",
+    kenny: "Ritmiek",
+    tine: "Gym",
+  },
+  {
+    week: "week 20",
+    lien: "Ritmiek",
+    kenny: "Ritmiek",
+    tine: "Gym",
+  },
+  {
+    week: "week 21",
+    lien: "Ritmiek",
+    kenny: "Ritmiek",
+    tine: "Gym",
+  },
+  {
+    week: "week 22",
+    lien: "Ritmiek",
+    kenny: "Ritmiek",
+    tine: "Gym",
+  },
+  {
+    week: "week 23",
+  },
+  {
+    week: "week 24",
+    lien: "GWP",
+  },
 
-  { week: "GWP", type: "gwp" },
+  {
+    week: "PAASVAKANTIE",
+    type: "vakantie",
+  },
 
-  { week: "PAASVAKANTIE", type: "vakantie" },
+  {
+    week: "week 25",
+    lien: "Gym",
+    kenny: "CrossFit / bootcamp",
+    tine: "Basketbal",
+  },
+  {
+    week: "week 26",
+    lien: "Gym",
+    kenny: "CrossFit / bootcamp",
+    tine: "Basketbal",
+  },
+  {
+    week: "week 27",
+    lien: "Gym",
+    kenny: "CrossFit",
+    tine: "Basketbal",
+  },
+  {
+    week: "week 28",
+    lien: "Gym",
+    kenny: "Basketbal",
+    tine: "Zelfverdediging / trek- en duwspelen / judo",
+    note: "Donderdag en vrijdag Hemelvaart",
+  },
+  {
+    week: "week 29",
+    lien: "Sprint",
+    kenny: "Basketbal",
+    tine: "Zelfverdediging / trek- en duwspelen / judo",
+  },
+  {
+    week: "week 30",
+    lien: "Sprint",
+    kenny: "Basketbal",
+    tine: "Zelfverdediging / trek- en duwspelen / judo",
+  },
+  {
+    week: "week 31",
+    lien: "Triatlon",
+    kenny: "Triatlon",
+  },
+  {
+    week: "week 32",
+    lien: "Triatlon",
+    kenny: "Triatlon",
+  },
+  {
+    week: "week 33",
+    lien: "Sportshopping",
+    kenny: "Sportshopping",
+    tine: "Sportshopping",
+    note: "Vrijdag starten de examens",
+  },
 
-  { week: "week 27", lien: "gym", kenny: "Zelfv/boksen", tine: "Badminton" },
-  { week: "week 28", lien: "gym", kenny: "Zelfv/boksen", tine: "Badminton" },
-  { week: "week 29", lien: "gym", kenny: "Zelfv/boksen", tine: "Badminton" },
-  { week: "week 30", lien: "gym", kenny: "Handbal", tine: "Badminton / Gym 6M" },
-  { week: "week 31", kenny: "Handbal", tine: "Spurt / Gym 6M" },
-  { week: "week 32", kenny: "Handbal", tine: "Spurt / Gym 6M" },
-  { week: "week 33", kenny: "Orientatielopen / 3000m", tine: "Gym 6M" },
-  { week: "week 34", lien: "sportshopping", kenny: "sportshopping", tine: "sportshopping" },
+  {
+    week: "EXAMENS EN KLASSENRADEN",
+    type: "examens",
+  },
 
-  { week: "EXAMENS en KLASSENRADEN", type: "examens" },
-  { week: "ZOMERVAKANTIE", type: "vakantie" },
+  {
+    week: "ZOMERVAKANTIE",
+    type: "vakantie",
+  },
 ];
 
 /* ===============================
@@ -94,38 +308,104 @@ const planning: WeekRow[] = [
 export default function JaarplanningPage() {
   const [teacher, setTeacher] = useState<TeacherKey>("lien");
 
-  return (
-    <AppShell title="LO App" subtitle="GO! Atheneum Avelgem" userName={null}>
-      <PageHero kicker="LES LO" title="Jaarplanning" subtitle="Overzicht per week" />
+  const activeTeacher = teachers[teacher];
 
-      <section style={{ marginTop: 16 }}>
-        <div style={{ marginBottom: 12 }}>
-          <select value={teacher} onChange={(e) => setTeacher(e.target.value as TeacherKey)} style={selectStyle}>
-            {Object.entries(teachers).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
+  return (
+    <AppShell
+      title="LO App"
+      subtitle="GO! Atheneum Avelgem"
+      userName={null}
+    >
+      <PageHero
+        kicker="LES LO"
+        title="Jaarplanning"
+        subtitle="Schooljaar 2026–2027"
+      />
+
+      <section style={{ marginTop: 18 }}>
+        {/* ===============================
+            LEERKRACHT KEUZE
+        ================================ */}
+
+        <div style={teacherPanelStyle}>
+          <div>
+            <div style={smallLabelStyle}>JAARPLANNING VAN</div>
+
+            <div style={selectedTeacherStyle}>
+              <span style={{ fontSize: 24 }}>
+                {activeTeacher.emoji}
+              </span>
+
+              <div>
+                <div style={selectedTeacherNameStyle}>
+                  {activeTeacher.label}
+                </div>
+
+                <div style={selectedTeacherSubStyle}>
+                  Lichamelijke opvoeding
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={teacherButtonsStyle}>
+            {(Object.keys(teachers) as TeacherKey[]).map((key) => {
+              const item = teachers[key];
+              const active = key === teacher;
+
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setTeacher(key)}
+                  style={{
+                    ...teacherButtonStyle,
+                    ...(active ? teacherButtonActiveStyle : {}),
+                  }}
+                >
+                  <span>{item.emoji}</span>
+                  <span>{item.short}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div style={tableWrap}>
-          {planning.map((row, i) => {
+        {/* ===============================
+            PLANNING
+        ================================ */}
+
+        <div style={planningWrapStyle}>
+          {planning.map((row, index) => {
             if (row.type === "vakantie") {
-              return <SpecialRow key={i} text={row.week} tone="vakantie" />;
-            }
-            if (row.type === "examens") {
-              return <SpecialRow key={i} text={row.week} tone="examens" />;
-            }
-            if (row.type === "gwp") {
-              return <SpecialRow key={i} text={row.week} tone="gwp" />;
+              return (
+                <SpecialRow
+                  key={`${row.week}-${index}`}
+                  text={row.week}
+                  tone="vakantie"
+                />
+              );
             }
 
+            if (row.type === "examens") {
+              return (
+                <SpecialRow
+                  key={`${row.week}-${index}`}
+                  text={row.week}
+                  tone="examens"
+                />
+              );
+            }
+
+            const activity = row[teacher];
+
             return (
-              <div key={i} style={rowStyle}>
-                <div style={weekStyle}>{row.week}</div>
-                <div style={contentStyle}>{row[teacher] ?? "—"}</div>
-              </div>
+              <WeekCard
+                key={`${row.week}-${index}`}
+                week={row.week}
+                activity={activity}
+                note={row.note}
+              />
             );
           })}
         </div>
@@ -135,116 +415,287 @@ export default function JaarplanningPage() {
 }
 
 /* ===============================
-   SPECIAL ROWS (brand synced)
+   WEEK CARD
 ================================ */
 
-function SpecialRow({ text, tone }: { text: string; tone: "vakantie" | "examens" | "gwp" }) {
-  const cfg =
-    tone === "vakantie"
-      ? {
-          label: "🌿",
-          bg: `linear-gradient(90deg, rgba(137,194,170,0.95), rgba(75,142,141,0.85))`,
-          border: "rgba(137,194,170,0.55)",
-        }
-      : tone === "examens"
-      ? {
-          label: "📚",
-          bg: `linear-gradient(90deg, rgba(75,142,141,0.95), rgba(37,89,113,0.85))`,
-          border: "rgba(75,142,141,0.55)",
-        }
-      : {
-          label: "🏕️",
-          bg: `linear-gradient(90deg, rgba(37,89,113,0.95), rgba(75,142,141,0.85))`,
-          border: "rgba(37,89,113,0.55)",
-        };
+function WeekCard({
+  week,
+  activity,
+  note,
+}: {
+  week: string;
+  activity?: string;
+  note?: string;
+}) {
+  const hasActivity = Boolean(activity);
 
   return (
-    <div
-      style={{
-        padding: "12px 14px",
-        borderRadius: 16,
-        textAlign: "center",
-        fontWeight: 980,
-        letterSpacing: 0.6,
-        color: "rgba(255,255,255,0.95)",
-        background: cfg.bg,
-        border: `1px solid ${cfg.border}`,
-        boxShadow: "0 10px 26px rgba(0,0,0,0.22)",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
-      <span style={{ marginRight: 10 }}>{cfg.label}</span>
-      {text}
+    <div style={weekCardStyle}>
+      {/* accent links */}
+      <div style={accentLineStyle} />
 
-      {/* subtiele shine */}
-      <span
-        style={{
-          position: "absolute",
-          inset: 0,
-          background:
-            "linear-gradient(120deg, rgba(255,255,255,0) 30%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0) 70%)",
-          transform: "translateX(-55%)",
-          animation: "shine 2.4s linear infinite",
-          opacity: 0.9,
-          pointerEvents: "none",
-        }}
-      />
+      <div style={weekNumberStyle}>
+        <span style={weekIconStyle}>📅</span>
+        {week}
+      </div>
 
-      <style jsx>{`
-        @keyframes shine {
-          0% {
-            transform: translateX(-55%);
-          }
-          100% {
-            transform: translateX(55%);
-          }
-        }
-      `}</style>
+      <div style={weekContentStyle}>
+        <div
+          style={{
+            ...activityStyle,
+            ...(hasActivity ? {} : emptyActivityStyle),
+          }}
+        >
+          {activity ?? "Nog geen activiteit gepland"}
+        </div>
+
+        {note && (
+          <div style={noteStyle}>
+            <span style={noteBadgeStyle}>INFO</span>
+            <span>{note}</span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 /* ===============================
-   STYLING
+   SPECIAL ROW
 ================================ */
 
-const tableWrap: React.CSSProperties = {
-  display: "grid",
-  gap: 8,
-};
+function SpecialRow({
+  text,
+  tone,
+}: {
+  text: string;
+  tone: "vakantie" | "examens";
+}) {
+  const vakantie = tone === "vakantie";
 
-const rowStyle: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "120px 1fr",
-  gap: 10,
-  padding: "10px 12px",
-  borderRadius: 14,
-  background: ui.panel,
+  return (
+    <div
+      style={{
+        ...specialRowStyle,
+        background: vakantie
+          ? "linear-gradient(135deg, rgba(137,194,170,0.22), rgba(75,142,141,0.12))"
+          : "linear-gradient(135deg, rgba(75,142,141,0.23), rgba(37,89,113,0.16))",
+
+        borderColor: vakantie
+          ? "rgba(137,194,170,0.32)"
+          : "rgba(75,142,141,0.35)",
+      }}
+    >
+      <div
+        style={{
+          ...specialIconStyle,
+          background: vakantie
+            ? "rgba(137,194,170,0.18)"
+            : "rgba(75,142,141,0.20)",
+        }}
+      >
+        {vakantie ? "🌿" : "📚"}
+      </div>
+
+      <div>
+        <div style={specialLabelStyle}>
+          {vakantie ? "VAKANTIE" : "SCHOOLORGANISATIE"}
+        </div>
+
+        <div style={specialTitleStyle}>{text}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ===============================
+   STYLES
+================================ */
+
+const teacherPanelStyle: React.CSSProperties = {
+  padding: 16,
+  borderRadius: 20,
+  background:
+    "linear-gradient(145deg, rgba(37,89,113,0.20), rgba(75,142,141,0.10))",
   border: `1px solid ${ui.border}`,
+  boxShadow: "0 14px 36px rgba(0,0,0,0.20)",
+  marginBottom: 18,
 };
 
-const weekStyle: React.CSSProperties = {
+const smallLabelStyle: React.CSSProperties = {
+  fontSize: 11,
+  fontWeight: 950,
+  letterSpacing: 1.1,
+  color: ui.muted,
+  marginBottom: 8,
+};
+
+const selectedTeacherStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+};
+
+const selectedTeacherNameStyle: React.CSSProperties = {
+  fontWeight: 950,
+  color: ui.text,
+  fontSize: 17,
+};
+
+const selectedTeacherSubStyle: React.CSSProperties = {
+  marginTop: 2,
+  color: ui.muted,
+  fontSize: 12,
+};
+
+const teacherButtonsStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gap: 8,
+  marginTop: 16,
+};
+
+const teacherButtonStyle: React.CSSProperties = {
+  border: "1px solid rgba(255,255,255,0.10)",
+  background: "rgba(255,255,255,0.045)",
+  color: ui.muted,
+  height: 44,
+  borderRadius: 13,
+  cursor: "pointer",
   fontWeight: 900,
-  color: ui.text,
-  opacity: 0.95,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 6,
+  transition: "all 160ms ease",
 };
 
-const contentStyle: React.CSSProperties = {
-  color: ui.text,
+const teacherButtonActiveStyle: React.CSSProperties = {
+  background:
+    "linear-gradient(135deg, rgba(75,142,141,0.95), rgba(37,89,113,0.95))",
+  color: "white",
+  border: "1px solid rgba(137,194,170,0.40)",
+  boxShadow: "0 8px 20px rgba(0,0,0,0.24)",
 };
 
-const selectStyle: React.CSSProperties = {
-  height: 46,
-  padding: "0 12px",
-  borderRadius: 14,
-  border: `1px solid ${ui.border2}`,
-  background: "rgba(0,0,0,0.55)",
-  color: ui.text,
-  fontWeight: 900,
-  outline: "none",
-  boxShadow: "0 10px 26px rgba(0,0,0,0.20)",
+const planningWrapStyle: React.CSSProperties = {
+  display: "grid",
+  gap: 9,
 };
 
-/* (brand const kept for future use; gradients already match palette) */
-void brand;
+const weekCardStyle: React.CSSProperties = {
+  position: "relative",
+  display: "grid",
+  gridTemplateColumns: "105px minmax(0,1fr)",
+  gap: 14,
+  padding: "14px 15px 14px 18px",
+  borderRadius: 17,
+  background:
+    "linear-gradient(135deg, rgba(255,255,255,0.065), rgba(255,255,255,0.035))",
+  border: "1px solid rgba(255,255,255,0.10)",
+  boxShadow: "0 8px 24px rgba(0,0,0,0.13)",
+  overflow: "hidden",
+};
+
+const accentLineStyle: React.CSSProperties = {
+  position: "absolute",
+  left: 0,
+  top: 0,
+  bottom: 0,
+  width: 4,
+  background: `linear-gradient(
+    180deg,
+    ${brand.mint},
+    ${brand.teal}
+  )`,
+};
+
+const weekNumberStyle: React.CSSProperties = {
+  color: ui.text,
+  fontWeight: 950,
+  fontSize: 13,
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  whiteSpace: "nowrap",
+};
+
+const weekIconStyle: React.CSSProperties = {
+  fontSize: 13,
+  opacity: 0.8,
+};
+
+const weekContentStyle: React.CSSProperties = {
+  minWidth: 0,
+};
+
+const activityStyle: React.CSSProperties = {
+  color: ui.text,
+  fontWeight: 800,
+  fontSize: 14,
+  lineHeight: 1.45,
+};
+
+const emptyActivityStyle: React.CSSProperties = {
+  color: ui.muted,
+  fontStyle: "italic",
+  fontWeight: 600,
+  opacity: 0.55,
+};
+
+const noteStyle: React.CSSProperties = {
+  marginTop: 8,
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: 7,
+  color: ui.muted,
+  fontSize: 11.5,
+  lineHeight: 1.4,
+};
+
+const noteBadgeStyle: React.CSSProperties = {
+  padding: "3px 6px",
+  borderRadius: 6,
+  background: "rgba(137,194,170,0.12)",
+  border: "1px solid rgba(137,194,170,0.20)",
+  color: brand.mint,
+  fontSize: 9,
+  fontWeight: 950,
+  letterSpacing: 0.6,
+};
+
+const specialRowStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 12,
+  padding: "14px 16px",
+  borderRadius: 18,
+  border: "1px solid",
+  boxShadow: "0 9px 26px rgba(0,0,0,0.15)",
+};
+
+const specialIconStyle: React.CSSProperties = {
+  width: 42,
+  height: 42,
+  borderRadius: 13,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 20,
+  flexShrink: 0,
+};
+
+const specialLabelStyle: React.CSSProperties = {
+  color: ui.muted,
+  fontSize: 9,
+  fontWeight: 950,
+  letterSpacing: 1,
+};
+
+const specialTitleStyle: React.CSSProperties = {
+  marginTop: 2,
+  color: ui.text,
+  fontSize: 14,
+  fontWeight: 950,
+};
