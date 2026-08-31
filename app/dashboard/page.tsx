@@ -16,10 +16,6 @@ type Profiel = {
   klas_naam: string | null;
   schooljaar: string | null;
   schooljaar_bevestigd_op: string | null;
-  xp: number | null;
-  streak: number | null;
-  best_streak: number | null;
-  last_login_date: string | null;
 };
 
 type RealRole = "leerling" | "leerkracht" | "lo_leerkracht" | "admin";
@@ -37,9 +33,18 @@ function mapProfileRole(rol: unknown, role: unknown): RealRole | null {
   const dbRole = normalizeRole(role);
 
   if (dbRol === "admin" || dbRole === "admin") return "admin";
-  if (dbRol === "lo_leerkracht" || dbRol === "loleerkracht") return "lo_leerkracht";
-  if (dbRol === "leerkracht" || dbRole === "teacher") return "leerkracht";
-  if (dbRol === "leerling" || dbRole === "student") return "leerling";
+
+  if (dbRol === "lo_leerkracht" || dbRol === "loleerkracht") {
+    return "lo_leerkracht";
+  }
+
+  if (dbRol === "leerkracht" || dbRole === "teacher") {
+    return "leerkracht";
+  }
+
+  if (dbRol === "leerling" || dbRole === "student") {
+    return "leerling";
+  }
 
   return null;
 }
@@ -49,6 +54,7 @@ function getShownRoleLabel(role: RealRole | null) {
   if (role === "lo_leerkracht") return "LO-leerkracht";
   if (role === "leerkracht") return "Leerkracht";
   if (role === "leerling") return "Leerling";
+
   return "Gebruiker";
 }
 
@@ -70,108 +76,20 @@ const ui = {
   errorBorder: "rgba(255,85,112,0.28)",
 };
 
-function toYMD(d = new Date()) {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function daysBetween(aYmd: string, bYmd: string) {
-  const a = new Date(aYmd + "T00:00:00");
-  const b = new Date(bYmd + "T00:00:00");
-  return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
-}
-
-async function applyDailyLoginRewards(userId: string, p: Profiel) {
-  const today = toYMD();
-  const last = p.last_login_date;
-  const base = 10;
-
-  if (!last) {
-    await supabase
-      .from("profielen")
-      .update({
-        xp: (p.xp ?? 0) + base,
-        streak: 1,
-        best_streak: Math.max(p.best_streak ?? 0, 1),
-        last_login_date: today,
-      })
-      .eq("id", userId);
-    return;
-  }
-
-  const diff = daysBetween(last, today);
-
-  if (diff === 0) return;
-
-  if (diff === 1) {
-    const newStreak = (p.streak ?? 0) + 1;
-    const bonus = Math.min(newStreak * 2, 20);
-
-    await supabase
-      .from("profielen")
-      .update({
-        xp: (p.xp ?? 0) + base + bonus,
-        streak: newStreak,
-        best_streak: Math.max(p.best_streak ?? 0, newStreak),
-        last_login_date: today,
-      })
-      .eq("id", userId);
-
-    return;
-  }
-
-  await supabase
-    .from("profielen")
-    .update({
-      xp: (p.xp ?? 0) + base,
-      streak: 1,
-      best_streak: Math.max(p.best_streak ?? 0, 1),
-      last_login_date: today,
-    })
-    .eq("id", userId);
-}
-
-const LEVELS = [
-  { name: "Rookie Beast", xp: 0 },
-  { name: "Hungry Beast", xp: 150 },
-  { name: "Alpha Beast", xp: 400 },
-  { name: "Savage Beast", xp: 800 },
-  { name: "Elite Beast", xp: 1400 },
-  { name: "Legendary Beast", xp: 2200 },
-];
-
-function getBeastLevel(xp: number) {
-  let current = LEVELS[0];
-  let next: (typeof LEVELS)[number] | null = null;
-
-  for (let i = 0; i < LEVELS.length; i++) {
-    if (xp >= LEVELS[i].xp) current = LEVELS[i];
-
-    if (xp < LEVELS[i].xp) {
-      next = LEVELS[i];
-      break;
-    }
-  }
-
-  return { current, next };
-}
-
 function quoteOfMonth(d = new Date()) {
   const quotes = [
     { q: "Discipline beats motivation.", a: "Coach-mode" },
     { q: "Small steps. Big results.", a: "LO" },
-    { q: "Earn your confidence.", a: "Beast code" },
+    { q: "Earn your confidence.", a: "Mindset" },
     { q: "Train smart. Show up. Repeat.", a: "Routine" },
     { q: "Progress, not perfection.", a: "Daily" },
     { q: "You don’t find willpower. You build it.", a: "Mindset" },
     { q: "Strong body. Strong mind.", a: "LO" },
-    { q: "Consistency is a superpower.", a: "Beasts" },
+    { q: "Consistency is a superpower.", a: "Training" },
     { q: "Speed comes from technique.", a: "Coach tip" },
     { q: "Be the standard.", a: "Athlete" },
     { q: "You are one session away from better.", a: "Reminder" },
-    { q: "Hard work is the talent you choose.", a: "Beast mode" },
+    { q: "Hard work is the talent you choose.", a: "Sport" },
   ];
 
   return quotes[d.getMonth() % quotes.length];
@@ -184,7 +102,12 @@ type DashboardTileProps = {
   desc: string;
 };
 
-function DashboardTile({ href, icon, title, desc }: DashboardTileProps) {
+function DashboardTile({
+  href,
+  icon,
+  title,
+  desc,
+}: DashboardTileProps) {
   return (
     <Link
       href={href}
@@ -202,6 +125,7 @@ function DashboardTile({ href, icon, title, desc }: DashboardTileProps) {
 
       <div className="relative z-10">
         <div className="text-xs leading-5 text-white/70">{desc}</div>
+
         <div className="mt-2.5 text-xs font-black text-white/90">
           Openen →
         </div>
@@ -223,6 +147,7 @@ export default function DashboardPage() {
     const now = new Date();
     const y = now.getFullYear();
     const m = now.getMonth() + 1;
+
     return m >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
   }, []);
 
@@ -230,7 +155,7 @@ export default function DashboardPage() {
     const { data, error } = await supabase
       .from("profielen")
       .select(
-        "id, volledige_naam, role, rol, klas_naam, schooljaar, schooljaar_bevestigd_op, xp, streak, best_streak, last_login_date"
+        "id, volledige_naam, role, rol, klas_naam, schooljaar, schooljaar_bevestigd_op"
       )
       .eq("id", userId)
       .maybeSingle();
@@ -252,7 +177,9 @@ export default function DashboardPage() {
     const appRole = mapProfileRole(p.rol, p.role);
 
     if (!appRole) {
-      setError("Je profiel heeft geen geldige rol. Contacteer een beheerder.");
+      setError(
+        "Je profiel heeft geen geldige rol. Contacteer een beheerder."
+      );
       setProfiel(p);
       setRealRole(null);
       return null;
@@ -282,12 +209,7 @@ export default function DashboardPage() {
 
       setUid(user.id);
 
-      const p = await fetchProfile(user.id);
-
-      if (p) {
-        await applyDailyLoginRewards(user.id, p);
-        await fetchProfile(user.id);
-      }
+      await fetchProfile(user.id);
 
       setLoading(false);
     };
@@ -330,6 +252,7 @@ export default function DashboardPage() {
     }
 
     await fetchProfile(uid);
+
     setConfirmingYear(false);
   };
 
@@ -342,7 +265,9 @@ export default function DashboardPage() {
   }
 
   const shownRoleLabel = getShownRoleLabel(realRole);
-  const greetingName = profiel?.volledige_naam?.split(" ")?.[0] ?? "Welkom";
+
+  const greetingName =
+    profiel?.volledige_naam?.split(" ")?.[0] ?? "Welkom";
 
   const showSchooljaarBanner =
     !profiel?.schooljaar || !profiel?.schooljaar_bevestigd_op;
@@ -356,16 +281,39 @@ export default function DashboardPage() {
       <Hero
         greetingName={greetingName}
         shownRoleLabel={shownRoleLabel}
-        klasNaam={realRole === "leerling" ? profiel?.klas_naam : null}
+        klasNaam={
+          realRole === "leerling"
+            ? profiel?.klas_naam
+            : null
+        }
       />
 
-      <div style={{ ...styles.headerRow, marginTop: 14 }}>
+      <div
+        style={{
+          ...styles.headerRow,
+          marginTop: 14,
+        }}
+      >
         <div style={{ minWidth: 0 }}>
-          <div style={{ marginTop: 0, fontSize: 13, color: ui.muted }}>
-            Dag <b style={{ color: ui.text }}>{greetingName}</b> 👋 •{" "}
-            {shownRoleLabel}
-            {realRole === "leerling" && profiel?.klas_naam ? (
-              <span style={{ color: ui.muted }}> • {profiel.klas_naam}</span>
+          <div
+            style={{
+              marginTop: 0,
+              fontSize: 13,
+              color: ui.muted,
+            }}
+          >
+            Dag{" "}
+            <b style={{ color: ui.text }}>
+              {greetingName}
+            </b>{" "}
+            👋 • {shownRoleLabel}
+
+            {realRole === "leerling" &&
+            profiel?.klas_naam ? (
+              <span style={{ color: ui.muted }}>
+                {" "}
+                • {profiel.klas_naam}
+              </span>
             ) : null}
           </div>
         </div>
@@ -378,7 +326,9 @@ export default function DashboardPage() {
             opacity: signingOut ? 0.7 : 1,
           }}
         >
-          {signingOut ? "Uitloggen..." : "Uitloggen"}
+          {signingOut
+            ? "Uitloggen..."
+            : "Uitloggen"}
         </button>
       </div>
 
@@ -388,22 +338,29 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <BeastStatusCard
-        xp={profiel?.xp ?? 0}
-        streak={profiel?.streak ?? 0}
-        bestStreak={profiel?.best_streak ?? 0}
-      />
-
       {showSchooljaarBanner && (
         <div style={styles.banner}>
           <div>
-            <div style={{ fontWeight: 950, color: ui.text }}>
+            <div
+              style={{
+                fontWeight: 950,
+                color: ui.text,
+              }}
+            >
               Bevestig je schooljaar
             </div>
 
-            <div style={{ marginTop: 3, fontSize: 13, color: ui.muted }}>
+            <div
+              style={{
+                marginTop: 3,
+                fontSize: 13,
+                color: ui.muted,
+              }}
+            >
               We stellen voor:{" "}
-              <b style={{ color: ui.text }}>{suggestedSchooljaar}</b>
+              <b style={{ color: ui.text }}>
+                {suggestedSchooljaar}
+              </b>
             </div>
           </div>
 
@@ -415,7 +372,9 @@ export default function DashboardPage() {
               opacity: confirmingYear ? 0.7 : 1,
             }}
           >
-            {confirmingYear ? "Bevestigen..." : "Bevestigen"}
+            {confirmingYear
+              ? "Bevestigen..."
+              : "Bevestigen"}
           </button>
         </div>
       )}
@@ -439,36 +398,42 @@ export default function DashboardPage() {
             title="Eurofittest"
             desc="Test & resultaten"
           />
+
           <DashboardTile
             href="/functional-fitheidstest"
             icon="🏋️"
             title="Functional fitheidstest"
             desc="Fitheid & progressie"
           />
+
           <DashboardTile
             href="/challenges"
             icon="🎯"
             title="Challenges"
             desc="Opdrachten & doelen"
           />
+
           <DashboardTile
             href="/sportfolio"
             icon="📸"
             title="Sportfolio"
             desc="Bewijzen & reflecties"
           />
+
           <DashboardTile
             href="/workouts"
             icon="💪"
             title="Workouts"
             desc="Ab • Home • Fitness • Running"
           />
+
           <DashboardTile
             href="/hall-of-fame"
             icon="🏆"
             title="Hall of Fame"
             desc="Topprestaties & records"
           />
+
           <DashboardTile
             href="/les-lo"
             icon="🏃‍♂️"
@@ -476,7 +441,8 @@ export default function DashboardPage() {
             desc="Lesinhoud & planning"
           />
 
-          {(realRole === "lo_leerkracht" || realRole === "admin") && (
+          {(realRole === "lo_leerkracht" ||
+            realRole === "admin") && (
             <DashboardTile
               href="/leerkrachten-lo"
               icon="👨‍🏫"
@@ -491,18 +457,21 @@ export default function DashboardPage() {
             title="Reservaties"
             desc="Zalen, materiaal & planning"
           />
+
           <DashboardTile
             href="/extramurale-sportactiviteiten"
             icon="🚴"
             title="Extramuros activiteiten"
             desc="Activiteiten buiten de school"
           />
+
           <DashboardTile
             href="/links"
             icon="🔗"
             title="Links"
             desc="Handige bronnen"
           />
+
           <DashboardTile
             href="/dashboard/profiel"
             icon="👤"
@@ -514,13 +483,19 @@ export default function DashboardPage() {
         <style jsx>{`
           .hub-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(
+              2,
+              minmax(0, 1fr)
+            );
             gap: 14px;
           }
 
           @media (min-width: 900px) {
             .hub-grid {
-              grid-template-columns: repeat(4, minmax(0, 1fr));
+              grid-template-columns: repeat(
+                4,
+                minmax(0, 1fr)
+              );
             }
           }
         `}</style>
@@ -544,47 +519,56 @@ function Hero({
     <section style={hero.wrap}>
       <div style={hero.inner}>
         <div style={hero.content}>
-          <div style={hero.kicker}>BEAST HQ</div>
+          <div style={hero.kicker}>
+            GO! ATHENEUM AVELGEM
+          </div>
 
-          <h1
-            style={{
-              ...hero.title,
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              flexWrap: "wrap",
-            }}
-          >
-            Welkom, <span style={hero.accent}>Beast</span> {greetingName}
-            <Image
-              src="/hero/beast.png"
-              alt="Beast icoon"
-              width={68}
-              height={68}
-              priority
-              style={{ display: "block", objectFit: "contain" }}
-            />
+          <h1 style={hero.title}>
+            Welkom,{" "}
+            <span style={hero.accent}>
+              {greetingName}
+            </span>
           </h1>
 
           <div style={hero.sub}>
             {shownRoleLabel}
+
             {klasNaam ? (
-              <span style={{ opacity: 0.85 }}> • {klasNaam}</span>
+              <span style={{ opacity: 0.85 }}>
+                {" "}
+                • {klasNaam}
+              </span>
             ) : null}
-            <span style={{ opacity: 0.85 }}> • </span>
-            Login, train, verzamel XP en stijg in status.
+
+            <span style={{ opacity: 0.85 }}>
+              {" "}
+              •{" "}
+            </span>
+
+            Alles voor LO op één plaats.
           </div>
 
           <div style={hero.actions}>
-            <Link href="/ideeenbus" style={hero.primary}>
+            <Link
+              href="/ideeenbus"
+              style={hero.primary}
+            >
               Ideeënbus →
             </Link>
           </div>
 
           <div style={hero.quoteCard}>
-            <div style={hero.quoteLabel}>Quote van de maand</div>
-            <div style={hero.quoteText}>“{q.q}”</div>
-            <div style={hero.quoteAuthor}>— {q.a}</div>
+            <div style={hero.quoteLabel}>
+              Quote van de maand
+            </div>
+
+            <div style={hero.quoteText}>
+              “{q.q}”
+            </div>
+
+            <div style={hero.quoteAuthor}>
+              — {q.a}
+            </div>
           </div>
         </div>
 
@@ -615,7 +599,8 @@ function Hero({
 
         @media (min-width: 768px) {
           section > div {
-            grid-template-columns: minmax(0, 1fr) 440px;
+            grid-template-columns:
+              minmax(0, 1fr) 440px;
           }
         }
 
@@ -629,55 +614,10 @@ function Hero({
   );
 }
 
-function BeastStatusCard({
-  xp = 0,
-  streak = 0,
-  bestStreak = 0,
-}: {
-  xp?: number;
-  streak?: number;
-  bestStreak?: number;
-}) {
-  const { current, next } = getBeastLevel(xp);
-  const from = current.xp;
-  const to = next?.xp ?? current.xp + 500;
-  const pct = Math.max(0, Math.min(100, ((xp - from) / (to - from)) * 100));
-
-  return (
-    <div style={beast.card}>
-      <div style={beast.row}>
-        <div>
-          <div style={beast.label}>Beast status</div>
-          <div style={beast.title}>{current.name}</div>
-
-          <div style={beast.meta}>
-            <b style={{ color: ui.text }}>{xp} XP</b> • 🔥 Streak:{" "}
-            <b style={{ color: ui.text }}>{streak}</b>{" "}
-            <span style={{ color: ui.muted }}>• Best: {bestStreak}</span>
-          </div>
-        </div>
-
-        <div style={beast.pill}>LEVEL</div>
-      </div>
-
-      <div style={beast.barWrap}>
-        <div style={{ ...beast.barFill, width: `${pct}%` }} />
-      </div>
-
-      <div style={beast.bottom}>
-        <span style={{ color: ui.muted }}>
-          Volgende:{" "}
-          <b style={{ color: ui.text }}>{next?.name ?? "Max level"}</b>
-        </span>
-        <span style={{ color: ui.muted }}>
-          {next ? `${xp}/${to} XP` : "🚀"}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-const hero: Record<string, React.CSSProperties> = {
+const hero: Record<
+  string,
+  React.CSSProperties
+> = {
   wrap: {
     position: "relative",
     overflow: "hidden",
@@ -687,21 +627,25 @@ const hero: Record<string, React.CSSProperties> = {
     background:
       "radial-gradient(900px 520px at 0% 0%, rgba(75,142,141,0.22) 0%, rgba(0,0,0,0) 60%), radial-gradient(900px 520px at 100% 0%, rgba(137,194,170,0.18) 0%, rgba(0,0,0,0) 60%), rgba(255,255,255,0.06)",
   },
+
   inner: {
     position: "relative",
     zIndex: 1,
   },
+
   content: {
     position: "relative",
     maxWidth: 620,
     zIndex: 1,
   },
+
   kicker: {
     fontSize: 12,
     fontWeight: 950,
     letterSpacing: 1.2,
     color: ui.muted,
   },
+
   title: {
     margin: "8px 0 0 0",
     fontSize: 30,
@@ -709,23 +653,32 @@ const hero: Record<string, React.CSSProperties> = {
     fontWeight: 980,
     color: ui.text,
   },
+
   accent: {
-    background: `linear-gradient(90deg, ${brand.blue}, ${brand.teal}, ${brand.mint})`,
+    background: `linear-gradient(
+      90deg,
+      ${brand.blue},
+      ${brand.teal},
+      ${brand.mint}
+    )`,
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
   },
+
   sub: {
     marginTop: 10,
     fontSize: 13.5,
     color: ui.muted,
     maxWidth: 520,
   },
+
   actions: {
     marginTop: 14,
     display: "flex",
     gap: 10,
     flexWrap: "wrap",
   },
+
   primary: {
     display: "inline-flex",
     alignItems: "center",
@@ -738,6 +691,7 @@ const hero: Record<string, React.CSSProperties> = {
     border: `1px solid ${ui.border2}`,
     background: "rgba(0,0,0,0.55)",
   },
+
   quoteCard: {
     marginTop: 14,
     borderRadius: 20,
@@ -746,11 +700,13 @@ const hero: Record<string, React.CSSProperties> = {
     background: "rgba(0,0,0,0.35)",
     maxWidth: 520,
   },
+
   quoteLabel: {
     fontSize: 12,
     fontWeight: 950,
     color: ui.muted,
   },
+
   quoteText: {
     marginTop: 8,
     fontSize: 16,
@@ -758,16 +714,19 @@ const hero: Record<string, React.CSSProperties> = {
     color: ui.text,
     lineHeight: 1.25,
   },
+
   quoteAuthor: {
     marginTop: 8,
     fontSize: 12.5,
     color: ui.muted,
   },
+
   artCol: {
     position: "relative",
     zIndex: 1,
     width: "100%",
   },
+
   illuBox: {
     position: "relative",
     width: "100%",
@@ -780,72 +739,10 @@ const hero: Record<string, React.CSSProperties> = {
   },
 };
 
-const beast: Record<string, React.CSSProperties> = {
-  card: {
-    marginTop: 14,
-    padding: 16,
-    borderRadius: 22,
-    background: ui.panel,
-    border: `1px solid ${ui.border}`,
-  },
-  row: {
-    display: "flex",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "flex-start",
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: 950,
-    color: ui.muted,
-    letterSpacing: 0.6,
-  },
-  title: {
-    marginTop: 6,
-    fontSize: 18,
-    fontWeight: 980,
-    color: ui.text,
-  },
-  meta: {
-    marginTop: 6,
-    fontSize: 13,
-    color: ui.muted,
-  },
-  pill: {
-    height: 34,
-    padding: "0 12px",
-    borderRadius: 14,
-    display: "grid",
-    placeItems: "center",
-    fontWeight: 950,
-    fontSize: 12,
-    color: ui.text,
-    background: "rgba(0,0,0,0.45)",
-    border: `1px solid ${ui.border}`,
-  },
-  barWrap: {
-    marginTop: 12,
-    height: 14,
-    borderRadius: 999,
-    background: "rgba(0,0,0,0.40)",
-    border: `1px solid ${ui.border}`,
-    overflow: "hidden",
-    position: "relative",
-  },
-  barFill: {
-    height: "100%",
-    borderRadius: 999,
-    background: `linear-gradient(90deg, ${brand.blue}, ${brand.teal}, ${brand.mint})`,
-  },
-  bottom: {
-    marginTop: 10,
-    display: "flex",
-    justifyContent: "space-between",
-    fontSize: 12.5,
-  },
-};
-
-const styles: Record<string, React.CSSProperties> = {
+const styles: Record<
+  string,
+  React.CSSProperties
+> = {
   headerRow: {
     display: "flex",
     justifyContent: "space-between",
@@ -856,6 +753,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: ui.panel,
     border: `1px solid ${ui.border}`,
   },
+
   blackBtn: {
     height: 50,
     padding: "0 18px",
@@ -867,6 +765,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
+
   banner: {
     marginTop: 14,
     padding: 14,
@@ -878,6 +777,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     gap: 12,
   },
+
   errorBox: {
     marginTop: 12,
     padding: 12,
