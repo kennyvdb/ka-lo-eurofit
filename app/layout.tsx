@@ -13,12 +13,16 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://ka-lo.vercel.app"),
+
   title: {
     default: "LOOP",
     template: "%s | LOOP",
   },
+
   description:
     "LOOP — Lichamelijke Opvoeding Online Platform van GO! Atheneum Avelgem.",
+
   applicationName: "LOOP",
 
   icons: {
@@ -56,6 +60,34 @@ export const metadata: Metadata = {
 
   formatDetection: {
     telephone: false,
+  },
+
+  // WhatsApp, Facebook, Messenger, ...
+  openGraph: {
+    title: "LOOP",
+    description:
+      "Lichamelijke Opvoeding Online Platform van GO! Atheneum Avelgem.",
+    url: "https://ka-lo.vercel.app",
+    siteName: "LOOP",
+    locale: "nl_BE",
+    type: "website",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "LOOP — Lichamelijke Opvoeding Online Platform",
+      },
+    ],
+  },
+
+  // Ook correcte preview op X/Twitter en andere platformen
+  twitter: {
+    card: "summary_large_image",
+    title: "LOOP",
+    description:
+      "Lichamelijke Opvoeding Online Platform van GO! Atheneum Avelgem.",
+    images: ["/og-image.png"],
   },
 };
 
