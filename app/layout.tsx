@@ -13,7 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://ka-lo.vercel.app"),
+  // Officieel domein van LOOP
+  metadataBase: new URL("https://www.loop-go-atheneumavelgem.be"),
 
   title: {
     default: "LOOP",
@@ -25,6 +26,7 @@ export const metadata: Metadata = {
 
   applicationName: "LOOP",
 
+  // Iconen / PWA
   icons: {
     icon: [
       {
@@ -50,8 +52,10 @@ export const metadata: Metadata = {
     ],
   },
 
+  // PWA manifest
   manifest: "/manifest.webmanifest",
 
+  // Apple / iPhone beginscherm
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -62,26 +66,32 @@ export const metadata: Metadata = {
     telephone: false,
   },
 
-  // WhatsApp, Facebook, Messenger, ...
+  // Canonieke URL
+  alternates: {
+    canonical: "/",
+  },
+
+  // WhatsApp / Facebook / Messenger / LinkedIn
   openGraph: {
     title: "LOOP",
     description:
       "Lichamelijke Opvoeding Online Platform van GO! Atheneum Avelgem.",
-    url: "https://ka-lo.vercel.app",
+    url: "https://www.loop-go-atheneumavelgem.be",
     siteName: "LOOP",
     locale: "nl_BE",
     type: "website",
+
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "LOOP — Lichamelijke Opvoeding Online Platform",
+        alt: "LOOP — Lichamelijke Opvoeding Online Platform van GO! Atheneum Avelgem",
       },
     ],
   },
 
-  // Ook correcte preview op X/Twitter en andere platformen
+  // X / Twitter en andere platformen
   twitter: {
     card: "summary_large_image",
     title: "LOOP",
