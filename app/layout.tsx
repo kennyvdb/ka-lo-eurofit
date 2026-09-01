@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   // Officieel domein van LOOP
-  metadataBase: new URL("https://www.loop-go-atheneumavelgem.be"),
+  metadataBase: new URL("https://www.loop.go-atheneumavelgem.be"),
 
   title: {
     default: "LOOP",
@@ -76,7 +76,7 @@ export const metadata: Metadata = {
     title: "LOOP",
     description:
       "Lichamelijke Opvoeding Online Platform van GO! Atheneum Avelgem.",
-    url: "https://www.loop-go-atheneumavelgem.be",
+    url: "https://www.loop.go-atheneumavelgem.be",
     siteName: "LOOP",
     locale: "nl_BE",
     type: "website",
