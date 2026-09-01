@@ -12,9 +12,11 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = "https://loop.go-atheneumavelgem.be";
+const ogImage = `${siteUrl}/og-image.png`;
+
 export const metadata: Metadata = {
-  // Officieel domein van LOOP
-  metadataBase: new URL("https://www.loop.go-atheneumavelgem.be"),
+  metadataBase: new URL(siteUrl),
 
   title: {
     default: "LOOP",
@@ -26,7 +28,6 @@ export const metadata: Metadata = {
 
   applicationName: "LOOP",
 
-  // Iconen / PWA
   icons: {
     icon: [
       {
@@ -52,10 +53,8 @@ export const metadata: Metadata = {
     ],
   },
 
-  // PWA manifest
   manifest: "/manifest.webmanifest",
 
-  // Apple / iPhone beginscherm
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -66,38 +65,35 @@ export const metadata: Metadata = {
     telephone: false,
   },
 
-  // Canonieke URL
   alternates: {
-    canonical: "/",
+    canonical: siteUrl,
   },
 
-  // WhatsApp / Facebook / Messenger / LinkedIn
   openGraph: {
     title: "LOOP",
     description:
       "Lichamelijke Opvoeding Online Platform van GO! Atheneum Avelgem.",
-    url: "https://www.loop.go-atheneumavelgem.be",
+    url: siteUrl,
     siteName: "LOOP",
     locale: "nl_BE",
     type: "website",
-
     images: [
       {
-        url: "/og-image.png",
+        url: ogImage,
         width: 1200,
         height: 630,
         alt: "LOOP — Lichamelijke Opvoeding Online Platform van GO! Atheneum Avelgem",
+        type: "image/png",
       },
     ],
   },
 
-  // X / Twitter en andere platformen
   twitter: {
     card: "summary_large_image",
     title: "LOOP",
     description:
       "Lichamelijke Opvoeding Online Platform van GO! Atheneum Avelgem.",
-    images: ["/og-image.png"],
+    images: [ogImage],
   },
 };
 
