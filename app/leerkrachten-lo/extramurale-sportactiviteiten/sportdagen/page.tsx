@@ -47,8 +47,9 @@ type GekoppeldeLeerling = SmartschoolLeerling & {
 type VervoersKeuze = {
   leerling_id: string;
   leerjaar: number;
-  heen: "fiets" | "eigen_vervoer";
-  terug: "fiets" | "eigen_vervoer";
+  activiteit: "donk" | "koers_golf" | null;
+  heen: "fiets" | "eigen_vervoer" | null;
+  terug: "fiets" | "eigen_vervoer" | null;
   updated_at: string;
 };
 
@@ -128,7 +129,9 @@ function getNaam(leerling: SmartschoolLeerling) {
 }
 
 function formatTransport(value: VervoersKeuze["heen"]) {
-  return value === "fiets" ? "Fiets" : "Eigen vervoer";
+  if (value === "fiets") return "Fiets";
+  if (value === "eigen_vervoer") return "Eigen vervoer";
+  return "Niet van toepassing";
 }
 
 function formatDate(value: string) {
@@ -373,6 +376,7 @@ export default function SportdagenBeheerPage() {
           .select(`
             leerling_id,
             leerjaar,
+            activiteit,
             heen,
             terug,
             updated_at
@@ -695,13 +699,15 @@ export default function SportdagenBeheerPage() {
                 );
 
               /* ------------------------------------------------
-                 VERVOERSTOTALEN
+                 ACTIVITEIT + VERVOERSTOTALEN
               ------------------------------------------------ */
 
               let fietsHeen = 0;
               let eigenHeen = 0;
               let fietsTerug = 0;
               let eigenTerug = 0;
+              let donkAantal = 0;
+              let koersGolfAantal = 0;
 
               for (const leerling of ingevuldeLeerlingen) {
                 const profielId = normalizeId(
@@ -715,6 +721,20 @@ export default function SportdagenBeheerPage() {
 
                 if (!keuze) continue;
 
+                const isKoersGolf =
+                  leerjaar >= 6 && keuze.activiteit === "koers_golf";
+
+                if (leerjaar >= 6) {
+                  if (isKoersGolf) {
+                    koersGolfAantal += 1;
+                  } else {
+                    donkAantal += 1;
+                  }
+                }
+
+                // Koers + golf heeft geen vervoerskeuze.
+                if (isKoersGolf) continue;
+
                 if (keuze.heen === "fiets") {
                   fietsHeen += 1;
                 }
@@ -727,12 +747,12 @@ export default function SportdagenBeheerPage() {
                   fietsTerug += 1;
                 }
 
-                if (
-                  keuze.terug === "eigen_vervoer"
-                ) {
+                if (keuze.terug === "eigen_vervoer") {
                   eigenTerug += 1;
                 }
               }
+
+              const koersGolfVrij = Math.max(0, 20 - koersGolfAantal);
 
               const percentage =
                 leerlingenVanLeerjaar.length > 0
@@ -810,10 +830,38 @@ export default function SportdagenBeheerPage() {
                     />
                   </div>
 
+                  {/* ACTIVITEITSKEUZE 6e / 7e */}
+
+                  {leerjaar >= 6 && (
+                    <>
+                      <div className="transport-title">
+                        Activiteitskeuze
+                      </div>
+
+                      <div className="activity-choice-grid">
+                        <ActivityCounter
+                          emoji="🏄‍♂️"
+                          value={donkAantal}
+                          label="Den Donk"
+                        />
+
+                        <ActivityCounter
+                          emoji="🚴"
+                          value={koersGolfAantal}
+                          label="Koers + golf"
+                          detail={`${koersGolfVrij} van 20 plaatsen vrij`}
+                          full={koersGolfAantal >= 20}
+                        />
+                      </div>
+                    </>
+                  )}
+
                   {/* VERVOER */}
 
                   <div className="transport-title">
-                    Vervoerskeuzes
+                    {leerjaar >= 6
+                      ? "Vervoerskeuzes Den Donk"
+                      : "Vervoerskeuzes"}
                   </div>
 
                   <div className="transport-grid">
@@ -1017,47 +1065,78 @@ export default function SportdagenBeheerPage() {
                                 </div>
 
                                 <div className="filled-choices">
-                                  <div className="choice-pill">
-                                    <span>
-                                      {keuze.heen ===
-                                      "fiets"
-                                        ? "🚲"
-                                        : "🚗"}
-                                    </span>
+                                  {leerjaar >= 6 && (
+                                    <div className="choice-pill activity-pill">
+                                      <span>
+                                        {keuze.activiteit === "koers_golf"
+                                          ? "🚴"
+                                          : "🏄‍♂️"}
+                                      </span>
 
-                                    <div>
-                                      <small>
-                                        HEEN
-                                      </small>
+                                      <div>
+                                        <small>
+                                          ACTIVITEIT
+                                        </small>
 
-                                      <strong>
-                                        {formatTransport(
-                                          keuze.heen
-                                        )}
-                                      </strong>
+                                        <strong>
+                                          {keuze.activiteit === "koers_golf"
+                                            ? "Koers + golf"
+                                            : "Den Donk"}
+                                        </strong>
+                                      </div>
                                     </div>
-                                  </div>
+                                  )}
 
-                                  <div className="choice-pill">
-                                    <span>
-                                      {keuze.terug ===
-                                      "fiets"
-                                        ? "🚲"
-                                        : "🚗"}
-                                    </span>
+                                  {!(
+                                    leerjaar >= 6 &&
+                                    keuze.activiteit === "koers_golf"
+                                  ) && (
+                                    <>
+                                      <div className="choice-pill">
+                                        <span>
+                                          {keuze.heen === "fiets"
+                                            ? "🚲"
+                                            : "🚗"}
+                                        </span>
 
-                                    <div>
-                                      <small>
-                                        TERUG
-                                      </small>
+                                        <div>
+                                          <small>HEEN</small>
 
-                                      <strong>
-                                        {formatTransport(
-                                          keuze.terug
-                                        )}
-                                      </strong>
-                                    </div>
-                                  </div>
+                                          <strong>
+                                            {formatTransport(keuze.heen)}
+                                          </strong>
+                                        </div>
+                                      </div>
+
+                                      <div className="choice-pill">
+                                        <span>
+                                          {keuze.terug === "fiets"
+                                            ? "🚲"
+                                            : "🚗"}
+                                        </span>
+
+                                        <div>
+                                          <small>TERUG</small>
+
+                                          <strong>
+                                            {formatTransport(keuze.terug)}
+                                          </strong>
+                                        </div>
+                                      </div>
+                                    </>
+                                  )}
+
+                                  {leerjaar >= 6 &&
+                                    keuze.activiteit === "koers_golf" && (
+                                      <div className="choice-pill no-transport-pill">
+                                        <span>✓</span>
+
+                                        <div>
+                                          <small>VERVOER</small>
+                                          <strong>Niet nodig</strong>
+                                        </div>
+                                      </div>
+                                    )}
                                 </div>
 
                                 <span className="updated">
@@ -1111,6 +1190,40 @@ function StatCard({
       <span className="stat-label">
         {label}
       </span>
+    </div>
+  );
+}
+
+/* =========================================================
+   ACTIVITEIT COUNTER
+========================================================= */
+
+function ActivityCounter({
+  emoji,
+  value,
+  label,
+  detail,
+  full = false,
+}: {
+  emoji: string;
+  value: number;
+  label: string;
+  detail?: string;
+  full?: boolean;
+}) {
+  return (
+    <div className={`activity-counter ${full ? "full" : ""}`}>
+      <span className="activity-counter-icon">{emoji}</span>
+
+      <div className="activity-counter-copy">
+        <div className="activity-counter-top">
+          <strong>{value}</strong>
+          {full && <span className="full-badge">VOLZET</span>}
+        </div>
+
+        <span>{label}</span>
+        {detail && <small>{detail}</small>}
+      </div>
     </div>
   );
 }
@@ -1466,6 +1579,80 @@ const css = `
     transition: width 300ms ease;
   }
 
+  /* ACTIVITEITSKEUZE 6e / 7e */
+
+  .activity-choice-grid {
+    margin-top: 8px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .activity-counter {
+    min-width: 0;
+    padding: 12px;
+    border-radius: 15px;
+    border: 1px solid rgba(137,194,170,0.14);
+    background: rgba(137,194,170,0.05);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .activity-counter.full {
+    border-color: rgba(251,191,36,0.22);
+    background: rgba(251,191,36,0.06);
+  }
+
+  .activity-counter-icon {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    font-size: 19px;
+  }
+
+  .activity-counter-copy {
+    min-width: 0;
+  }
+
+  .activity-counter-top {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .activity-counter-top strong {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .activity-counter-copy > span {
+    display: block;
+    margin-top: 3px;
+    font-size: 10px;
+    font-weight: 900;
+  }
+
+  .activity-counter-copy small {
+    display: block;
+    margin-top: 2px;
+    color: ${ui.muted};
+    font-size: 8px;
+  }
+
+  .full-badge {
+    padding: 3px 5px;
+    border-radius: 6px;
+    background: rgba(251,191,36,0.10);
+    color: #fde68a;
+    font-size: 7px;
+    font-weight: 1000;
+  }
+
   /* TRANSPORT */
 
   .transport-title {
@@ -1807,6 +1994,16 @@ const css = `
     font-size: 17px;
   }
 
+  .choice-pill.activity-pill {
+    border-color: rgba(137,194,170,0.15);
+    background: rgba(137,194,170,0.05);
+  }
+
+  .choice-pill.no-transport-pill {
+    border-color: rgba(34,197,94,0.14);
+    background: rgba(34,197,94,0.045);
+  }
+
   .choice-pill small,
   .choice-pill strong {
     display: block;
@@ -1839,6 +2036,10 @@ const css = `
   }
 
   @media(max-width: 640px) {
+    .activity-choice-grid {
+      grid-template-columns: 1fr;
+    }
+
     .source-bar {
       align-items: flex-start;
       flex-direction: column;
