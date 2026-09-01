@@ -421,50 +421,68 @@ export default function SportdagenPage() {
 
         {kanPreviewen && (
           <section className="preview-card">
-            <div className="preview-copy">
+            <div className="preview-header">
               <div className="preview-icon">👀</div>
-              <div>
+              <div className="preview-heading">
                 <span className="preview-label">LEERLINGWEERGAVE TESTEN</span>
                 <h2>Bekijk wat leerlingen zien</h2>
                 <p>
-                  Kies een leerjaar om de pagina als leerling te bekijken. Je
-                  kunt keuzes aanklikken om de werking te testen, maar als
-                  leerkracht kun je niets opslaan.
+                  Kies een leerjaar en bekijk de pagina vanuit het perspectief
+                  van een leerling. Je kunt alle keuzes testen, maar in
+                  previewmodus wordt niets opgeslagen.
                 </p>
               </div>
             </div>
 
-            <div className="preview-buttons">
+            <div className="preview-tiles">
               <button
                 type="button"
-                className={`preview-button ${previewLeerjaar === null ? "active" : ""}`}
+                className={`preview-tile ${previewLeerjaar === null ? "active" : ""}`}
                 onClick={() => setPreviewLeerjaar(null)}
               >
-                Alle sportdagen
+                <span className="preview-tile-icon">🏆</span>
+                <span className="preview-tile-copy">
+                  <strong>Alle sportdagen</strong>
+                  <small>Leerkrachtenoverzicht</small>
+                </span>
+                <span className="preview-tile-arrow">→</span>
               </button>
 
               {[1, 2, 3, 4, 5, 6, 7].map((jaar) => (
                 <button
                   key={jaar}
                   type="button"
-                  className={`preview-button ${previewLeerjaar === jaar ? "active" : ""}`}
+                  className={`preview-tile ${previewLeerjaar === jaar ? "active" : ""}`}
                   onClick={() => setPreviewLeerjaar(jaar)}
                 >
-                  {jaar}e jaar
+                  <span className="preview-year-number">{jaar}</span>
+                  <span className="preview-tile-copy">
+                    <strong>{jaar}e jaar</strong>
+                    <small>Leerlingweergave</small>
+                  </span>
+                  <span className="preview-tile-arrow">→</span>
                 </button>
               ))}
             </div>
 
             {previewActief && (
-              <div className="preview-warning">
-                <span>🔒</span>
-                <div>
-                  <strong>Previewmodus actief</strong>
+              <div className="preview-active-card">
+                <div className="preview-lock">🔒</div>
+                <div className="preview-active-copy">
+                  <span className="preview-active-label">PREVIEWMODUS ACTIEF</span>
+                  <strong>Je bekijkt nu het {previewLeerjaar}e jaar</strong>
                   <p>
-                    Je bekijkt nu de leerlingweergave van het {previewLeerjaar}e jaar.
+                    Je ziet dezelfde inhoud en keuzes als een leerling.
                     Opslaan is voor leerkrachten volledig uitgeschakeld.
                   </p>
                 </div>
+                <button
+                  type="button"
+                  className="preview-close"
+                  onClick={() => setPreviewLeerjaar(null)}
+                >
+                  Preview sluiten
+                </button>
               </div>
             )}
           </section>
@@ -1168,6 +1186,210 @@ const css = `
 
   .sportdagen-list { display: grid; gap: 20px; }
 
+
+  /* PREVIEW LEERLINGWEERGAVE */
+
+  .preview-card {
+    margin-bottom: 22px;
+    padding: 24px;
+    border-radius: 26px;
+    border: 1px solid rgba(137,194,170,0.18);
+    background:
+      radial-gradient(520px 220px at 100% 0%, rgba(137,194,170,0.10), transparent 72%),
+      linear-gradient(145deg, rgba(18,38,52,0.82), rgba(9,20,31,0.72));
+    box-shadow: 0 18px 48px rgba(0,0,0,0.18);
+  }
+
+  .preview-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 15px;
+  }
+
+  .preview-icon {
+    width: 50px;
+    height: 50px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 16px;
+    border: 1px solid rgba(137,194,170,0.18);
+    background: rgba(137,194,170,0.08);
+    font-size: 23px;
+  }
+
+  .preview-heading { min-width: 0; }
+
+  .preview-label {
+    display: block;
+    color: rgba(183,231,209,0.88);
+    font-size: 10px;
+    font-weight: 1000;
+    letter-spacing: 1.25px;
+  }
+
+  .preview-heading h2 {
+    margin: 4px 0 0;
+    font-size: 22px;
+    line-height: 1.2;
+    font-weight: 1000;
+  }
+
+  .preview-heading p {
+    max-width: 720px;
+    margin: 7px 0 0;
+    color: ${ui.muted};
+    font-size: 12px;
+    line-height: 1.55;
+  }
+
+  .preview-tiles {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .preview-tile {
+    min-width: 0;
+    min-height: 78px;
+    padding: 12px;
+    border-radius: 17px;
+    border: 1px solid rgba(255,255,255,0.085);
+    background: rgba(255,255,255,0.035);
+    color: ${ui.text};
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+    cursor: pointer;
+    transition: transform 150ms ease, border-color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+  }
+
+  .preview-tile:hover {
+    transform: translateY(-2px);
+    border-color: rgba(137,194,170,0.24);
+    background: rgba(137,194,170,0.065);
+  }
+
+  .preview-tile.active {
+    border-color: rgba(137,194,170,0.46);
+    background: linear-gradient(135deg, rgba(75,142,141,0.18), rgba(137,194,170,0.10));
+    box-shadow: inset 0 0 0 1px rgba(137,194,170,0.06);
+  }
+
+  .preview-year-number,
+  .preview-tile-icon {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.045);
+  }
+
+  .preview-year-number {
+    color: #b7e7d1;
+    font-size: 16px;
+    font-weight: 1000;
+  }
+
+  .preview-tile-icon { font-size: 19px; }
+
+  .preview-tile-copy {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .preview-tile-copy strong,
+  .preview-tile-copy small { display: block; }
+
+  .preview-tile-copy strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 950;
+  }
+
+  .preview-tile-copy small {
+    margin-top: 3px;
+    color: ${ui.muted};
+    font-size: 9px;
+  }
+
+  .preview-tile-arrow {
+    flex: 0 0 auto;
+    color: rgba(183,231,209,0.58);
+    font-size: 13px;
+  }
+
+  .preview-active-card {
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: 17px;
+    border: 1px solid rgba(96,165,250,0.20);
+    background: rgba(59,130,246,0.07);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .preview-lock {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 auto;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    border: 1px solid rgba(96,165,250,0.16);
+    background: rgba(96,165,250,0.08);
+    font-size: 18px;
+  }
+
+  .preview-active-copy {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .preview-active-label {
+    display: block;
+    color: #93c5fd;
+    font-size: 8px;
+    font-weight: 1000;
+    letter-spacing: 1px;
+  }
+
+  .preview-active-copy strong {
+    display: block;
+    margin-top: 2px;
+    font-size: 12px;
+  }
+
+  .preview-active-copy p {
+    margin: 3px 0 0;
+    color: rgba(191,219,254,0.72);
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .preview-close {
+    min-height: 38px;
+    flex: 0 0 auto;
+    padding: 0 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(96,165,250,0.18);
+    background: rgba(96,165,250,0.08);
+    color: #dbeafe;
+    font-size: 10px;
+    font-weight: 900;
+    cursor: pointer;
+  }
+
+  .preview-close:hover { background: rgba(96,165,250,0.12); }
+
   .hero {
     margin-bottom: 20px;
     padding: 30px;
@@ -1772,7 +1994,37 @@ const css = `
 
     .hero h1 { font-size: 31px; }
 
-    .preview-button { flex: 1 1 calc(25% - 7px); min-width: 78px; }
+    .preview-card {
+      padding: 18px;
+      border-radius: 22px;
+    }
+
+    .preview-header { gap: 12px; }
+
+    .preview-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      font-size: 20px;
+    }
+
+    .preview-heading h2 { font-size: 19px; }
+
+    .preview-tiles {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .preview-tile {
+      min-height: 72px;
+      padding: 10px;
+    }
+
+    .preview-active-card {
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .preview-close { width: 100%; }
 
     .info-grid {
       grid-template-columns: 1fr;
