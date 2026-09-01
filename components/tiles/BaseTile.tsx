@@ -10,7 +10,12 @@ type BaseTileProps = {
   desc: string;
 };
 
-export function BaseTile({ href, icon, title, desc }: BaseTileProps) {
+export function BaseTile({
+  href,
+  icon,
+  title,
+  desc,
+}: BaseTileProps) {
   return (
     <Link
       href={href}
@@ -30,9 +35,9 @@ export function BaseTile({ href, icon, title, desc }: BaseTileProps) {
       {/* shine animation */}
       <div className="pointer-events-none absolute inset-[-40%_-30%] opacity-0 transition group-hover:opacity-100 group-hover:animate-[tileSweep_900ms_ease_forwards] [background:linear-gradient(120deg,rgba(255,255,255,0)_35%,rgba(255,255,255,0.08)_50%,rgba(255,255,255,0)_65%)]" />
 
-      {/* content */}
+      {/* content bovenaan */}
       <div className="relative z-10 grid gap-3">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl border border-slate-400/20 bg-[linear-gradient(180deg,rgba(0,0,0,0.38),rgba(0,0,0,0.30))] text-xl text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition duration-200 group-hover:border-teal-200/25 group-hover:scale-[1.05]">
+        <div className="grid h-12 w-12 place-items-center rounded-2xl border border-slate-400/20 bg-[linear-gradient(180deg,rgba(0,0,0,0.38),rgba(0,0,0,0.30))] text-xl text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] transition duration-200 group-hover:scale-[1.05] group-hover:border-teal-200/25">
           {icon}
         </div>
 
@@ -41,14 +46,10 @@ export function BaseTile({ href, icon, title, desc }: BaseTileProps) {
         </div>
       </div>
 
+      {/* beschrijving onderaan */}
       <div className="relative z-10">
-        <div className="text-xs leading-5 text-white/70">{desc}</div>
-
-        <div className="mt-3 inline-flex items-center text-xs font-black text-white/90 transition duration-200 group-hover:translate-x-0.5">
-          Openen
-          <span className="ml-1 transition duration-200 group-hover:translate-x-1">
-            →
-          </span>
+        <div className="text-xs leading-5 text-white/70">
+          {desc}
         </div>
       </div>
 
@@ -57,6 +58,7 @@ export function BaseTile({ href, icon, title, desc }: BaseTileProps) {
           0% {
             transform: translateX(-55%) rotate(10deg);
           }
+
           100% {
             transform: translateX(55%) rotate(10deg);
           }
