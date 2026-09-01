@@ -274,6 +274,14 @@ const sportdagen: Sportdag[] = [
    HELPERS
 ========================================================= */
 
+function normalizeRole(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
 function getLeerjaar(value: number | string | null | undefined) {
   if (typeof value === "number") return value;
   if (!value) return null;
@@ -301,6 +309,7 @@ function isReminderPeriode() {
 export default function SportdagenPage() {
   const [profiel, setProfiel] = useState<Profiel | null>(null);
   const [loading, setLoading] = useState(true);
+  const [previewLeerjaar, setPreviewLeerjaar] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadProfile() {
@@ -334,17 +343,34 @@ export default function SportdagenPage() {
   }, []);
 
   const leerjaar = getLeerjaar(profiel?.leerjaar);
-  const isLeerling = profiel?.rol === "leerling";
+  const rol = normalizeRole(profiel?.rol);
+  const isLeerling = rol === "leerling";
+
+  const isLeerkracht = rol === "leerkracht";
+  const isLoLeerkracht =
+    rol === "lo_leerkracht" || rol === "leerkracht_lo";
+
+  const kanPreviewen = isLeerkracht || isLoLeerkracht;
+  const previewActief = kanPreviewen && previewLeerjaar !== null;
 
   const magAllesZien =
-    profiel?.rol === "leerkracht" ||
-    profiel?.rol === "lo_leerkracht" ||
-    profiel?.rol === "leerkracht_lo" ||
-    profiel?.rol === "administratief_personeel" ||
-    profiel?.rol === "admin";
+    isLeerkracht ||
+    isLoLeerkracht ||
+    rol === "administratief_personeel" ||
+    rol === "admin";
+
+  const effectiefLeerjaar = previewActief ? previewLeerjaar : leerjaar;
+  const leerlingWeergave = isLeerling || previewActief;
 
   const zichtbareSportdagen = useMemo(() => {
     if (!profiel) return [];
+
+    if (previewActief && previewLeerjaar) {
+      return sportdagen.filter((sportdag) =>
+        sportdag.leerjaren.includes(previewLeerjaar)
+      );
+    }
+
     if (magAllesZien) return sportdagen;
 
     if (isLeerling && leerjaar) {
@@ -354,7 +380,7 @@ export default function SportdagenPage() {
     }
 
     return [];
-  }, [profiel, magAllesZien, isLeerling, leerjaar]);
+  }, [profiel, previewActief, previewLeerjaar, magAllesZien, isLeerling, leerjaar]);
 
   if (loading) {
     return (
@@ -384,12 +410,65 @@ export default function SportdagenPage() {
             <div className="eyebrow">SCHOOLJAAR 2026–2027</div>
             <h1>Sportdagen</h1>
             <p>
-              {isLeerling
-                ? "Hier vind je alle praktische informatie voor jouw sportdag."
+              {leerlingWeergave
+                ? previewActief
+                  ? `Preview leerlingweergave ${previewLeerjaar}e jaar. Opslaan is uitgeschakeld.`
+                  : "Hier vind je alle praktische informatie voor jouw sportdag."
                 : "Hier vind je het volledige overzicht van alle sportdagen."}
             </p>
           </div>
         </section>
+
+        {kanPreviewen && (
+          <section className="preview-card">
+            <div className="preview-copy">
+              <div className="preview-icon">👀</div>
+              <div>
+                <span className="preview-label">LEERLINGWEERGAVE TESTEN</span>
+                <h2>Bekijk wat leerlingen zien</h2>
+                <p>
+                  Kies een leerjaar om de pagina als leerling te bekijken. Je
+                  kunt keuzes aanklikken om de werking te testen, maar als
+                  leerkracht kun je niets opslaan.
+                </p>
+              </div>
+            </div>
+
+            <div className="preview-buttons">
+              <button
+                type="button"
+                className={`preview-button ${previewLeerjaar === null ? "active" : ""}`}
+                onClick={() => setPreviewLeerjaar(null)}
+              >
+                Alle sportdagen
+              </button>
+
+              {[1, 2, 3, 4, 5, 6, 7].map((jaar) => (
+                <button
+                  key={jaar}
+                  type="button"
+                  className={`preview-button ${previewLeerjaar === jaar ? "active" : ""}`}
+                  onClick={() => setPreviewLeerjaar(jaar)}
+                >
+                  {jaar}e jaar
+                </button>
+              ))}
+            </div>
+
+            {previewActief && (
+              <div className="preview-warning">
+                <span>🔒</span>
+                <div>
+                  <strong>Previewmodus actief</strong>
+                  <p>
+                    Je bekijkt nu de leerlingweergave van het {previewLeerjaar}e jaar.
+                    Opslaan is voor leerkrachten volledig uitgeschakeld.
+                  </p>
+                </div>
+              </div>
+            )}
+          </section>
+        )}
 
         {isLeerling && !leerjaar && (
           <div className="notice error">
@@ -404,8 +483,9 @@ export default function SportdagenPage() {
               key={sportdag.jaar}
               sportdag={sportdag}
               profiel={profiel}
-              isLeerling={isLeerling}
-              leerjaar={leerjaar}
+              isLeerling={leerlingWeergave}
+              leerjaar={effectiefLeerjaar}
+              previewMode={previewActief}
             />
           ))}
         </div>
@@ -435,11 +515,13 @@ function SportdagCard({
   profiel,
   isLeerling,
   leerjaar,
+  previewMode,
 }: {
   sportdag: Sportdag;
   profiel: Profiel | null;
   isLeerling: boolean;
   leerjaar: number | null;
+  previewMode: boolean;
 }) {
   return (
     <article className="sportdag-card">
@@ -540,6 +622,7 @@ function SportdagCard({
             leerlingId={profiel.id}
             leerjaar={leerjaar}
             isZesdeOfZevende={sportdag.leerjaren.includes(6)}
+            previewMode={previewMode}
           />
         )}
     </article>
@@ -582,10 +665,12 @@ function SportdagKeuze({
   leerlingId,
   leerjaar,
   isZesdeOfZevende,
+  previewMode,
 }: {
   leerlingId: string;
   leerjaar: number;
   isZesdeOfZevende: boolean;
+  previewMode: boolean;
 }) {
   const [activiteit, setActiviteit] = useState<Activiteit67>("donk");
   const [heen, setHeen] = useState("");
@@ -624,6 +709,20 @@ function SportdagKeuze({
       setLoading(true);
       setErrorMessage("");
 
+      if (previewMode) {
+        setActiviteit("donk");
+        setHeen("");
+        setTerug("");
+        setSaved(false);
+
+        if (isZesdeOfZevende) {
+          await refreshKoersGolfAantal();
+        }
+
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from("sportdag_vervoer")
         .select("heen, terug, activiteit")
@@ -639,10 +738,8 @@ function SportdagKeuze({
         if (isZesdeOfZevende) {
           const bestaandeActiviteit: Activiteit67 =
             data.activiteit === "koers_golf" ? "koers_golf" : "donk";
-
           setActiviteit(bestaandeActiviteit);
         }
-
         setHeen(data.heen ?? "");
         setTerug(data.terug ?? "");
         setSaved(true);
@@ -656,7 +753,7 @@ function SportdagKeuze({
     }
 
     loadChoice();
-  }, [leerlingId, isZesdeOfZevende]);
+  }, [leerlingId, isZesdeOfZevende, previewMode]);
 
   function kiesActiviteit(nieuweActiviteit: Activiteit67) {
     if (
@@ -678,6 +775,8 @@ function SportdagKeuze({
   }
 
   async function saveChoice() {
+    if (previewMode) return;
+
     if (!isZesdeOfZevende && (!heen || !terug)) {
       setErrorMessage("Kies zowel je heenreis als je terugreis.");
       return;
@@ -749,6 +848,7 @@ function SportdagKeuze({
   }
 
   const saveDisabled =
+    previewMode ||
     saving ||
     (!kiestKoersGolf && (!heen || !terug)) ||
     (isZesdeOfZevende &&
@@ -758,7 +858,17 @@ function SportdagKeuze({
 
   return (
     <div className="transport-card">
-      {reminderActief && !saved && (
+      {previewMode && (
+        <div className="transport-preview-notice">
+          <span>👀</span>
+          <div>
+            <strong>Voorbeeld leerlingweergave</strong>
+            <p>Je kunt alles aanklikken om te testen. Er wordt niets opgeslagen.</p>
+          </div>
+        </div>
+      )}
+
+      {reminderActief && !saved && !previewMode && (
         <div className="transport-reminder">
           <div className="reminder-icon">⚠️</div>
           <div>
@@ -935,10 +1045,16 @@ function SportdagKeuze({
         disabled={saveDisabled}
         onClick={saveChoice}
       >
-        {saving ? "Opslaan..." : saved ? "Keuze wijzigen" : "Keuze opslaan"}
+        {previewMode
+          ? "Preview — opslaan uitgeschakeld"
+          : saving
+          ? "Opslaan..."
+          : saved
+          ? "Keuze wijzigen"
+          : "Keuze opslaan"}
       </button>
 
-      {saved && (
+      {saved && !previewMode && (
         <div className="transport-success">
           <span>✓</span>
           <div>
@@ -1655,6 +1771,8 @@ const css = `
     }
 
     .hero h1 { font-size: 31px; }
+
+    .preview-button { flex: 1 1 calc(25% - 7px); min-width: 78px; }
 
     .info-grid {
       grid-template-columns: 1fr;
