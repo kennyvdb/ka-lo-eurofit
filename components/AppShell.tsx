@@ -102,19 +102,17 @@ export default function AppShell({
         return;
       }
 
-      const { data: profiel } = await supabase
+      const { data: profiel, error: profielError } = await supabase
         .from("profielen")
-        .select("volledige_naam, naam, voornaam, achternaam")
+        .select("volledige_naam")
         .eq("id", user.id)
         .maybeSingle();
 
-      const profielNaam = normalizeName(
-        profiel?.volledige_naam ??
-          profiel?.naam ??
-          [profiel?.voornaam, profiel?.achternaam]
-            .filter(Boolean)
-            .join(" ")
-      );
+      if (profielError) {
+        console.error("AppShell profiel laden mislukt:", profielError);
+      }
+
+      const profielNaam = normalizeName(profiel?.volledige_naam);
 
       const metadataNaam = normalizeName(
         user.user_metadata?.full_name ??

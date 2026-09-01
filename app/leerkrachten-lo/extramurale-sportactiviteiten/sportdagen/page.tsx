@@ -40,14 +40,9 @@ type GekoppeldeLeerling = SmartschoolLeerling & {
   gekoppeld_profiel_id: string | null;
   koppeling:
     | "smartschool_profiel_id"
-    | "email"
     | "niet_gekoppeld";
 };
 
-type ProfielKoppeling = {
-  id: string;
-  email: string | null;
-};
 
 type VervoersKeuze = {
   leerling_id: string;
@@ -90,6 +85,12 @@ function isAllowedRole(role: string) {
 }
 
 function normalizeEmail(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeId(value: string | null | undefined) {
   return String(value ?? "")
     .trim()
     .toLowerCase();
@@ -159,8 +160,6 @@ export default function SportdagenBeheerPage() {
   const [smartschoolSchooljaar, setSmartschoolSchooljaar] =
     useState<string | null>(null);
 
-  const [profielFallbackBeschikbaar, setProfielFallbackBeschikbaar] =
-    useState(true);
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -234,7 +233,7 @@ export default function SportdagenBeheerPage() {
 
       const { data: smartschoolData, error: smartschoolError } =
         await supabase
-          .from("eurofit_class_students_view")
+          .from("sportdag_class_students_view")
           .select(`
             email,
             given_name,
@@ -335,88 +334,23 @@ export default function SportdagenBeheerPage() {
         Array.from(uniekeLeerlingen.values());
 
       /* ---------------------------------------------------
-         6. PROFIELEN LADEN VOOR E-MAILFALLBACK
+         6. SMARTSCHOOL -> PROFIEL KOPPELEN
 
-         Dit maakt de koppeling robuust:
-
-         Smartschool.profiel_id
-                    OF
-         Smartschool.email -> profielen.email -> profielen.id
-      --------------------------------------------------- */
-
-      const { data: profielLinksData, error: profielLinksError } =
-        await supabase
-          .from("profielen")
-          .select("id, email")
-          .range(0, 4999);
-
-      let profielLinks: ProfielKoppeling[] = [];
-
-      if (profielLinksError) {
-        /*
-          Geen harde fout.
-
-          Als RLS verhindert dat alle profielen gelezen worden,
-          blijven we gewoon werken met profiel_id uit de
-          Smartschool-view.
-        */
-
-        console.warn(
-          "E-mailfallback via profielen niet beschikbaar:",
-          profielLinksError
-        );
-
-        setProfielFallbackBeschikbaar(false);
-      } else {
-        profielLinks =
-          (profielLinksData ?? []) as ProfielKoppeling[];
-
-        setProfielFallbackBeschikbaar(true);
-      }
-
-      /* ---------------------------------------------------
-         7. E-MAIL -> PROFIEL-ID MAP
-      --------------------------------------------------- */
-
-      const profielIdPerEmail = new Map<string, string>();
-
-      for (const profielLink of profielLinks) {
-        const email = normalizeEmail(profielLink.email);
-
-        if (!email) continue;
-
-        profielIdPerEmail.set(email, profielLink.id);
-      }
-
-      /* ---------------------------------------------------
-         8. SMARTSCHOOL + PROFIELEN KOPPELEN
-
-         Prioriteit:
-         1. profiel_id uit Smartschool-view
-         2. profiel via e-mailadres
-         3. geen profiel
+         De view sportdag_class_students_view bevat al profiel_id.
+         We gebruiken dit veld rechtstreeks en normaliseren de UUID.
+         Zo vermijden we een extra query naar profielen en dus ook
+         mogelijke RLS/PostgREST-problemen op die fallback-query.
       --------------------------------------------------- */
 
       const gekoppeldeLeerlingen: GekoppeldeLeerling[] =
         actieveSmartschoolRijen.map((leerling) => {
-          if (leerling.profiel_id) {
+          const profielId = normalizeId(leerling.profiel_id);
+
+          if (profielId) {
             return {
               ...leerling,
-              gekoppeld_profiel_id: leerling.profiel_id,
+              gekoppeld_profiel_id: profielId,
               koppeling: "smartschool_profiel_id",
-            };
-          }
-
-          const email = normalizeEmail(leerling.email);
-
-          const profielIdViaEmail =
-            profielIdPerEmail.get(email) ?? null;
-
-          if (profielIdViaEmail) {
-            return {
-              ...leerling,
-              gekoppeld_profiel_id: profielIdViaEmail,
-              koppeling: "email",
             };
           }
 
@@ -445,6 +379,7 @@ export default function SportdagenBeheerPage() {
           `)
           .eq("schooljaar", SCHOOLJAAR_SPORTDAG)
           .range(0, 4999);
+
 
       if (vervoerError) {
         console.error(
@@ -526,7 +461,11 @@ export default function SportdagenBeheerPage() {
     const result = new Map<string, VervoersKeuze>();
 
     for (const keuze of vervoersKeuzes) {
-      result.set(keuze.leerling_id, keuze);
+      const leerlingId = normalizeId(keuze.leerling_id);
+
+      if (!leerlingId) continue;
+
+      result.set(leerlingId, keuze);
     }
 
     return result;
@@ -673,13 +612,6 @@ export default function SportdagenBeheerPage() {
                   {smartschoolSchooljaar}
                 </div>
               )}
-
-            {!profielFallbackBeschikbaar && (
-              <div className="schoolyear-warning">
-                ⚠️ Profielkoppeling via e-mail niet
-                beschikbaar
-              </div>
-            )}
           </div>
         </section>
 
@@ -710,8 +642,9 @@ export default function SportdagenBeheerPage() {
               const ingevuldeLeerlingen =
                 leerlingenVanLeerjaar.filter(
                   (leerling) => {
-                    const profielId =
-                      leerling.gekoppeld_profiel_id;
+                    const profielId = normalizeId(
+                      leerling.gekoppeld_profiel_id
+                    );
 
                     if (!profielId) {
                       return false;
@@ -720,9 +653,13 @@ export default function SportdagenBeheerPage() {
                     const keuze =
                       vervoerPerLeerling.get(profielId);
 
+                    if (!keuze) {
+                      return false;
+                    }
+
                     return (
-                      Boolean(keuze) &&
-                      keuze?.leerjaar === leerjaar
+                      Number(keuze.leerjaar) ===
+                      Number(leerjaar)
                     );
                   }
                 );
@@ -733,19 +670,28 @@ export default function SportdagenBeheerPage() {
               */
 
               const ingevuldeIds = new Set(
-                ingevuldeLeerlingen.map(
-                  (leerling) =>
-                    leerling.gekoppeld_profiel_id
-                )
+                ingevuldeLeerlingen
+                  .map((leerling) =>
+                    normalizeId(
+                      leerling.gekoppeld_profiel_id
+                    )
+                  )
+                  .filter(Boolean)
               );
 
               const ontbrekendeLeerlingen =
                 leerlingenVanLeerjaar.filter(
-                  (leerling) =>
-                    !leerling.gekoppeld_profiel_id ||
-                    !ingevuldeIds.has(
+                  (leerling) => {
+                    const profielId = normalizeId(
                       leerling.gekoppeld_profiel_id
-                    )
+                    );
+
+                    if (!profielId) {
+                      return true;
+                    }
+
+                    return !ingevuldeIds.has(profielId);
+                  }
                 );
 
               /* ------------------------------------------------
@@ -758,8 +704,9 @@ export default function SportdagenBeheerPage() {
               let eigenTerug = 0;
 
               for (const leerling of ingevuldeLeerlingen) {
-                const profielId =
-                  leerling.gekoppeld_profiel_id;
+                const profielId = normalizeId(
+                  leerling.gekoppeld_profiel_id
+                );
 
                 if (!profielId) continue;
 
@@ -967,14 +914,6 @@ export default function SportdagenBeheerPage() {
                                     Nog niet ingelogd
                                   </span>
                                 )}
-
-                                {leerling.gekoppeld_profiel_id &&
-                                  leerling.koppeling ===
-                                    "email" && (
-                                    <span className="linked-badge">
-                                      Profiel gekoppeld
-                                    </span>
-                                  )}
                               </div>
                             )
                           )}
@@ -1038,8 +977,9 @@ export default function SportdagenBeheerPage() {
                       <div className="filled-list">
                         {ingevuldeLeerlingen.map(
                           (leerling) => {
-                            const profielId =
-                              leerling.gekoppeld_profiel_id;
+                            const profielId = normalizeId(
+                              leerling.gekoppeld_profiel_id
+                            );
 
                             if (!profielId) {
                               return null;
@@ -1074,14 +1014,6 @@ export default function SportdagenBeheerPage() {
                                         "Geen klas"}
                                     </span>
                                   </div>
-
-                                  {leerling.koppeling ===
-                                    "email" && (
-                                    <span className="linked-badge">
-                                      Gekoppeld via
-                                      e-mail
-                                    </span>
-                                  )}
                                 </div>
 
                                 <div className="filled-choices">
