@@ -57,7 +57,9 @@ function getInitials(name?: string | null) {
 
   const parts = cleaned.split(/\s+/).filter(Boolean);
   const first = parts[0]?.[0] ?? "";
-  const last = parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
+  const last =
+    parts.length > 1 ? parts[parts.length - 1]?.[0] ?? "" : "";
+
   const initials = (first + last).toUpperCase();
 
   return initials || "KA";
@@ -109,7 +111,9 @@ export default function AppShell({
       const profielNaam = normalizeName(
         profiel?.volledige_naam ??
           profiel?.naam ??
-          [profiel?.voornaam, profiel?.achternaam].filter(Boolean).join(" ")
+          [profiel?.voornaam, profiel?.achternaam]
+            .filter(Boolean)
+            .join(" ")
       );
 
       const metadataNaam = normalizeName(
@@ -130,18 +134,24 @@ export default function AppShell({
     };
   }, [userName]);
 
-  const initials = useMemo(() => getInitials(resolvedUserName), [resolvedUserName]);
+  const initials = useMemo(
+    () => getInitials(resolvedUserName),
+    [resolvedUserName]
+  );
+
   const displayUserName = resolvedUserName ?? "—";
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
       if (!menuRef.current) return;
+
       if (!menuRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     }
 
     document.addEventListener("mousedown", onClickOutside);
+
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
@@ -187,12 +197,20 @@ export default function AppShell({
         ].join(" ")}
       >
         <span className="appNavLeft">
-          <span className={["appNavIcon", active ? "appNavIconActive" : ""].join(" ")}>
+          <span
+            className={[
+              "appNavIcon",
+              active ? "appNavIconActive" : "",
+            ].join(" ")}
+          >
             {icon ?? "→"}
           </span>
+
           <span className="appNavLabel">{label}</span>
         </span>
+
         <span className="appNavArrow">→</span>
+
         <span className="appNavEdge" aria-hidden="true" />
       </Link>
     );
@@ -200,7 +218,12 @@ export default function AppShell({
 
   return (
     <div className="min-h-dvh bg-neutral-950 text-white">
-      <header className="sticky top-0 z-50 border-b border-white/10 bg-neutral-950/60 backdrop-blur-xl">
+      <header
+        className="sticky top-0 z-50 border-b border-white/10 bg-neutral-950/60 backdrop-blur-xl"
+        style={{
+          paddingTop: "env(safe-area-inset-top)",
+        }}
+      >
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
           <div ref={menuRef} className="relative">
             <button
@@ -238,14 +261,22 @@ export default function AppShell({
                     </div>
 
                     <div className="min-w-0">
-                      <div className="text-sm font-extrabold leading-tight">{title}</div>
-                      <div className="text-xs text-white/70">{subtitle}</div>
+                      <div className="text-sm font-extrabold leading-tight">
+                        {title}
+                      </div>
+
+                      <div className="text-xs text-white/70">
+                        {subtitle}
+                      </div>
                     </div>
                   </div>
 
                   <div className="userCard">
                     <div className="min-w-0">
-                      <div className="text-xs text-white/55">Aangemeld als</div>
+                      <div className="text-xs text-white/55">
+                        Aangemeld als
+                      </div>
+
                       <div className="truncate text-sm font-semibold text-white">
                         {displayUserName}
                       </div>
@@ -253,6 +284,7 @@ export default function AppShell({
 
                     <div className="avatarSm">
                       {initials}
+
                       <span className="ring" aria-hidden="true" />
                       <span className="sweep" aria-hidden="true" />
                     </div>
@@ -260,11 +292,27 @@ export default function AppShell({
                 </div>
 
                 <nav className="grid">
-                  <NavLink href="/dashboard" label="Beginscherm" icon="🏠" first />
+                  <NavLink
+                    href="/dashboard"
+                    label="Beginscherm"
+                    icon="🏠"
+                    first
+                  />
+
                   {navItems.map((it) => (
-                    <NavLink key={it.href} href={it.href} label={it.label} icon={it.icon} />
+                    <NavLink
+                      key={it.href}
+                      href={it.href}
+                      label={it.label}
+                      icon={it.icon}
+                    />
                   ))}
-                  <NavLink href="/dashboard/profiel" label="Profiel" icon="👤" />
+
+                  <NavLink
+                    href="/dashboard/profiel"
+                    label="Profiel"
+                    icon="👤"
+                  />
                 </nav>
               </div>
             )}
@@ -277,12 +325,18 @@ export default function AppShell({
                 alt="Logo Atheneum"
                 className="topLogoImg"
               />
+
               <span className="sweep" aria-hidden="true" />
             </div>
 
             <div className="grid text-center leading-tight">
-              <div className="text-sm font-extrabold tracking-tight">{title}</div>
-              <div className="text-xs text-white/70">{subtitle}</div>
+              <div className="text-sm font-extrabold tracking-tight">
+                {title}
+              </div>
+
+              <div className="text-xs text-white/70">
+                {subtitle}
+              </div>
             </div>
 
             <div className="topLogoFree">
@@ -291,6 +345,7 @@ export default function AppShell({
                 alt="Logo Atheneum"
                 className="topLogoImg"
               />
+
               <span className="sweep" aria-hidden="true" />
             </div>
           </div>
@@ -302,6 +357,7 @@ export default function AppShell({
             className="avatarTop"
           >
             {initials}
+
             <span className="ring" aria-hidden="true" />
             <span className="sweep" aria-hidden="true" />
           </Link>
@@ -375,10 +431,10 @@ export default function AppShell({
 
           .menuDrop{
             position:fixed;
-            top:64px;
+            top:calc(64px + env(safe-area-inset-top));
             left:16px;
             width:min(320px, calc(100vw - 32px));
-            max-height:calc(100dvh - 80px);
+            max-height:calc(100dvh - 80px - env(safe-area-inset-top));
             overflow-y:auto;
             overflow-x:hidden;
             -webkit-overflow-scrolling:touch;
@@ -499,10 +555,12 @@ export default function AppShell({
             color:var(--uiText);
             border:1px solid var(--uiBorder2);
             background:
-              radial-gradient(120% 120% at 20% 20%,
+              radial-gradient(
+                120% 120% at 20% 20%,
                 rgba(137,194,170,0.30) 0%,
                 rgba(75,142,141,0.16) 45%,
-                rgba(0,0,0,0.50) 78%),
+                rgba(0,0,0,0.50) 78%
+              ),
               rgba(0,0,0,0.58);
             box-shadow:
               0 12px 28px rgba(0,0,0,0.42),
@@ -543,7 +601,9 @@ export default function AppShell({
               rgba(75,142,141,0.60),
               rgba(137,194,170,0.48)
             );
-            -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+            -webkit-mask:
+              linear-gradient(#000 0 0) content-box,
+              linear-gradient(#000 0 0);
             -webkit-mask-composite: xor;
             mask-composite: exclude;
             opacity:0.95;
