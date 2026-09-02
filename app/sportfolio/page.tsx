@@ -56,8 +56,10 @@ const ui = {
 };
 
 function getRoleLabel(role?: string | null, rol?: string | null) {
-  const raw = (role ?? rol ?? "").toLowerCase();
-  if (raw === "teacher" || raw === "leerkracht") return "Leerkracht";
+  const raw = (rol ?? role ?? "").trim().toLowerCase();
+  if (["teacher", "leerkracht", "lo_leerkracht", "admin"].includes(raw)) {
+    return "Leerkracht";
+  }
   return "Leerling";
 }
 

@@ -41,14 +41,20 @@ type Klasgroep = {
 };
 
 type KlasgroepLeerling = {
-  id?: string;
+  koppeling_id: string;
   klasgroep_id: string;
-  leerling_id: string;
-  leerling_naam: string;
+  klasgroep_naam: string;
+  schooljaar: string;
+  leerkracht_id: string;
+  positie: number;
+  leerling_email: string;
+  profiel_id: string | null;
+  volledige_naam: string;
+  given_name: string;
+  family_name: string;
+  username: string;
   klas_naam: string;
-  email: string | null;
-  username: string | null;
-  lo_groepen: string | null;
+  lo_groepen: string;
 };
 
 const ui = {
@@ -244,11 +250,11 @@ export default function LeerkrachtenLOKlasgroepenPage() {
 
   async function loadGroepLeerlingen(klasgroepId: string) {
     const { data, error } = await supabase
-      .from("lo_klasgroep_leerlingen")
-      .select("id, klasgroep_id, leerling_id, leerling_naam, klas_naam, email, username, lo_groepen")
+      .from("lo_klasgroep_leden_view")
+      .select("*")
       .eq("klasgroep_id", klasgroepId)
       .order("klas_naam", { ascending: true })
-      .order("leerling_naam", { ascending: true });
+      .order("positie", { ascending: true });
 
     if (error) throw new Error(readableSupabaseError(error, "Kon leerlingen van klasgroep niet laden."));
     setKlasgroepLeerlingen((data ?? []) as KlasgroepLeerling[]);
@@ -543,16 +549,17 @@ export default function LeerkrachtenLOKlasgroepenPage() {
     setGeslachtFilter(filters.geslachtFilter ?? "Alle");
     setZoekterm("");
     setKlasbeeldOpen(true);
-    setLeerlingOrder(Array.isArray(filters.leerlingOrder) ? filters.leerlingOrder : []);
+    setLeerlingOrder([]);
     setActiveKlasbeeldKlas(filters.activeKlasbeeldKlas ?? "");
 
     try {
       await loadGroepLeerlingen(group.id);
 
       const { data, error } = await supabase
-        .from("lo_klasgroep_leerlingen")
-        .select("leerling_id, leerling_naam, klas_naam, email, username, lo_groepen")
-        .eq("klasgroep_id", group.id);
+        .from("lo_klasgroep_leden_view")
+        .select("profiel_id, leerling_email, volledige_naam, klas_naam, positie")
+        .eq("klasgroep_id", group.id)
+        .order("positie", { ascending: true });
 
       if (error) throw new Error(readableSupabaseError(error, "Kon klasgroepselectie niet laden."));
 
@@ -560,15 +567,26 @@ export default function LeerkrachtenLOKlasgroepenPage() {
       (data ?? []).forEach((row: any) => {
         const match = leerlingen.find(
           (l) =>
-            l.id === row.leerling_id ||
-            (!!row.email && l.email === String(row.email).toLowerCase()) ||
-            (l.naam === row.leerling_naam && l.klas === row.klas_naam)
+            (!!row.profiel_id && l.id === row.profiel_id) ||
+            l.email === String(row.leerling_email ?? "").toLowerCase()
         );
 
         if (match) keys.add(leerlingKey(match));
       });
 
       setSelectedKeys(keys);
+      setLeerlingOrder(
+        (data ?? [])
+          .map((row: any) => {
+            const match = leerlingen.find(
+              (l) =>
+                (!!row.profiel_id && l.id === row.profiel_id) ||
+                l.email === String(row.leerling_email ?? "").toLowerCase()
+            );
+            return match ? leerlingKey(match) : null;
+          })
+          .filter((key: string | null): key is string => Boolean(key))
+      );
 
       const klassen = Array.from(new Set<string>((data ?? []).map((row: any) => String(row.klas_naam ?? "").trim()).filter(Boolean))).sort((a, b) =>
         a.localeCompare(b, "nl-BE", { numeric: true })
@@ -604,7 +622,6 @@ export default function LeerkrachtenLOKlasgroepenPage() {
         klasFilter,
         loGroepFilter,
         geslachtFilter,
-        leerlingOrder,
         klasbeeldOpen: true,
       };
       let klasgroepId = activeGroupId;
@@ -652,12 +669,10 @@ export default function LeerkrachtenLOKlasgroepenPage() {
 
       const payload = geselecteerdeLeerlingen.map((l) => ({
         klasgroep_id: klasgroepId,
-        leerling_id: l.id,
-        leerling_naam: l.naam,
-        klas_naam: l.klas,
-        email: l.email || null,
-        username: l.username || null,
-        lo_groepen: l.loGroep || null,
+        leerling_email: l.email.trim().toLowerCase(),
+        positie: leerlingOrder.indexOf(leerlingKey(l)) >= 0
+          ? leerlingOrder.indexOf(leerlingKey(l))
+          : geselecteerdeLeerlingen.indexOf(l),
       }));
 
       const { error: membersError } = await supabase.from("lo_klasgroep_leerlingen").insert(payload);
@@ -710,9 +725,20 @@ export default function LeerkrachtenLOKlasgroepenPage() {
         klasFilter,
         loGroepFilter,
         geslachtFilter,
-        leerlingOrder,
         klasbeeldOpen: true,
       };
+
+      const positiePayload = geordendeGeselecteerdeLeerlingen.map((leerling, positie) => ({
+        klasgroep_id: activeGroupId,
+        leerling_email: leerling.email.trim().toLowerCase(),
+        positie,
+      }));
+
+      const { error: positieError } = await supabase
+        .from("lo_klasgroep_leerlingen")
+        .upsert(positiePayload, { onConflict: "klasgroep_id,leerling_email" });
+
+      if (positieError) throw new Error(readableSupabaseError(positieError, "Kon leerlingvolgorde bewaren."));
 
       const { error: updateError } = await supabase
         .from("lo_klasgroepen")
@@ -741,13 +767,6 @@ export default function LeerkrachtenLOKlasgroepenPage() {
     setError(null);
 
     try {
-      const { error: membersError } = await supabase
-        .from("lo_klasgroep_leerlingen")
-        .delete()
-        .eq("klasgroep_id", group.id);
-
-      if (membersError) throw new Error(readableSupabaseError(membersError, "Kon leerlingen niet verwijderen."));
-
       const { error: groupError } = await supabase
         .from("lo_klasgroepen")
         .delete()

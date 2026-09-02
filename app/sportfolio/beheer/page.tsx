@@ -1,6 +1,8 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
+import KlasgroepSelector from "@/components/klasgroepen/KlasgroepSelector";
+import type { KlasgroepLid } from "@/types/klasgroepen";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
@@ -27,9 +29,12 @@ type Openstelling = {
   id: string;
   discipline_id: string;
   klas_naam: string | null;
+  klasgroep_id: string | null;
   schooljaar: string;
   open_voor_leerlingen: boolean | null;
 };
+
+type DoelType = "klas" | "klasgroep";
 
 function getValue(row: RawRow, keys: string[]) {
   for (const key of keys) {
@@ -74,6 +79,9 @@ export default function SportfolioBeheerPage() {
   const [openstellingen, setOpenstellingen] = useState<Openstelling[]>([]);
 
   const [selectedKlasNaam, setSelectedKlasNaam] = useState("");
+  const [selectedKlasgroepId, setSelectedKlasgroepId] = useState<string | null>(null);
+  const [selectedKlasgroepLeden, setSelectedKlasgroepLeden] = useState<KlasgroepLid[]>([]);
+  const [doelType, setDoelType] = useState<DoelType>("klas");
   const [selectedSchooljaar, setSelectedSchooljaar] = useState("");
 
   const klassen = useMemo(() => {
@@ -87,14 +95,26 @@ export default function SportfolioBeheerPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [leerlingenRows]);
 
-  async function loadOpenstellingen(klasNaam: string, schooljaar: string) {
-    if (!klasNaam || !schooljaar) return;
+  async function loadOpenstellingen(args: {
+    type: DoelType;
+    klasNaam?: string;
+    klasgroepId?: string | null;
+    schooljaar: string;
+  }) {
+    if (!args.schooljaar) return;
+    if (args.type === "klas" && !args.klasNaam) return;
+    if (args.type === "klasgroep" && !args.klasgroepId) return;
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("sportfolio_openstellingen")
-      .select("id, discipline_id, klas_naam, schooljaar, open_voor_leerlingen")
-      .eq("klas_naam", klasNaam)
-      .eq("schooljaar", schooljaar);
+      .select("id, discipline_id, klas_naam, klasgroep_id, schooljaar, open_voor_leerlingen")
+      .eq("schooljaar", args.schooljaar);
+
+    query = args.type === "klas"
+      ? query.eq("klas_naam", args.klasNaam!).is("klasgroep_id", null)
+      : query.eq("klasgroep_id", args.klasgroepId!).is("klas_naam", null);
+
+    const { data, error } = await query;
 
     if (error) {
       console.error("loadOpenstellingen error:", error);
@@ -118,7 +138,9 @@ export default function SportfolioBeheerPage() {
     setLeerlingenRows(rows);
 
     const set = new Set<string>();
-    rows.forEach((row) => {
+    rows
+      .filter((row) => String(getValue(row, ["schooljaar", "school_year"])) === schooljaar)
+      .forEach((row) => {
       const klas = getKlasNaam(row);
       if (klas && isEchteKlas(klas)) set.add(klas);
     });
@@ -129,7 +151,7 @@ export default function SportfolioBeheerPage() {
     setSelectedKlasNaam(firstKlasNaam);
 
     if (firstKlasNaam) {
-      await loadOpenstellingen(firstKlasNaam, schooljaar);
+      await loadOpenstellingen({ type: "klas", klasNaam: firstKlasNaam, schooljaar });
     } else {
       setOpenstellingen([]);
     }
@@ -204,7 +226,7 @@ export default function SportfolioBeheerPage() {
     setError(null);
 
     try {
-      await loadOpenstellingen(klasNaam, selectedSchooljaar);
+      await loadOpenstellingen({ type: "klas", klasNaam, schooljaar: selectedSchooljaar });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kon openstellingen niet laden.");
     }
@@ -220,8 +242,30 @@ export default function SportfolioBeheerPage() {
     }
   }
 
+  async function handleKlasgroepChange(id: string | null, leden: KlasgroepLid[]) {
+    setSelectedKlasgroepId(id);
+    setSelectedKlasgroepLeden(leden);
+    setError(null);
+
+    if (!id) {
+      setOpenstellingen([]);
+      return;
+    }
+
+    try {
+      await loadOpenstellingen({
+        type: "klasgroep",
+        klasgroepId: id,
+        schooljaar: selectedSchooljaar,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Kon openstellingen niet laden.");
+    }
+  }
+
   async function toggleDiscipline(disciplineId: string, nextValue: boolean) {
-    if (!profiel || !selectedKlasNaam || !selectedSchooljaar) return;
+    const doelGekozen = doelType === "klas" ? Boolean(selectedKlasNaam) : Boolean(selectedKlasgroepId);
+    if (!profiel || !doelGekozen || !selectedSchooljaar) return;
 
     try {
       setSavingId(disciplineId);
@@ -246,7 +290,8 @@ export default function SportfolioBeheerPage() {
       } else {
         const insertPayload = {
           discipline_id: disciplineId,
-          klas_naam: selectedKlasNaam,
+          klas_naam: doelType === "klas" ? selectedKlasNaam : null,
+          klasgroep_id: doelType === "klasgroep" ? selectedKlasgroepId : null,
           schooljaar: selectedSchooljaar,
           open_voor_leerlingen: nextValue,
           geopend_door: profiel.id,
@@ -263,7 +308,12 @@ export default function SportfolioBeheerPage() {
         }
       }
 
-      await loadOpenstellingen(selectedKlasNaam, selectedSchooljaar);
+      await loadOpenstellingen({
+        type: doelType,
+        klasNaam: selectedKlasNaam,
+        klasgroepId: selectedKlasgroepId,
+        schooljaar: selectedSchooljaar,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kon discipline niet aanpassen.");
     } finally {
@@ -314,7 +364,7 @@ export default function SportfolioBeheerPage() {
               Disciplines openzetten
             </h1>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">
-              Kies een klas en zet disciplines open of dicht voor leerlingen.
+              Kies een officiële klas of een persoonlijke klasgroep en zet disciplines open of dicht.
             </p>
           </div>
 
@@ -333,10 +383,10 @@ export default function SportfolioBeheerPage() {
       <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-4">
         <div className="text-sm font-black text-white">Filters</div>
         <div className="mt-1 text-xs text-white/60">
-          Klassen worden opgehaald uit eurofit_class_students_view.
+          Kies of je voor een volledige officiële klas of voor één van je eigen klasgroepen werkt.
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_auto]">
+        <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
           <div>
             <label className="mb-2 block text-xs font-black uppercase tracking-[0.08em] text-white/60">
               Schooljaar
@@ -350,6 +400,27 @@ export default function SportfolioBeheerPage() {
           </div>
 
           <div>
+            <label className="mb-2 block text-xs font-black uppercase tracking-[0.08em] text-white/60">
+              Doelgroep
+            </label>
+            <select
+              value={doelType}
+              onChange={(e) => {
+                const next = e.target.value as DoelType;
+                setDoelType(next);
+                setOpenstellingen([]);
+                if (next === "klas" && selectedKlasNaam) {
+                  void loadOpenstellingen({ type: "klas", klasNaam: selectedKlasNaam, schooljaar: selectedSchooljaar });
+                }
+              }}
+              className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none"
+            >
+              <option value="klas" className="bg-neutral-900">Officiële klas</option>
+              <option value="klasgroep" className="bg-neutral-900">Mijn klasgroep</option>
+            </select>
+          </div>
+
+          {doelType === "klas" ? <div>
             <label className="mb-2 block text-xs font-black uppercase tracking-[0.08em] text-white/60">
               Klas
             </label>
@@ -370,7 +441,14 @@ export default function SportfolioBeheerPage() {
                 ))
               )}
             </select>
-          </div>
+          </div> : (
+            <KlasgroepSelector
+              schooljaar={selectedSchooljaar}
+              value={selectedKlasgroepId}
+              onChange={handleKlasgroepChange}
+              includeAllOption={false}
+            />
+          )}
 
           <div className="flex items-end">
             <button
@@ -388,9 +466,11 @@ export default function SportfolioBeheerPage() {
           <div>
             <div className="text-sm font-black text-white">Disciplines</div>
             <div className="text-xs text-white/60">
-              {selectedKlasNaam
+              {doelType === "klas" && selectedKlasNaam
                 ? `Openstellingen voor ${selectedKlasNaam} • ${selectedSchooljaar}`
-                : "Kies eerst een klas."}
+                : doelType === "klasgroep" && selectedKlasgroepId
+                ? `Openstellingen voor je klasgroep • ${selectedKlasgroepLeden.length} leerlingen • ${selectedSchooljaar}`
+                : "Kies eerst een doelgroep."}
             </div>
           </div>
 
@@ -435,7 +515,7 @@ export default function SportfolioBeheerPage() {
 
                 <button
                   onClick={() => toggleDiscipline(discipline.id, !isOpen)}
-                  disabled={savingId === discipline.id || !selectedKlasNaam}
+                  disabled={savingId === discipline.id || (doelType === "klas" ? !selectedKlasNaam : !selectedKlasgroepId)}
                   className={[
                     "mt-4 h-11 w-full rounded-2xl border px-4 text-sm font-black transition disabled:cursor-not-allowed disabled:opacity-50",
                     isOpen

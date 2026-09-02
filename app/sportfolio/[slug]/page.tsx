@@ -46,14 +46,6 @@ type ScoreRow = {
   extra_data: Record<string, unknown> | null;
 };
 
-type Openstelling = {
-  id: string;
-  discipline_id: string;
-  klas_naam: string | null;
-  schooljaar: string;
-  open_voor_leerlingen: boolean | null;
-};
-
 type RubricRow = {
   id: string;
   discipline_id: string;
@@ -89,8 +81,10 @@ const ui = {
 };
 
 function getRoleLabel(role?: string | null, rol?: string | null) {
-  const raw = (role ?? rol ?? "").toLowerCase();
-  if (raw === "teacher" || raw === "leerkracht") return "Leerkracht";
+  const raw = (rol ?? role ?? "").trim().toLowerCase();
+  if (["teacher", "leerkracht", "lo_leerkracht", "admin"].includes(raw)) {
+    return "Leerkracht";
+  }
   return "Leerling";
 }
 
@@ -237,7 +231,7 @@ export default function DisciplineDetailPage() {
   const [scoresAlleJaren, setScoresAlleJaren] = useState<ScoreRow[]>([]);
   const [scoresHuidigSchooljaar, setScoresHuidigSchooljaar] = useState<ScoreRow[]>([]);
   const [rubrics, setRubrics] = useState<RubricRow[]>([]);
-  const [openstelling, setOpenstelling] = useState<Openstelling | null>(null);
+  const [disciplineOpen, setDisciplineOpen] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardJoinedRow[]>([]);
 
   const [scoreInput, setScoreInput] = useState("");
@@ -268,13 +262,13 @@ export default function DisciplineDetailPage() {
   const leerlingMagIngeven = useMemo(() => {
     if (isLeerkracht) return true;
     if (!isLeerling) return false;
-    if (!openstelling?.open_voor_leerlingen) return false;
+    if (!disciplineOpen) return false;
 
     if (!latestCurrentYearScore) return true;
 
     const status = (latestCurrentYearScore.status ?? "").toLowerCase();
     return status !== "bevestigd";
-  }, [isLeerkracht, isLeerling, openstelling?.open_voor_leerlingen, latestCurrentYearScore]);
+  }, [isLeerkracht, isLeerling, disciplineOpen, latestCurrentYearScore]);
 
   async function loadPage() {
     try {
@@ -370,19 +364,16 @@ export default function DisciplineDetailPage() {
         setTekstInput("");
       }
 
-      const { data: openstellingData, error: openstellingError } = await supabase
-        .from("sportfolio_openstellingen")
-        .select("id, discipline_id, klas_naam, schooljaar, open_voor_leerlingen")
-        .eq("discipline_id", disciplineValue.id)
-        .eq("schooljaar", profielValue.schooljaar ?? "")
-        .eq("klas_naam", profielValue.klas_naam ?? "")
-        .maybeSingle();
+      const { data: openData, error: openstellingError } = await supabase.rpc(
+        "sportfolio_discipline_is_open",
+        {
+          p_discipline_id: disciplineValue.id,
+          p_schooljaar: profielValue.schooljaar ?? "",
+        }
+      );
 
-      if (openstellingError && openstellingError.code !== "PGRST116") {
-        throw openstellingError;
-      }
-
-      setOpenstelling((openstellingData as Openstelling) ?? null);
+      if (openstellingError) throw openstellingError;
+      setDisciplineOpen(Boolean(openData));
 
       const { data: leaderboardData, error: leaderboardError } = await supabase
         .from("sportfolio_scores")
@@ -599,12 +590,12 @@ export default function DisciplineDetailPage() {
               <span
                 className={[
                   "rounded-full border px-3 py-1.5 text-xs font-bold",
-                  openstelling?.open_voor_leerlingen
+                  disciplineOpen
                     ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
                     : "border-white/10 bg-white/5 text-white/65",
                 ].join(" ")}
               >
-                {openstelling?.open_voor_leerlingen ? "Open voor invoer" : "Gesloten"}
+                {disciplineOpen ? "Open voor invoer" : "Gesloten"}
               </span>
             </div>
           </div>
@@ -740,7 +731,7 @@ export default function DisciplineDetailPage() {
                 </button>
 
                 <div className="text-sm text-white/60">
-                  {!openstelling?.open_voor_leerlingen && isLeerling
+                  {!disciplineOpen && isLeerling
                     ? "Deze discipline is momenteel gesloten voor leerlingen."
                     : latestCurrentYearScore?.status?.toLowerCase() === "bevestigd" && isLeerling
                     ? "Je score is bevestigd en kan niet meer aangepast worden."
