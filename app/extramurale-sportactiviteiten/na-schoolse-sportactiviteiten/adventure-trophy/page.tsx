@@ -2,18 +2,67 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import { createClient } from "@/lib/supabase/client";
 
 const supabase = createClient();
 
+const EVENT_ID = "survival-trophy-2026";
+
 type Profiel = {
   id: string;
   volledige_naam: string | null;
   rol: string | null;
+  klas_naam: string | null;
+  leerjaar: number | string | null;
 };
+
+type Config = {
+  id: string;
+  schooljaar: string;
+  max_plaatsen: number;
+  inschrijvingen_open: boolean;
+  tweede_graad_open: boolean;
+};
+
+type Inschrijving = {
+  id: string;
+  event_id: string;
+  leerling_id: string;
+  status: "ingeschreven" | "uitgeschreven";
+  ingeschreven_op: string;
+  uitgeschreven_op: string | null;
+};
+
+function normalizeRole(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+function getLeerjaar(value: number | string | null | undefined) {
+  if (value === null || value === undefined) return null;
+
+  const parsed = Number(String(value).trim());
+
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatDateTime(value: string | null) {
+  if (!value) return "";
+
+  return new Intl.DateTimeFormat("nl-BE", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
 
 function InfoCard({
   icon,
@@ -77,36 +126,241 @@ function ExternalButton({
 
 export default function AdventureTrophyPage() {
   const [profiel, setProfiel] = useState<Profiel | null>(null);
+  const [config, setConfig] = useState<Config | null>(null);
+  const [inschrijving, setInschrijving] = useState<Inschrijving | null>(null);
+  const [aantal, setAantal] = useState(0);
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  const loadData = useCallback(async (showLoader = true) => {
+    if (showLoader) setLoading(true);
+
+    setErrorMessage("");
+
+    try {
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
+
+      if (userError) {
+        throw userError;
+      }
+
+      if (!user) {
+        setProfiel(null);
+        return;
+      }
+
+      const [
+        profielResult,
+        configResult,
+        inschrijvingResult,
+        countResult,
+      ] = await Promise.all([
+        supabase
+          .from("profielen")
+          .select("id, volledige_naam, rol, klas_naam, leerjaar")
+          .eq("id", user.id)
+          .maybeSingle(),
+
+        supabase
+          .from("adventure_trophy_config")
+          .select(
+            "id, schooljaar, max_plaatsen, inschrijvingen_open, tweede_graad_open"
+          )
+          .eq("id", EVENT_ID)
+          .maybeSingle(),
+
+        supabase
+          .from("adventure_trophy_inschrijvingen")
+          .select(
+            "id, event_id, leerling_id, status, ingeschreven_op, uitgeschreven_op"
+          )
+          .eq("event_id", EVENT_ID)
+          .eq("leerling_id", user.id)
+          .maybeSingle(),
+
+        supabase.rpc("get_adventure_trophy_count", {
+          p_event_id: EVENT_ID,
+        }),
+      ]);
+
+      if (profielResult.error) throw profielResult.error;
+      if (configResult.error) throw configResult.error;
+      if (inschrijvingResult.error) throw inschrijvingResult.error;
+      if (countResult.error) throw countResult.error;
+
+      setProfiel((profielResult.data as Profiel | null) ?? null);
+      setConfig((configResult.data as Config | null) ?? null);
+      setInschrijving(
+        (inschrijvingResult.data as Inschrijving | null) ?? null
+      );
+
+      setAantal(Number(countResult.data ?? 0));
+    } catch (error) {
+      console.error("Adventure Trophy laden mislukt:", error);
+      setErrorMessage(
+        "De inschrijvingsgegevens konden niet geladen worden. Probeer de pagina opnieuw."
+      );
+    } finally {
+      if (showLoader) setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const loadProfiel = async () => {
-      const { data, error } = await supabase.auth.getSession();
+    loadData();
+  }, [loadData]);
+
+  const leerjaar = getLeerjaar(profiel?.leerjaar);
+  const rol = normalizeRole(profiel?.rol);
+
+  const isLeerling = rol === "leerling";
+  const derdeGraad = leerjaar === 5 || leerjaar === 6 || leerjaar === 7;
+  const tweedeGraad = leerjaar === 3 || leerjaar === 4;
+
+  const isActiefIngeschreven = inschrijving?.status === "ingeschreven";
+  const wasUitgeschreven = inschrijving?.status === "uitgeschreven";
+
+  const maxPlaatsen = config?.max_plaatsen ?? 20;
+  const vrijePlaatsen = Math.max(0, maxPlaatsen - aantal);
+  const volzet = aantal >= maxPlaatsen;
+
+  const magDeelnemen = useMemo(() => {
+    if (!isLeerling) return false;
+
+    if (derdeGraad) return true;
+
+    if (tweedeGraad && config?.tweede_graad_open) {
+      return true;
+    }
+
+    return false;
+  }, [
+    isLeerling,
+    derdeGraad,
+    tweedeGraad,
+    config?.tweede_graad_open,
+  ]);
+
+  const progressPercentage =
+    maxPlaatsen > 0
+      ? Math.min(100, Math.round((aantal / maxPlaatsen) * 100))
+      : 0;
+
+  async function inschrijven() {
+    if (saving) return;
+
+    setSaving(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const { error } = await supabase.rpc(
+        "inschrijven_adventure_trophy",
+        {
+          p_event_id: EVENT_ID,
+        }
+      );
 
       if (error) {
-        console.error("Fout bij ophalen sessie:", error.message);
-        return;
+        const message = `${error.message ?? ""} ${
+          error.details ?? ""
+        }`.toUpperCase();
+
+        if (message.includes("ADVENTURE_TROPHY_VOLZET")) {
+          setErrorMessage(
+            "De 20 plaatsen zijn helaas intussen ingenomen. De Survival Trophy is volzet."
+          );
+          await loadData(false);
+          return;
+        }
+
+        if (message.includes("INSCHRIJVINGEN_GESLOTEN")) {
+          setErrorMessage(
+            "De inschrijvingen zijn momenteel gesloten door de LO-leerkrachten."
+          );
+          await loadData(false);
+          return;
+        }
+
+        if (message.includes("NIET_TOEGELATEN")) {
+          setErrorMessage(
+            "Je leerjaar kan zich momenteel niet inschrijven voor de Survival Trophy."
+          );
+          return;
+        }
+
+        if (message.includes("LEERJAAR_ONBEKEND")) {
+          setErrorMessage(
+            "We konden je leerjaar niet bepalen. Neem contact op met een LO-leerkracht."
+          );
+          return;
+        }
+
+        throw error;
       }
 
-      const userId = data.session?.user?.id;
+      setSuccessMessage(
+        wasUitgeschreven
+          ? "Je bent opnieuw ingeschreven voor de Survival Trophy! 🔥"
+          : "Je bent ingeschreven voor de Survival Trophy! 🔥"
+      );
 
-      if (!userId) return;
+      await loadData(false);
+    } catch (error) {
+      console.error("Inschrijven mislukt:", error);
 
-      const { data: profielData, error: profielError } = await supabase
-        .from("profielen")
-        .select("id, volledige_naam, rol")
-        .eq("id", userId)
-        .maybeSingle();
+      setErrorMessage(
+        "Je inschrijving kon niet opgeslagen worden. Probeer opnieuw."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
 
-      if (profielError) {
-        console.error("Fout bij ophalen profiel:", profielError.message);
-        return;
-      }
+  async function uitschrijven() {
+    if (saving) return;
 
-      setProfiel(profielData as Profiel);
-    };
+    const confirmed = window.confirm(
+      "Ben je zeker dat je je wilt uitschrijven voor de Survival Trophy? Je plaats komt opnieuw vrij voor een andere leerling."
+    );
 
-    loadProfiel();
-  }, []);
+    if (!confirmed) return;
+
+    setSaving(true);
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    try {
+      const { error } = await supabase.rpc(
+        "uitschrijven_adventure_trophy",
+        {
+          p_event_id: EVENT_ID,
+        }
+      );
+
+      if (error) throw error;
+
+      setSuccessMessage(
+        "Je bent uitgeschreven. Je plaats is opnieuw vrijgekomen."
+      );
+
+      await loadData(false);
+    } catch (error) {
+      console.error("Uitschrijven mislukt:", error);
+
+      setErrorMessage(
+        "Uitschrijven is niet gelukt. Probeer opnieuw of neem contact op met een LO-leerkracht."
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <AppShell
@@ -167,6 +421,12 @@ export default function AdventureTrophyPage() {
               <span className="inline-flex rounded-full border border-cyan-400/20 bg-cyan-400/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-cyan-300">
                 3e graad
               </span>
+
+              {config?.tweede_graad_open && (
+                <span className="inline-flex rounded-full border border-violet-400/20 bg-violet-400/10 px-3 py-2 text-[10px] font-black uppercase tracking-[0.12em] text-violet-300">
+                  + 2e graad
+                </span>
+              )}
             </div>
           </div>
 
@@ -253,26 +513,307 @@ export default function AdventureTrophyPage() {
                 <InfoCard
                   icon="🎓"
                   label="Voor wie?"
-                  value="Leerlingen 3e graad"
+                  value={
+                    config?.tweede_graad_open
+                      ? "2e en 3e graad"
+                      : "Leerlingen 3e graad"
+                  }
                 />
 
-                <InfoCard
-                  icon="🏃"
-                  label="Parcours"
-                  value="5 kilometer"
-                />
+                <InfoCard icon="🏃" label="Parcours" value="5 kilometer" />
 
-                <InfoCard
-                  icon="🧗"
-                  label="Obstakels"
-                  value="25 obstakels"
-                />
+                <InfoCard icon="🧗" label="Obstakels" value="25 obstakels" />
 
-                <InfoCard
-                  icon="💶"
-                  label="Prijs"
-                  value="Gratis"
-                />
+                <InfoCard icon="💶" label="Prijs" value="Gratis" />
+              </div>
+            </div>
+
+            {/* INSCHRIJVEN */}
+            <div className="overflow-hidden rounded-[28px] border border-cyan-400/20 bg-[linear-gradient(145deg,rgba(8,47,73,0.46),rgba(8,13,25,0.98))] shadow-[0_20px_60px_rgba(0,0,0,0.22)]">
+              <div className="p-5 sm:p-7 lg:p-8">
+                <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <div className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">
+                      Inschrijving GO! Atheneum Avelgem
+                    </div>
+
+                    <h2 className="mt-2 text-2xl font-black text-white">
+                      Reserveer je plaats 🔥
+                    </h2>
+
+                    <p className="mt-2 max-w-2xl text-sm font-semibold leading-6 text-slate-300">
+                      Er zijn maximaal{" "}
+                      <strong className="text-white">
+                        {maxPlaatsen} plaatsen
+                      </strong>
+                      . Inschrijven gebeurt volgens het principe: eerst
+                      ingeschreven, eerst verzekerd van een plaats.
+                    </p>
+                  </div>
+
+                  <div
+                    className={`shrink-0 rounded-2xl border px-4 py-3 text-center ${
+                      volzet
+                        ? "border-rose-400/20 bg-rose-400/10"
+                        : "border-emerald-400/20 bg-emerald-400/10"
+                    }`}
+                  >
+                    <div
+                      className={`text-2xl font-black ${
+                        volzet ? "text-rose-300" : "text-emerald-300"
+                      }`}
+                    >
+                      {loading ? "…" : vrijePlaatsen}
+                    </div>
+
+                    <div className="mt-0.5 text-[9px] font-black uppercase tracking-[0.14em] text-slate-400">
+                      plaatsen vrij
+                    </div>
+                  </div>
+                </div>
+
+                {/* CAPACITEIT */}
+                <div className="mt-6 rounded-[22px] border border-white/[0.08] bg-black/20 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <strong className="text-sm font-black text-white">
+                      Bezetting
+                    </strong>
+
+                    <span className="text-sm font-black text-cyan-200">
+                      {aantal} / {maxPlaatsen}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-white/[0.07]">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        volzet
+                          ? "bg-rose-400"
+                          : progressPercentage >= 75
+                          ? "bg-orange-400"
+                          : "bg-emerald-400"
+                      }`}
+                      style={{
+                        width: `${progressPercentage}%`,
+                      }}
+                    />
+                  </div>
+
+                  <p className="mt-3 text-xs font-semibold text-slate-400">
+                    {loading
+                      ? "Beschikbaarheid laden..."
+                      : volzet
+                      ? "Alle plaatsen zijn momenteel ingenomen."
+                      : vrijePlaatsen === 1
+                      ? "Er is nog 1 plaats beschikbaar."
+                      : `Er zijn nog ${vrijePlaatsen} plaatsen beschikbaar.`}
+                  </p>
+                </div>
+
+                {/* FOUT / SUCCES */}
+                {errorMessage && (
+                  <div className="mt-5 rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 py-3 text-sm font-bold leading-6 text-rose-200">
+                    ⚠️ {errorMessage}
+                  </div>
+                )}
+
+                {successMessage && (
+                  <div className="mt-5 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm font-bold leading-6 text-emerald-200">
+                    ✓ {successMessage}
+                  </div>
+                )}
+
+                {/* LOADING */}
+                {loading && (
+                  <div className="mt-5 rounded-[22px] border border-white/[0.07] bg-white/[0.03] p-5 text-sm font-bold text-slate-400">
+                    Inschrijvingsgegevens laden...
+                  </div>
+                )}
+
+                {/* ACTIEF INGESCHREVEN */}
+                {!loading && isActiefIngeschreven && (
+                  <div className="mt-5 rounded-[24px] border border-emerald-400/25 bg-emerald-400/[0.08] p-5">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-400/15 text-2xl">
+                        ✓
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">
+                          Je bent ingeschreven
+                        </div>
+
+                        <h3 className="mt-1 text-xl font-black text-white">
+                          Jouw plaats is gereserveerd!
+                        </h3>
+
+                        <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">
+                          Je inschrijving werd geregistreerd op{" "}
+                          <strong className="text-white">
+                            {formatDateTime(inschrijving?.ingeschreven_op ?? null)}
+                          </strong>
+                          .
+                        </p>
+
+                        <p className="mt-2 text-xs font-semibold leading-5 text-slate-400">
+                          Kun je toch niet deelnemen? Schrijf je dan tijdig uit,
+                          zodat je plaats beschikbaar komt voor een andere
+                          leerling.
+                        </p>
+
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={uitschrijven}
+                          className="mt-4 inline-flex min-h-11 items-center justify-center rounded-2xl border border-rose-400/20 bg-rose-400/10 px-4 text-sm font-black text-rose-200 transition hover:border-rose-400/35 hover:bg-rose-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {saving ? "Even geduld..." : "Uitschrijven"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* EERDER UITGESCHREVEN */}
+                {!loading && wasUitgeschreven && (
+                  <div className="mt-5 rounded-[24px] border border-amber-400/20 bg-amber-400/[0.07] p-5">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-400/10 text-2xl">
+                        ↩️
+                      </div>
+
+                      <div>
+                        <div className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">
+                          Eerder uitgeschreven
+                        </div>
+
+                        <h3 className="mt-1 text-lg font-black text-white">
+                          Je bent momenteel niet ingeschreven
+                        </h3>
+
+                        {inschrijving?.uitgeschreven_op && (
+                          <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">
+                            Je schreef je uit op{" "}
+                            <strong className="text-white">
+                              {formatDateTime(inschrijving.uitgeschreven_op)}
+                            </strong>
+                            .
+                          </p>
+                        )}
+
+                        {magDeelnemen &&
+                          config?.inschrijvingen_open &&
+                          !volzet && (
+                            <p className="mt-2 text-sm font-semibold text-slate-400">
+                              Je kunt je opnieuw inschrijven zolang er plaatsen
+                              beschikbaar zijn.
+                            </p>
+                          )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* INSCHRIJVEN */}
+                {!loading &&
+                  !isActiefIngeschreven &&
+                  magDeelnemen &&
+                  config?.inschrijvingen_open &&
+                  !volzet && (
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={inschrijven}
+                      className="mt-5 flex min-h-14 w-full items-center justify-center rounded-[20px] border border-cyan-300/30 bg-[linear-gradient(135deg,rgba(34,211,238,0.25),rgba(20,184,166,0.18))] px-5 text-base font-black text-white shadow-[0_14px_40px_rgba(6,182,212,0.12)] transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300/45 hover:shadow-[0_18px_45px_rgba(6,182,212,0.18)] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {saving
+                        ? "Inschrijving verwerken..."
+                        : wasUitgeschreven
+                        ? "🔥 Opnieuw inschrijven"
+                        : "🔥 Schrijf mij in"}
+                    </button>
+                  )}
+
+                {/* VOLZET */}
+                {!loading &&
+                  !isActiefIngeschreven &&
+                  magDeelnemen &&
+                  volzet && (
+                    <div className="mt-5 rounded-[22px] border border-rose-400/20 bg-rose-400/[0.07] p-5">
+                      <div className="text-lg font-black text-rose-200">
+                        Volzet
+                      </div>
+
+                      <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">
+                        Alle {maxPlaatsen} plaatsen zijn momenteel ingenomen.
+                        Wanneer iemand zich uitschrijft, komt die plaats
+                        automatisch opnieuw beschikbaar.
+                      </p>
+                    </div>
+                  )}
+
+                {/* INSCHRIJVINGEN GESLOTEN */}
+                {!loading &&
+                  !isActiefIngeschreven &&
+                  magDeelnemen &&
+                  !config?.inschrijvingen_open && (
+                    <div className="mt-5 rounded-[22px] border border-amber-400/20 bg-amber-400/[0.07] p-5">
+                      <div className="text-lg font-black text-amber-200">
+                        Inschrijvingen gesloten
+                      </div>
+
+                      <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">
+                        De LO-leerkrachten hebben de inschrijvingen momenteel
+                        gesloten.
+                      </p>
+                    </div>
+                  )}
+
+                {/* 2E GRAAD NOG NIET OPEN */}
+                {!loading &&
+                  isLeerling &&
+                  tweedeGraad &&
+                  !config?.tweede_graad_open &&
+                  !isActiefIngeschreven && (
+                    <div className="mt-5 rounded-[22px] border border-violet-400/20 bg-violet-400/[0.07] p-5">
+                      <div className="text-lg font-black text-violet-200">
+                        Inschrijving nog niet geopend voor de 2e graad
+                      </div>
+
+                      <p className="mt-2 text-sm font-semibold leading-6 text-slate-300">
+                        Momenteel kunnen leerlingen van de 3e graad
+                        inschrijven. Indien er later nog plaatsen vrij zijn,
+                        kunnen de LO-leerkrachten de inschrijving ook openstellen
+                        voor het 3e en 4e jaar.
+                      </p>
+                    </div>
+                  )}
+
+                {/* ANDERE LEERJAREN */}
+                {!loading &&
+                  isLeerling &&
+                  !derdeGraad &&
+                  !tweedeGraad && (
+                    <div className="mt-5 rounded-[22px] border border-white/[0.08] bg-white/[0.03] p-5">
+                      <div className="font-black text-white">
+                        Deze activiteit is niet voor jouw leerjaar.
+                      </div>
+
+                      <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">
+                        De Survival Trophy is in eerste instantie bedoeld voor
+                        de 3e graad en kan eventueel worden uitgebreid naar de
+                        2e graad.
+                      </p>
+                    </div>
+                  )}
+
+                {!loading && !isLeerling && (
+                  <div className="mt-5 rounded-[22px] border border-white/[0.08] bg-white/[0.03] p-5 text-sm font-semibold leading-6 text-slate-400">
+                    De inschrijfknop wordt alleen weergegeven voor leerlingen.
+                    LO-leerkrachten kunnen de inschrijvingen opvolgen via hun
+                    beheerpagina.
+                  </div>
+                )}
               </div>
             </div>
 
@@ -372,7 +913,7 @@ export default function AdventureTrophyPage() {
               </div>
             </div>
 
-            {/* INSCHRIJVING SCHOOL */}
+            {/* OFFICIËLE INSCHRIJVING */}
             <div className="rounded-[28px] border border-orange-400/15 bg-orange-400/[0.045] p-5 sm:p-7 lg:p-8">
               <div className="flex items-start gap-4">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-orange-400/10 text-xl">
@@ -385,24 +926,23 @@ export default function AdventureTrophyPage() {
                   </div>
 
                   <h2 className="mt-1 text-xl font-black text-white">
-                    Inschrijving gebeurt via de school
+                    De school verzorgt de officiële inschrijving
                   </h2>
 
                   <p className="mt-3 text-sm font-semibold leading-6 text-slate-300">
-                    Per school kunnen minimaal 4 en maximaal 40 leerlingen
-                    deelnemen. De officiële inschrijving bij Sport Vlaanderen
-                    gebeurt door de school.
+                    Via de inschrijfmodule hierboven geef je aan dat je met onze
+                    school wilt deelnemen. De LO-leerkrachten verzamelen de
+                    deelnemers en verzorgen daarna de officiële inschrijving bij
+                    de organisatie.
                   </p>
 
                   <p className="mt-3 text-sm font-semibold leading-6 text-slate-300">
-                    De manier waarop leerlingen van onze school zich kandidaat
-                    kunnen stellen voor deelname wordt hier meegedeeld zodra
-                    de inschrijvingen binnen de school geopend worden.
+                    Onze school voorziet momenteel maximaal{" "}
+                    <strong className="text-white">
+                      {maxPlaatsen} leerlingen
+                    </strong>{" "}
+                    voor deze activiteit.
                   </p>
-
-                  <div className="mt-5 inline-flex rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm font-black text-amber-200">
-                    ⏳ Inschrijving voor leerlingen volgt
-                  </div>
                 </div>
               </div>
             </div>
@@ -450,7 +990,7 @@ export default function AdventureTrophyPage() {
               </h2>
 
               <p className="mt-3 text-sm font-semibold leading-6 text-slate-400">
-                Bekijk foto's, verhalen, nieuwe beelden en
+                Bekijk foto&apos;s, verhalen, nieuwe beelden en
                 behind-the-scenes-content via de officiële kanalen.
               </p>
 
@@ -469,10 +1009,7 @@ export default function AdventureTrophyPage() {
                   Instagram @survivaltrophy
                 </ExternalButton>
 
-                <ExternalButton
-                  href="https://www.moev.be/"
-                  variant="dark"
-                >
+                <ExternalButton href="https://www.moev.be/" variant="dark">
                   MOEV
                 </ExternalButton>
 
@@ -496,8 +1033,8 @@ export default function AdventureTrophyPage() {
               </h2>
 
               <p className="mt-2 text-sm font-semibold leading-6 text-slate-400">
-                Sport Vlaanderen organiseert in 2026 drie Survival Trophy's op
-                woensdagnamiddag.
+                Sport Vlaanderen organiseert in 2026 drie Survival Trophy&apos;s
+                op woensdagnamiddag.
               </p>
 
               <div className="mt-5 space-y-3">

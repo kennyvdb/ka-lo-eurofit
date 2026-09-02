@@ -9,10 +9,18 @@ import { createClient } from "@/lib/supabase/client";
 
 const supabase = createClient();
 
+/* =========================================================
+   TYPES
+========================================================= */
+
 type Profiel = {
   volledige_naam: string | null;
   rol: string | null;
 };
+
+/* =========================================================
+   UI
+========================================================= */
 
 const ui = {
   text: "rgba(234,240,255,0.92)",
@@ -23,68 +31,20 @@ const ui = {
 };
 
 /* =========================================================
-   MODULES
+   ACTIVITEITEN
 ========================================================= */
 
-const modules = [
+const activiteiten = [
   {
-    href: "/eurofittest",
-    icon: "🏃",
-    title: "Eurofittest",
-    desc: "Ingevuld, niet ingevuld, automatische evaluatie en resultaten.",
-  },
-  {
-    href: "/functional-fitheidstest",
-    icon: "💪",
-    title: "Functional Fitheidstest",
-    desc: "Ingevuld, niet ingevuld, automatische evaluatie en resultaten.",
-  },
-  {
-    href: "/sportfolio",
-    icon: "📁",
-    title: "Sportfolio",
-    desc: "Bewijsstukken, reflecties en feedback.",
-  },
-  {
-    href: "/leerkrachten-lo/challenges",
-    icon: "🏆",
-    title: "Challenges",
-    desc: "Scores invoeren, deelnemers beheren en klassementen opvolgen.",
-  },
-  {
-    href: "/leerkrachten-lo/extramurale-sportactiviteiten",
-    icon: "🚌",
-    title: "Extramurale sportactiviteiten",
-    desc: "Sportdagen, uitstappen en andere sportactiviteiten buiten de school.",
-  },
-  {
-    href: "/leerkrachten-lo/reservaties",
-    icon: "📅",
-    title: "Reservaties",
-    desc: "Beheer fitnessreservaties en andere reservatiemodules.",
-  },
-  {
-    href: "/leerkrachten-lo/klasgroepen",
-    icon: "👥",
-    title: "Klasgroepen",
-    desc: "Mijn klasgroepen maken met klassen.",
-  },
-  {
-    href: "#",
-    icon: "✅",
-    title: "Evaluaties",
-    desc: "Opvolging, feedback en evaluatieoverzichten.",
-  },
-  {
-    href: "#",
-    icon: "📊",
-    title: "Statistieken",
-    desc: "Grafieken, gemiddelden en evoluties.",
+    href: "/leerkrachten-lo/extramurale-sportactiviteiten/na-schoolse-sportactiviteiten/adventure-trophy",
+    icon: "🔥",
+    title: "Adventure Trophy",
+    desc: "Beheer de inschrijvingen voor de Survival Trophy en volg deelnemers, vrije plaatsen en uitschrijvingen op.",
   },
 ];
 
 /* =========================================================
-   ROLE HELPERS
+   HELPERS
 ========================================================= */
 
 function normalizeRole(value: unknown) {
@@ -108,7 +68,7 @@ function isAllowedRole(rol: string) {
    PAGE
 ========================================================= */
 
-export default function LeerkrachtenLOPage() {
+export default function NaSchoolseSportactiviteitenPage() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
   const [profiel, setProfiel] = useState<Profiel | null>(null);
@@ -137,7 +97,6 @@ export default function LeerkrachtenLOPage() {
 
         if (error) {
           console.error("Profiel laden mislukt:", error);
-          setLoading(false);
           return;
         }
 
@@ -145,8 +104,6 @@ export default function LeerkrachtenLOPage() {
 
         setProfiel(profielData as Profiel | null);
         setAllowed(isAllowedRole(rol));
-      } catch (error) {
-        console.error("Fout bij laden leerkrachtenpagina:", error);
       } finally {
         setLoading(false);
       }
@@ -161,16 +118,9 @@ export default function LeerkrachtenLOPage() {
 
   if (loading) {
     return (
-      <AppShell title="LO App" subtitle="Leerkrachten LO">
+      <AppShell title="LO App" subtitle="Na-schoolse sportactiviteiten">
         <section style={styles.panel}>
-          <p
-            style={{
-              margin: 0,
-              color: ui.text,
-            }}
-          >
-            Laden...
-          </p>
+          <p style={{ margin: 0, color: ui.text }}>Laden...</p>
         </section>
       </AppShell>
     );
@@ -222,64 +172,64 @@ export default function LeerkrachtenLOPage() {
   }
 
   /* =======================================================
-     DASHBOARD
+     PAGINA
   ======================================================= */
 
   return (
     <AppShell
       title="LO App"
-      subtitle="Leerkrachten LO"
+      subtitle="Na-schoolse sportactiviteiten"
       userName={profiel?.volledige_naam ?? null}
     >
-      {/* HERO */}
-
       <BaseHero
-        label="GO! Atheneum Avelgem"
+        label="LEERKRACHTEN LO"
         title={
           <>
-            Leerkrachten{" "}
+            Na-schoolse{" "}
             <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
-              LO
+              sportactiviteiten
             </span>
           </>
         }
-        description="Centraal dashboard voor alles wat met leerlingen in lichamelijke opvoeding te maken heeft."
+        description="Beheer inschrijvingen en opvolging van sportactiviteiten die buiten de gewone lesuren plaatsvinden."
         imageSrc="/lo/LO.png"
-        imageAlt="Leerkrachten LO dashboard"
-        quoteTitle="LO-dashboard"
-        quote="Eén centrale plek voor opvolging, modules en statistieken."
+        imageAlt="Na-schoolse sportactiviteiten"
+        quoteTitle="Extra sport"
+        quote="Van inschrijving tot deelnemerslijst: alle na-schoolse sportactiviteiten op één plaats."
         quoteAuthor="LO team"
         actions={
           <Link
-            href="/dashboard"
+            href="/leerkrachten-lo/extramurale-sportactiviteiten"
             className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
           >
-            🏠 Terug naar dashboard
+            ← Terug naar extramurale sportactiviteiten
           </Link>
         }
       />
 
-      {/* MODULES */}
-
       <section style={{ marginTop: 16 }}>
         <div style={styles.sectionHeader}>
           <div>
-            <div style={styles.sectionTitle}>Modules</div>
+            <div style={styles.sectionTitle}>Activiteiten</div>
 
             <p style={styles.sectionDescription}>
-              Kies een onderdeel om de leerlingen en activiteiten op te volgen.
+              Kies een activiteit om de inschrijvingen en deelnemers op te
+              volgen.
             </p>
           </div>
         </div>
 
-        <div className="lo-module-grid" style={styles.moduleGrid}>
-          {modules.map((module) => (
+        <div
+          className="naschools-module-grid"
+          style={styles.moduleGrid}
+        >
+          {activiteiten.map((activiteit) => (
             <BaseTile
-              key={module.title}
-              href={module.href}
-              icon={module.icon}
-              title={module.title}
-              desc={module.desc}
+              key={activiteit.title}
+              href={activiteit.href}
+              icon={activiteit.icon}
+              title={activiteit.title}
+              desc={activiteit.desc}
             />
           ))}
         </div>
@@ -337,7 +287,7 @@ const styles: Record<string, React.CSSProperties> = {
 function injectResponsiveCSS() {
   if (typeof window === "undefined") return;
 
-  const id = "leerkrachten-lo-dashboard-responsive-css";
+  const id = "naschoolse-sportactiviteiten-responsive-css";
 
   if (document.getElementById(id)) return;
 
@@ -346,20 +296,14 @@ function injectResponsiveCSS() {
   style.id = id;
 
   style.innerHTML = `
-    @media (max-width: 1100px) {
-      .lo-module-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-      }
-    }
-
     @media (max-width: 900px) {
-      .lo-module-grid {
+      .naschools-module-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       }
     }
 
     @media (max-width: 640px) {
-      .lo-module-grid {
+      .naschools-module-grid {
         grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
       }
     }

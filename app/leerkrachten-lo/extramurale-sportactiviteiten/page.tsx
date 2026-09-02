@@ -41,6 +41,12 @@ const modules = [
     title: "Sportdagen",
     desc: "Praktische informatie, vervoerskeuzes en opvolging per leerjaar.",
   },
+  {
+    href: "/leerkrachten-lo/extramurale-sportactiviteiten/na-schoolse-sportactiviteiten",
+    icon: "🌙",
+    title: "Na-schoolse sportactiviteiten",
+    desc: "Beheer inschrijvingen en opvolging van sportactiviteiten buiten de lesuren.",
+  },
 ];
 
 /* =========================================================

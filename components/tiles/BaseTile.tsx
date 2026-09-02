@@ -24,7 +24,7 @@ export function BaseTile({
       {/* ambient glow */}
       <div className="absolute -right-14 -top-14 h-44 w-44 rounded-full bg-[rgba(75,142,141,0.15)] blur-[18px] transition duration-300 group-hover:translate-x-2 group-hover:-translate-y-2 group-hover:scale-110" />
 
-      <div className="absolute left-[-25%] top-[-10%] h-36 w-36 rounded-full bg-[rgba(137,194,170,0.10)] blur-2xl opacity-0 transition duration-300 group-hover:opacity-100" />
+      <div className="absolute left-[-25%] top-[-10%] h-36 w-36 rounded-full bg-[rgba(137,194,170,0.10)] opacity-0 blur-2xl transition duration-300 group-hover:opacity-100" />
 
       {/* gradient hover border */}
       <div className="pointer-events-none absolute inset-0 rounded-[22px] border border-transparent opacity-0 transition duration-200 group-hover:opacity-100 [background:linear-gradient(135deg,rgba(37,89,113,0.45),rgba(75,142,141,0.45),rgba(137,194,170,0.30))_border-box] [mask-composite:exclude] [mask:linear-gradient(#000_0_0)_padding-box,linear-gradient(#000_0_0)]" />
@@ -33,7 +33,7 @@ export function BaseTile({
       <div className="pointer-events-none absolute inset-0 rounded-[22px] opacity-100 [background:linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0))]" />
 
       {/* shine animation */}
-      <div className="pointer-events-none absolute inset-[-40%_-30%] opacity-0 transition group-hover:opacity-100 group-hover:animate-[tileSweep_900ms_ease_forwards] [background:linear-gradient(120deg,rgba(255,255,255,0)_35%,rgba(255,255,255,0.08)_50%,rgba(255,255,255,0)_65%)]" />
+      <div className="pointer-events-none absolute inset-[-40%_-30%] opacity-0 transition group-hover:animate-[tileSweep_900ms_ease_forwards] group-hover:opacity-100 [background:linear-gradient(120deg,rgba(255,255,255,0)_35%,rgba(255,255,255,0.08)_50%,rgba(255,255,255,0)_65%)]" />
 
       {/* content bovenaan */}
       <div className="relative z-10 grid gap-3">

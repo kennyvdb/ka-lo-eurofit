@@ -12,6 +12,44 @@ type AppShellProps = {
   children: React.ReactNode;
 };
 
+type RealRole = "leerling" | "leerkracht" | "lo_leerkracht" | "admin";
+
+function normalizeRole(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+function mapProfileRole(rol: unknown, role: unknown): RealRole | null {
+  const dbRol = normalizeRole(rol);
+  const legacyRole = normalizeRole(role);
+
+  if (dbRol === "admin") return "admin";
+  if (dbRol === "lo_leerkracht" || dbRol === "loleerkracht") {
+    return "lo_leerkracht";
+  }
+  if (dbRol === "leerkracht") return "leerkracht";
+  if (dbRol === "leerling") return "leerling";
+
+  if (legacyRole === "admin") return "admin";
+  if (
+    legacyRole === "lo_leerkracht" ||
+    legacyRole === "loleerkracht"
+  ) {
+    return "lo_leerkracht";
+  }
+  if (legacyRole === "teacher" || legacyRole === "leerkracht") {
+    return "leerkracht";
+  }
+  if (legacyRole === "student" || legacyRole === "leerling") {
+    return "leerling";
+  }
+
+  return null;
+}
+
 const brand = {
   blue: "#255971",
   teal: "#4B8E8D",
@@ -78,6 +116,7 @@ export default function AppShell({
   const [resolvedUserName, setResolvedUserName] = useState<string | null>(() =>
     normalizeName(userName)
   );
+  const [realRole, setRealRole] = useState<RealRole | null>(null);
 
   useEffect(() => {
     const nextName = normalizeName(userName);
@@ -90,21 +129,21 @@ export default function AppShell({
   useEffect(() => {
     let cancelled = false;
 
-    async function loadUserName() {
-      const explicitName = normalizeName(userName);
-      if (explicitName) return;
-
+    async function loadProfile() {
       const { data: userData } = await supabase.auth.getUser();
       const user = userData.user;
 
       if (!user) {
-        if (!cancelled) setResolvedUserName(null);
+        if (!cancelled) {
+          setResolvedUserName(null);
+          setRealRole(null);
+        }
         return;
       }
 
       const { data: profiel, error: profielError } = await supabase
         .from("profielen")
-        .select("volledige_naam")
+        .select("volledige_naam, rol, role")
         .eq("id", user.id)
         .maybeSingle();
 
@@ -121,11 +160,14 @@ export default function AppShell({
       );
 
       if (!cancelled) {
-        setResolvedUserName(profielNaam ?? metadataNaam);
+        setResolvedUserName(
+          normalizeName(userName) ?? profielNaam ?? metadataNaam
+        );
+        setRealRole(mapProfileRole(profiel?.rol, profiel?.role));
       }
     }
 
-    loadUserName();
+    loadProfile();
 
     return () => {
       cancelled = true;
@@ -138,6 +180,8 @@ export default function AppShell({
   );
 
   const displayUserName = resolvedUserName ?? "—";
+  const canSeeLoTeachers =
+    realRole === "lo_leerkracht" || realRole === "admin";
 
   useEffect(() => {
     function onClickOutside(e: MouseEvent) {
@@ -305,6 +349,14 @@ export default function AppShell({
                       icon={it.icon}
                     />
                   ))}
+
+                  {canSeeLoTeachers && (
+                    <NavLink
+                      href="/leerkrachten-lo"
+                      label="Leerkrachten LO"
+                      icon="👩‍🏫"
+                    />
+                  )}
 
                   <NavLink
                     href="/dashboard/profiel"
