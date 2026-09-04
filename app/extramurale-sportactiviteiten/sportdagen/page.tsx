@@ -256,7 +256,7 @@ const sportdagen: Sportdag[] = [
       titel: "Koersrit + golfinitiatie",
       beschrijving:
         "Koersrit van ongeveer 75 km in de voormiddag en golfinitiatie in de namiddag bij Golf Oudenaarde. Er zijn maximaal 20 plaatsen beschikbaar.",
-      vertrek: ["Verzamelen om 8.55 uur aan de fietsenstalling."],
+      vertrek: ["Verzamelen om 8.55 uur aan het sportveld van Kluisbergen Sportief"],
       terug: ["Terug op school rond 16.15 uur."],
       kledij: [
         "Een fietshelm is verplicht.",
