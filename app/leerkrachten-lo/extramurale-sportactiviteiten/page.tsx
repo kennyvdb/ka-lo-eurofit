@@ -42,6 +42,12 @@ const modules = [
     desc: "Praktische informatie, vervoerskeuzes en opvolging per leerjaar.",
   },
   {
+    href: "/leerkrachten-lo/extramurale-sportactiviteiten/sneeuwstage",
+    icon: "❄️",
+    title: "Sneeuwstage",
+    desc: "Beheer deelnemers en volg de ski- en snowboardkeuzes voor de sneeuwstage op.",
+  },
+  {
     href: "/leerkrachten-lo/extramurale-sportactiviteiten/na-schoolse-sportactiviteiten",
     icon: "🌙",
     title: "Na-schoolse sportactiviteiten",
@@ -116,7 +122,7 @@ export default function ExtramuraleSportactiviteitenPage() {
       }
     };
 
-    run();
+    void run();
   }, []);
 
   /* =======================================================
@@ -125,7 +131,10 @@ export default function ExtramuraleSportactiviteitenPage() {
 
   if (loading) {
     return (
-      <AppShell title="LO App" subtitle="Extramurale sportactiviteiten">
+      <AppShell
+        title="LO App"
+        subtitle="Extramurale sportactiviteiten"
+      >
         <section style={styles.panel}>
           <p style={{ margin: 0, color: ui.text }}>Laden...</p>
         </section>
@@ -188,8 +197,6 @@ export default function ExtramuraleSportactiviteitenPage() {
       subtitle="Extramurale sportactiviteiten"
       userName={profiel?.volledige_naam ?? null}
     >
-      {/* HERO */}
-
       <BaseHero
         label="LEERKRACHTEN LO"
         title={
@@ -200,7 +207,7 @@ export default function ExtramuraleSportactiviteitenPage() {
             </span>
           </>
         }
-        description="Beheer en opvolging van sportdagen, sportuitstappen en andere activiteiten buiten de school."
+        description="Beheer en opvolging van sportdagen, sneeuwstage, sportuitstappen en andere activiteiten buiten de school."
         imageSrc="/lo/LO.png"
         imageAlt="Extramurale sportactiviteiten"
         quoteTitle="Buiten de school"
@@ -215,8 +222,6 @@ export default function ExtramuraleSportactiviteitenPage() {
           </Link>
         }
       />
-
-      {/* MODULES */}
 
       <section style={{ marginTop: 16 }}>
         <div style={styles.sectionHeader}>
@@ -274,7 +279,7 @@ const styles: Record<string, React.CSSProperties> = {
   sectionTitle: {
     color: ui.text,
     fontSize: 18,
-    fontWeight: 980,
+    fontWeight: 900,
   },
 
   sectionDescription: {
