@@ -640,7 +640,7 @@ export default function SneeuwstageLeerkrachtPage() {
         description="Beheer de deelnemers en volg hier de ski- en snowboardkeuzes van de leerlingen op."
         imageSrc="/eurofit/eurofittest.png"
         imageAlt="Sneeuwstage 2026"
-        quoteTitle="Ahrntal · Oostenrijk"
+        quoteTitle="Ahrntal · Italië"
         quote="Van 18 tot 24 december 2026 verblijven we in Pension Rotbach en skiën we in Speikboden en Klausberg."
         quoteAuthor="GO! Atheneum Avelgem"
         actions={

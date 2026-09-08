@@ -256,7 +256,7 @@ const sportdagen: Sportdag[] = [
       titel: "Koersrit + golfinitiatie",
       beschrijving:
         "Koersrit van ongeveer 75 km in de voormiddag en golfinitiatie in de namiddag bij Golf Oudenaarde. Er zijn maximaal 20 plaatsen beschikbaar.",
-      vertrek: ["Verzamelen om 8.55 uur aan het sportveld van Kluisbergen Sportief"],
+      vertrek: ["Verzamelen om 8.55 uur aan de fietsenstalling."],
       terug: ["Terug op school rond 16.15 uur."],
       kledij: [
         "Een fietshelm is verplicht.",
@@ -310,6 +310,7 @@ export default function SportdagenPage() {
   const [profiel, setProfiel] = useState<Profiel | null>(null);
   const [loading, setLoading] = useState(true);
   const [previewLeerjaar, setPreviewLeerjaar] = useState<number | null>(null);
+  const [actueelLeerjaar, setActueelLeerjaar] = useState<number | null>(null);
 
   useEffect(() => {
     async function loadProfile() {
@@ -334,6 +335,31 @@ export default function SportdagenPage() {
         }
 
         setProfiel(data);
+
+        // Voor leerlingen halen we het actuele leerjaar via één centrale
+        // Supabase-functie. Die gebruikt de Smartschool-klas uit
+        // sportdag_class_students_view en valt alleen indien nodig terug op
+        // profielen.leerjaar. Zo worden ook alle 7e jaren correct herkend.
+        if (normalizeRole(data?.rol) === "leerling") {
+          const { data: leerjaarData, error: leerjaarError } = await supabase.rpc(
+            "get_my_sportdag_leerjaar",
+            { p_schooljaar: SCHOOLJAAR }
+          );
+
+          if (leerjaarError) {
+            console.error(
+              "Actueel sportdagleerjaar laden mislukt:",
+              leerjaarError
+            );
+            setActueelLeerjaar(getLeerjaar(data?.leerjaar));
+          } else {
+            setActueelLeerjaar(
+              getLeerjaar(leerjaarData) ?? getLeerjaar(data?.leerjaar)
+            );
+          }
+        } else {
+          setActueelLeerjaar(null);
+        }
       } finally {
         setLoading(false);
       }
@@ -342,7 +368,7 @@ export default function SportdagenPage() {
     loadProfile();
   }, []);
 
-  const leerjaar = getLeerjaar(profiel?.leerjaar);
+  const leerjaar = actueelLeerjaar ?? getLeerjaar(profiel?.leerjaar);
   const rol = normalizeRole(profiel?.rol);
   const isLeerling = rol === "leerling";
 
