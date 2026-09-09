@@ -57,21 +57,44 @@ function currentSchoolYear() {
   const d = new Date();
   const y = d.getFullYear();
   const m = d.getMonth() + 1;
+
   return m >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
 }
 
+/**
+ * Echte klasnamen beginnen met een cijfer.
+ *
+ * Belangrijk:
+ * Ook 7e jaar moet ondersteund worden, bijvoorbeeld "7 VHO".
+ */
 function startsWithNumber(value: string | null | undefined) {
-  return /^[1-6]/.test(String(value ?? "").trim());
+  return /^[1-7]/.test(String(value ?? "").trim());
 }
 
 function cleanClassName(value: string | null | undefined) {
-  return String(value ?? "").trim().replace(/\s+/g, " ");
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function normalizeUsername(value: string | null | undefined) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase();
+}
+
+function usernameFromEmail(email: string) {
+  return normalizeUsername(email.split("@")[0]);
 }
 
 function mapSex(value: string | null | undefined): "M" | "V" | null {
-  const sex = String(value ?? "").trim().toLowerCase();
+  const sex = String(value ?? "")
+    .trim()
+    .toLowerCase();
+
   if (sex === "male") return "M";
   if (sex === "female") return "V";
+
   return null;
 }
 
@@ -81,28 +104,52 @@ function getLoGroep(classRows: ClassStudent[] | null | undefined) {
     return name === "LOJON" || name === "LOMEI";
   });
 
-  return match ? cleanClassName(match.class_name).toUpperCase() : null;
+  return match
+    ? cleanClassName(match.class_name).toUpperCase()
+    : null;
 }
 
-function fullName(user: SmartschoolUser | null, student: ClassStudent | null) {
+function fullName(
+  user: SmartschoolUser | null,
+  student: ClassStudent | null
+) {
   const smartFull = String(user?.full_name ?? "").trim();
+
   if (smartFull) return smartFull;
 
   const first =
-    user?.given_name ?? user?.raw?.givenName ?? student?.given_name ?? "";
+    user?.given_name ??
+    user?.raw?.givenName ??
+    student?.given_name ??
+    "";
 
   const last =
-    user?.family_name ?? user?.raw?.familyName ?? student?.family_name ?? "";
+    user?.family_name ??
+    user?.raw?.familyName ??
+    student?.family_name ??
+    "";
 
-  return [first, last].filter(Boolean).join(" ").trim();
+  return [first, last]
+    .filter(Boolean)
+    .join(" ")
+    .trim();
 }
 
 function hasValue(value: unknown) {
-  return value !== null && value !== undefined && String(value).trim() !== "";
+  return (
+    value !== null &&
+    value !== undefined &&
+    String(value).trim() !== ""
+  );
 }
 
-function keepExisting<T>(existingValue: T | null | undefined, newValue: T | null | undefined) {
-  return hasValue(existingValue) ? existingValue : newValue ?? null;
+function keepExisting<T>(
+  existingValue: T | null | undefined,
+  newValue: T | null | undefined
+) {
+  return hasValue(existingValue)
+    ? existingValue
+    : newValue ?? null;
 }
 
 export default function AuthCallbackPage() {
@@ -113,6 +160,10 @@ export default function AuthCallbackPage() {
 
     const finishLogin = async () => {
       try {
+        /* =========================================
+           1. GOOGLE / SUPABASE LOGIN AFRONDEN
+        ========================================= */
+
         const url = new URL(window.location.href);
         const code = url.searchParams.get("code");
 
@@ -146,12 +197,18 @@ export default function AuthCallbackPage() {
           throw new Error("Geen e-mailadres gevonden.");
         }
 
-        const { data: existingProfile, error: existingProfileError } =
-          await supabase
-            .from("profielen")
-            .select("*")
-            .eq("id", authUser.id)
-            .maybeSingle();
+        /* =========================================
+           2. BESTAAND PROFIEL OPHALEN
+        ========================================= */
+
+        const {
+          data: existingProfile,
+          error: existingProfileError,
+        } = await supabase
+          .from("profielen")
+          .select("*")
+          .eq("id", authUser.id)
+          .maybeSingle();
 
         if (existingProfileError) {
           throw new Error(existingProfileError.message);
@@ -159,29 +216,99 @@ export default function AuthCallbackPage() {
 
         const actueelSchooljaar = currentSchoolYear();
 
-        const { data: classRows, error: classError } = await supabase
+        /*
+         * Username die we kunnen gebruiken als fallback.
+         *
+         * Volgorde:
+         * 1. username uit bestaand profiel
+         * 2. lokale deel van Google-schoolmail
+         *
+         * Voor Féy:
+         *
+         * Google:
+         * delombaerdefey@leerling-atheneumavelgem.be
+         *
+         * OneRoster:
+         * delombaerdefay@leerling-atheneumavelgem.be
+         *
+         * Username:
+         * delombaerdefey
+         */
+
+        const loginUsername =
+          normalizeUsername(existingProfile?.username) ||
+          usernameFromEmail(email);
+
+        /* =========================================
+           3. KLASGEGEVENS ZOEKEN
+
+           Eerst op e-mail.
+           Indien geen resultaat: fallback op username.
+        ========================================= */
+
+        let classRows: ClassStudent[] = [];
+
+        const {
+          data: classRowsByEmail,
+          error: classByEmailError,
+        } = await supabase
           .from("class_students")
           .select("*")
           .eq("email", email)
           .eq("schooljaar", actueelSchooljaar);
 
-        if (classError) {
-          throw new Error(classError.message);
+        if (classByEmailError) {
+          throw new Error(classByEmailError.message);
         }
 
+        classRows = (classRowsByEmail ?? []) as ClassStudent[];
+
+        /*
+         * Geen match op e-mail?
+         *
+         * Dan zoeken we opnieuw op username.
+         *
+         * Dit vangt situaties op waarbij Google Workspace
+         * en Smartschool/OneRoster een verschillend
+         * e-mailadres gebruiken.
+         */
+        if (classRows.length === 0 && loginUsername) {
+          const {
+            data: classRowsByUsername,
+            error: classByUsernameError,
+          } = await supabase
+            .from("class_students")
+            .select("*")
+            .ilike("username", loginUsername)
+            .eq("schooljaar", actueelSchooljaar);
+
+          if (classByUsernameError) {
+            throw new Error(classByUsernameError.message);
+          }
+
+          classRows =
+            (classRowsByUsername ?? []) as ClassStudent[];
+        }
+
+        /* =========================================
+           4. ECHTE KLAS SELECTEREN
+        ========================================= */
+
         const selectedClass: ClassStudent | null =
-          classRows?.find(
+          classRows.find(
             (row) =>
               row.primary_class === true &&
               startsWithNumber(row.class_name) &&
               !!getKlasMeta(cleanClassName(row.class_name))
           ) ??
-          classRows?.find(
+          classRows.find(
             (row) =>
               startsWithNumber(row.class_name) &&
               !!getKlasMeta(cleanClassName(row.class_name))
           ) ??
-          classRows?.find((row) => startsWithNumber(row.class_name)) ??
+          classRows.find((row) =>
+            startsWithNumber(row.class_name)
+          ) ??
           null;
 
         const klasNaam = selectedClass?.class_name
@@ -189,11 +316,24 @@ export default function AuthCallbackPage() {
           : null;
 
         const loGroep = getLoGroep(classRows);
-        const klasMeta = klasNaam ? getKlasMeta(klasNaam) : undefined;
+
+        const klasMeta = klasNaam
+          ? getKlasMeta(klasNaam)
+          : undefined;
+
+        /* =========================================
+           5. SMARTSCHOOL USER ZOEKEN
+        ========================================= */
 
         let smartschoolUser: SmartschoolUser | null = null;
 
-        const { data: userByEmail, error: userByEmailError } = await supabase
+        /*
+         * Eerst op Google-loginmail.
+         */
+        const {
+          data: userByEmail,
+          error: userByEmailError,
+        } = await supabase
           .from("smartschool_users")
           .select("*")
           .eq("email", email)
@@ -205,25 +345,50 @@ export default function AuthCallbackPage() {
 
         smartschoolUser = userByEmail?.[0] ?? null;
 
-        if (!smartschoolUser && selectedClass?.username) {
-          const { data: userByUsername, error: userByUsernameError } =
-            await supabase
-              .from("smartschool_users")
-              .select("*")
-              .eq("username", selectedClass.username)
-              .limit(1);
+        /*
+         * Geen match op e-mail?
+         *
+         * Gebruik username uit:
+         * - gevonden klas
+         * - bestaand profiel
+         * - Google e-mailadres
+         */
+        const smartschoolUsername =
+          normalizeUsername(selectedClass?.username) ||
+          normalizeUsername(existingProfile?.username) ||
+          loginUsername;
+
+        if (!smartschoolUser && smartschoolUsername) {
+          const {
+            data: userByUsername,
+            error: userByUsernameError,
+          } = await supabase
+            .from("smartschool_users")
+            .select("*")
+            .ilike("username", smartschoolUsername)
+            .limit(1);
 
           if (userByUsernameError) {
             throw new Error(userByUsernameError.message);
           }
 
-          smartschoolUser = userByUsername?.[0] ?? null;
+          smartschoolUser =
+            userByUsername?.[0] ?? null;
         }
 
+        /* =========================================
+           6. LEERKRACHT-LOGINMAPPING
+        ========================================= */
+
         if (!smartschoolUser) {
-          const { data: teacherLinks, error: teacherLinkError } = await supabase
+          const {
+            data: teacherLinks,
+            error: teacherLinkError,
+          } = await supabase
             .from("teacher_login_emails")
-            .select("school_email, smartschool_username")
+            .select(
+              "school_email, smartschool_username"
+            )
             .eq("school_email", email)
             .limit(1);
 
@@ -231,30 +396,50 @@ export default function AuthCallbackPage() {
             throw new Error(teacherLinkError.message);
           }
 
-          const teacherLink = (teacherLinks?.[0] ?? null) as
-            | TeacherLoginEmail
-            | null;
+          const teacherLink = (teacherLinks?.[0] ??
+            null) as TeacherLoginEmail | null;
 
           if (teacherLink?.smartschool_username) {
-            const { data: teacherUsers, error: teacherUserError } =
-              await supabase
-                .from("smartschool_users")
-                .select("*")
-                .eq("username", teacherLink.smartschool_username)
-                .limit(1);
+            const {
+              data: teacherUsers,
+              error: teacherUserError,
+            } = await supabase
+              .from("smartschool_users")
+              .select("*")
+              .eq(
+                "username",
+                teacherLink.smartschool_username
+              )
+              .limit(1);
 
             if (teacherUserError) {
-              throw new Error(teacherUserError.message);
+              throw new Error(
+                teacherUserError.message
+              );
             }
 
-            smartschoolUser = teacherUsers?.[0] ?? null;
+            smartschoolUser =
+              teacherUsers?.[0] ?? null;
           }
         }
 
+        /* =========================================
+           7. GEEN SMARTSCHOOL ACCOUNT?
+        ========================================= */
+
         if (!smartschoolUser && !selectedClass) {
-          await supabase.auth.signOut({ scope: "local" });
-          throw new Error("Je account staat niet in Smartschool.");
+          await supabase.auth.signOut({
+            scope: "local",
+          });
+
+          throw new Error(
+            "Je account staat niet in Smartschool."
+          );
         }
+
+        /* =========================================
+           8. ROL BEPALEN
+        ========================================= */
 
         const rawRole = String(
           smartschoolUser?.role ??
@@ -265,22 +450,51 @@ export default function AuthCallbackPage() {
           .trim()
           .toLowerCase();
 
-        const isStudent = rawRole === "student" || rawRole === "leerling";
-        const defaultRole = isStudent ? "student" : "teacher";
-        const defaultRol = isStudent ? "leerling" : "leerkracht";
+        const isStudent =
+          rawRole === "student" ||
+          rawRole === "leerling";
+
+        const defaultRole = isStudent
+          ? "student"
+          : "teacher";
+
+        const defaultRol = isStudent
+          ? "leerling"
+          : "leerkracht";
+
+        /* =========================================
+           9. PROFIELGEGEVENS
+        ========================================= */
 
         const smartschoolName =
-          fullName(smartschoolUser, selectedClass) ||
-          String(authUser.user_metadata?.full_name ?? "").trim() ||
+          fullName(
+            smartschoolUser,
+            selectedClass
+          ) ||
+          String(
+            authUser.user_metadata?.full_name ?? ""
+          ).trim() ||
           email;
 
-        const smartschoolGeslacht = mapSex(smartschoolUser?.raw?.sex);
+        const smartschoolGeslacht = mapSex(
+          smartschoolUser?.raw?.sex
+        );
 
         const smartschoolGeboortedatum =
           smartschoolUser?.birth_date ??
           smartschoolUser?.raw?.birthDate ??
           null;
 
+        /*
+         * BELANGRIJK:
+         *
+         * email blijft altijd de Google/Supabase Auth mail.
+         *
+         * We schrijven dus NIET het afwijkende OneRoster
+         * e-mailadres terug naar profielen.
+         *
+         * Hierdoor blijft auth.users en profielen consistent.
+         */
         const profielPayload = {
           id: authUser.id,
           email,
@@ -290,18 +504,29 @@ export default function AuthCallbackPage() {
             smartschoolName
           ),
 
-          // Belangrijk:
-          // Bestaande rollen mogen nooit overschreven worden bij login.
-          // Rollen worden later enkel via admin/beheer aangepast.
-          role: keepExisting(existingProfile?.role, defaultRole),
-          rol: keepExisting(existingProfile?.rol, defaultRol),
-          rol_bevestigd: existingProfile?.rol_bevestigd ?? true,
+          /*
+           * Bestaande rollen nooit overschrijven bij login.
+           */
+          role: keepExisting(
+            existingProfile?.role,
+            defaultRole
+          ),
+
+          rol: keepExisting(
+            existingProfile?.rol,
+            defaultRol
+          ),
+
+          rol_bevestigd:
+            existingProfile?.rol_bevestigd ??
+            true,
 
           username: keepExisting(
             existingProfile?.username,
             smartschoolUser?.username ??
               smartschoolUser?.raw?.username ??
               selectedClass?.username ??
+              loginUsername ??
               null
           ),
 
@@ -331,12 +556,20 @@ export default function AuthCallbackPage() {
 
           full_name: keepExisting(
             existingProfile?.full_name,
-            fullName(smartschoolUser, selectedClass)
+            fullName(
+              smartschoolUser,
+              selectedClass
+            )
           ),
 
-          // Belangrijk:
-          // Bestaande persoonlijke profielvelden niet leegmaken bij Google-login.
-          geslacht: keepExisting(existingProfile?.geslacht, smartschoolGeslacht),
+          /*
+           * Persoonlijke profielvelden nooit
+           * leegmaken bij Google-login.
+           */
+          geslacht: keepExisting(
+            existingProfile?.geslacht,
+            smartschoolGeslacht
+          ),
 
           geboortedatum: keepExisting(
             existingProfile?.geboortedatum,
@@ -348,8 +581,10 @@ export default function AuthCallbackPage() {
             smartschoolGeboortedatum
           ),
 
-          // Deze velden komen uit de actuele Smartschool-sync en mogen
-          // dus bij een nieuw schooljaar geactualiseerd worden.
+          /*
+           * Actuele schoolgegevens mogen wel
+           * bijgewerkt worden.
+           */
           klas_naam: isStudent
             ? klasNaam
             : existingProfile?.klas_naam ?? null,
@@ -359,21 +594,32 @@ export default function AuthCallbackPage() {
             : existingProfile?.lo_groep ?? null,
 
           class_info:
-            smartschoolUser?.raw?.metadata?.["smsc.classInfo"] ??
-            (isStudent ? klasNaam : existingProfile?.class_info ?? null),
+            smartschoolUser?.raw?.metadata?.[
+              "smsc.classInfo"
+            ] ??
+            (isStudent
+              ? klasNaam
+              : existingProfile?.class_info ??
+                null),
 
           class_year:
-            smartschoolUser?.raw?.metadata?.["smsc.classYear"] ??
+            smartschoolUser?.raw?.metadata?.[
+              "smsc.classYear"
+            ] ??
             existingProfile?.class_year ??
             null,
 
           class_level:
-            smartschoolUser?.raw?.metadata?.["smsc.classLevel"] ??
+            smartschoolUser?.raw?.metadata?.[
+              "smsc.classLevel"
+            ] ??
             existingProfile?.class_level ??
             null,
 
           internal_number:
-            smartschoolUser?.raw?.metadata?.["smsc.internalNumber"] ??
+            smartschoolUser?.raw?.metadata?.[
+              "smsc.internalNumber"
+            ] ??
             existingProfile?.internal_number ??
             null,
 
@@ -387,30 +633,46 @@ export default function AuthCallbackPage() {
 
           finaliteit: isStudent
             ? klasMeta?.finaliteit ?? null
-            : existingProfile?.finaliteit ?? null,
+            : existingProfile?.finaliteit ??
+              null,
 
           schooljaar: actueelSchooljaar,
 
           schooljaar_bevestigd_op:
-            existingProfile?.schooljaar === actueelSchooljaar
-              ? existingProfile?.schooljaar_bevestigd_op ??
-                new Date().toISOString().slice(0, 10)
-              : new Date().toISOString().slice(0, 10),
+            existingProfile?.schooljaar ===
+            actueelSchooljaar
+              ? existingProfile
+                  ?.schooljaar_bevestigd_op ??
+                new Date()
+                  .toISOString()
+                  .slice(0, 10)
+              : new Date()
+                  .toISOString()
+                  .slice(0, 10),
 
           updated_at: new Date().toISOString(),
         };
 
-        const { error: profielError } = await supabase
-          .from("profielen")
-          .upsert(profielPayload, { onConflict: "id" });
+        /* =========================================
+           10. PROFIEL OPSLAAN
+        ========================================= */
+
+        const { error: profielError } =
+          await supabase
+            .from("profielen")
+            .upsert(profielPayload, {
+              onConflict: "id",
+            });
 
         if (profielError) {
           throw new Error(profielError.message);
         }
 
+        /* =========================================
+           11. NAAR DASHBOARD
+        ========================================= */
+
         if (!cancelled) {
-          // Wacht kort tot Supabase de sessie volledig heeft opgeslagen.
-          // Dit voorkomt een redirect-loop tussen /login en /dashboard.
           await supabase.auth.getSession();
 
           window.setTimeout(() => {
@@ -438,7 +700,9 @@ export default function AuthCallbackPage() {
   return (
     <main className="min-h-dvh grid place-items-center px-6 bg-neutral-950">
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-6 text-white">
-        {!error ? "Smartschool-profiel wordt geladen…" : error}
+        {!error
+          ? "Smartschool-profiel wordt geladen…"
+          : error}
       </div>
     </main>
   );
