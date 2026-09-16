@@ -123,14 +123,29 @@ export default function GradeBoard({
           transition: !isMobile ? undefined : "all 0.3s ease",
         }}
       >
-        {disciplines.map((d) => (
-          <DisciplineCard
-            key={d.key}
-            t={t}
-            discipline={d}
-            schooljaar={schooljaar}
-          />
-        ))}
+        {disciplines.length === 0 ? (
+          <div
+            style={{
+              padding: 14,
+              borderRadius: 12,
+              border: "1px solid rgba(255,255,255,0.10)",
+              background: "rgba(0,0,0,0.18)",
+              color: "rgba(234,240,255,0.58)",
+              fontSize: 12.5,
+            }}
+          >
+            Nog geen disciplines voor deze graad.
+          </div>
+        ) : (
+          disciplines.map((d) => (
+            <DisciplineCard
+              key={d.key}
+              t={t}
+              discipline={d}
+              schooljaar={schooljaar}
+            />
+          ))
+        )}
       </div>
     </section>
   );

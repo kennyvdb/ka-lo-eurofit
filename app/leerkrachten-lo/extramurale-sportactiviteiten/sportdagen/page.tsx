@@ -8,16 +8,9 @@ import { createClient } from "@/lib/supabase/client";
 
 const supabase = createClient();
 
-/* =========================================================
-   CONSTANTEN
-========================================================= */
-
 const SCHOOLJAAR_SPORTDAG = "2026-2027";
 const LEERJAREN_MET_VERVOERSKEUZE = [3, 5, 6, 7];
-
-/* =========================================================
-   TYPES
-========================================================= */
+const MAX_KOERS_GOLF = 20;
 
 type MijnProfiel = {
   volledige_naam: string | null;
@@ -38,11 +31,8 @@ type SmartschoolLeerling = {
 
 type GekoppeldeLeerling = SmartschoolLeerling & {
   gekoppeld_profiel_id: string | null;
-  koppeling:
-    | "smartschool_profiel_id"
-    | "niet_gekoppeld";
+  koppeling: "smartschool_profiel_id" | "niet_gekoppeld";
 };
-
 
 type VervoersKeuze = {
   leerling_id: string;
@@ -53,9 +43,18 @@ type VervoersKeuze = {
   updated_at: string;
 };
 
-/* =========================================================
-   UI
-========================================================= */
+type LeerlingMetKeuze = {
+  leerling: GekoppeldeLeerling;
+  keuze: VervoersKeuze;
+};
+
+type CopyRow = {
+  naam: string;
+  klas: string;
+  activiteit?: string;
+  heen?: string;
+  terug?: string;
+};
 
 const ui = {
   text: "rgba(234,240,255,0.92)",
@@ -64,9 +63,15 @@ const ui = {
   glass: "rgba(6, 12, 20, 0.42)",
 };
 
-/* =========================================================
-   HELPERS
-========================================================= */
+const SPORTDAG_INFO: Record<
+  number,
+  { titel: string; locatie: string; emoji: string }
+> = {
+  3: { titel: "Adventure De Gavers", locatie: "Harelbeke", emoji: "🚴" },
+  5: { titel: "Sport & Teambuilding", locatie: "Oudenaarde", emoji: "🎯" },
+  6: { titel: "Waterski & Adventure Donk", locatie: "Oudenaarde", emoji: "🏄‍♂️" },
+  7: { titel: "Waterski & Adventure Donk", locatie: "Oudenaarde", emoji: "🏄‍♂️" },
+};
 
 function normalizeRole(value: unknown) {
   return String(value ?? "")
@@ -86,99 +91,100 @@ function isAllowedRole(role: string) {
 }
 
 function normalizeEmail(value: string | null | undefined) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
+  return String(value ?? "").trim().toLowerCase();
 }
 
 function normalizeId(value: string | null | undefined) {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase();
+  return String(value ?? "").trim().toLowerCase();
 }
 
 function getLeerjaarUitKlas(klasNaam: string | null) {
   if (!klasNaam) return null;
-
   const match = klasNaam.trim().match(/^([1-7])/);
-
   if (!match) return null;
-
   const leerjaar = Number(match[1]);
-
   return Number.isNaN(leerjaar) ? null : leerjaar;
 }
 
 function getNaam(leerling: SmartschoolLeerling) {
-  if (leerling.volledige_naam?.trim()) {
-    return leerling.volledige_naam.trim();
-  }
+  if (leerling.volledige_naam?.trim()) return leerling.volledige_naam.trim();
 
-  const naam = [
-    leerling.given_name?.trim(),
-    leerling.family_name?.trim(),
-  ]
+  const naam = [leerling.given_name?.trim(), leerling.family_name?.trim()]
     .filter(Boolean)
     .join(" ");
 
   if (naam) return naam;
-
   if (leerling.email) return leerling.email;
-
   return "Onbekende leerling";
 }
 
 function formatTransport(value: VervoersKeuze["heen"]) {
   if (value === "fiets") return "Fiets";
-  if (value === "eigen_vervoer") return "Eigen vervoer";
-  return "Niet van toepassing";
+  if (value === "eigen_vervoer") return "Rechtstreeks / eigen vervoer";
+  return "Niet ingevuld";
 }
 
-function formatDate(value: string) {
+function sortLeerlingen(items: LeerlingMetKeuze[]) {
+  return [...items].sort((a, b) => {
+    const klas = String(a.leerling.klas_naam ?? "").localeCompare(
+      String(b.leerling.klas_naam ?? ""),
+      "nl"
+    );
+    if (klas !== 0) return klas;
+    return getNaam(a.leerling).localeCompare(getNaam(b.leerling), "nl");
+  });
+}
+
+function sortOntbrekend(items: GekoppeldeLeerling[]) {
+  return [...items].sort((a, b) => {
+    const klas = String(a.klas_naam ?? "").localeCompare(
+      String(b.klas_naam ?? ""),
+      "nl"
+    );
+    if (klas !== 0) return klas;
+    return getNaam(a).localeCompare(getNaam(b), "nl");
+  });
+}
+
+async function copyForExcel(titel: string, rows: CopyRow[]) {
+  const headers = ["Naam", "Klas", "Activiteit", "Heen", "Terug"];
+  const body = rows.map((row) =>
+    [
+      row.naam,
+      row.klas,
+      row.activiteit ?? "",
+      row.heen ?? "",
+      row.terug ?? "",
+    ].join("\t")
+  );
+
+  const text = [titel, "", headers.join("\t"), ...body].join("\n");
+
   try {
-    return new Intl.DateTimeFormat("nl-BE", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(new Date(value));
-  } catch {
-    return "";
+    await navigator.clipboard.writeText(text);
+    window.alert(
+      `${rows.length} leerling${rows.length === 1 ? "" : "en"} gekopieerd.\n\nPlak de lijst rechtstreeks in Excel.`
+    );
+  } catch (error) {
+    console.error("Kopiëren mislukt:", error);
+    window.alert("Kopiëren naar het klembord is mislukt.");
   }
 }
-
-/* =========================================================
-   PAGE
-========================================================= */
 
 export default function SportdagenBeheerPage() {
   const [loading, setLoading] = useState(true);
   const [profiel, setProfiel] = useState<MijnProfiel | null>(null);
   const [allowed, setAllowed] = useState(false);
-
   const [leerlingen, setLeerlingen] = useState<GekoppeldeLeerling[]>([]);
   const [vervoersKeuzes, setVervoersKeuzes] = useState<VervoersKeuze[]>([]);
-
-  const [smartschoolSchooljaar, setSmartschoolSchooljaar] =
-    useState<string | null>(null);
-
-
+  const [smartschoolSchooljaar, setSmartschoolSchooljaar] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  /* =======================================================
-     DATA LADEN
-  ======================================================= */
 
   const loadData = useCallback(async () => {
     setLoading(true);
     setErrorMessage(null);
 
     try {
-      /* ---------------------------------------------------
-         1. INGelogde gebruiker
-      --------------------------------------------------- */
-
       const {
         data: { user },
         error: userError,
@@ -186,11 +192,7 @@ export default function SportdagenBeheerPage() {
 
       if (userError) {
         console.error("Gebruiker laden mislukt:", userError);
-
-        setErrorMessage(
-          "De ingelogde gebruiker kon niet worden geladen."
-        );
-
+        setErrorMessage("De ingelogde gebruiker kon niet worden geladen.");
         return;
       }
 
@@ -198,10 +200,6 @@ export default function SportdagenBeheerPage() {
         setErrorMessage("Je bent niet aangemeld.");
         return;
       }
-
-      /* ---------------------------------------------------
-         2. EIGEN PROFIEL / ROL
-      --------------------------------------------------- */
 
       const { data: profielData, error: profielError } = await supabase
         .from("profielen")
@@ -211,205 +209,101 @@ export default function SportdagenBeheerPage() {
 
       if (profielError) {
         console.error("Profiel laden mislukt:", profielError);
-
         setErrorMessage("Je profiel kon niet worden geladen.");
-
         return;
       }
 
       const mijnProfiel = profielData as MijnProfiel | null;
-
       setProfiel(mijnProfiel);
 
-      const role = normalizeRole(mijnProfiel?.rol);
-      const magBeheren = isAllowedRole(role);
-
+      const magBeheren = isAllowedRole(normalizeRole(mijnProfiel?.rol));
       setAllowed(magBeheren);
+      if (!magBeheren) return;
 
-      if (!magBeheren) {
-        return;
-      }
-
-      /* ---------------------------------------------------
-         3. SMARTSCHOOL LEERLINGEN
-      --------------------------------------------------- */
-
-      const { data: smartschoolData, error: smartschoolError } =
-        await supabase
-          .from("sportdag_class_students_view")
-          .select(`
-            email,
-            given_name,
-            family_name,
-            volledige_naam,
-            username,
-            klas_naam,
-            lo_groepen,
-            profiel_id,
-            schooljaar
-          `)
-          .range(0, 4999);
+      const { data: smartschoolData, error: smartschoolError } = await supabase
+        .from("sportdag_class_students_view")
+        .select(`
+          email,
+          given_name,
+          family_name,
+          volledige_naam,
+          username,
+          klas_naam,
+          lo_groepen,
+          profiel_id,
+          schooljaar
+        `)
+        .range(0, 4999);
 
       if (smartschoolError) {
-        console.error(
-          "Smartschool leerlingen laden mislukt:",
-          smartschoolError
-        );
-
-        setErrorMessage(
-          "De leerlingen konden niet uit Smartschool worden geladen."
-        );
-
+        console.error("Smartschool leerlingen laden mislukt:", smartschoolError);
+        setErrorMessage("De leerlingen konden niet uit Smartschool worden geladen.");
         return;
       }
 
-      const alleSmartschoolRijen =
-        (smartschoolData ?? []) as SmartschoolLeerling[];
-
-      /* ---------------------------------------------------
-         4. SCHOOLJAAR KIEZEN
-
-         Voorkeur:
-         2026-2027
-
-         Indien niet aanwezig:
-         meest recente schooljaar
-      --------------------------------------------------- */
-
+      const alleRijen = (smartschoolData ?? []) as SmartschoolLeerling[];
       const beschikbareSchooljaren = Array.from(
         new Set(
-          alleSmartschoolRijen
+          alleRijen
             .map((row) => row.schooljaar)
             .filter((value): value is string => Boolean(value))
         )
       ).sort((a, b) => b.localeCompare(a));
 
-      const gekozenSchooljaar =
-        beschikbareSchooljaren.includes(SCHOOLJAAR_SPORTDAG)
-          ? SCHOOLJAAR_SPORTDAG
-          : beschikbareSchooljaren[0] ?? null;
+      const gekozenSchooljaar = beschikbareSchooljaren.includes(SCHOOLJAAR_SPORTDAG)
+        ? SCHOOLJAAR_SPORTDAG
+        : beschikbareSchooljaren[0] ?? null;
 
       setSmartschoolSchooljaar(gekozenSchooljaar);
 
-      let actieveSmartschoolRijen = gekozenSchooljaar
-        ? alleSmartschoolRijen.filter(
-            (row) => row.schooljaar === gekozenSchooljaar
-          )
-        : alleSmartschoolRijen;
-
-      /* ---------------------------------------------------
-         5. DUBBELE SMARTSCHOOL-RIJEN VERWIJDEREN
-
-         E-mail is primair.
-         Username is fallback.
-      --------------------------------------------------- */
+      let actieveRijen = gekozenSchooljaar
+        ? alleRijen.filter((row) => row.schooljaar === gekozenSchooljaar)
+        : alleRijen;
 
       const uniekeLeerlingen = new Map<string, SmartschoolLeerling>();
 
-      for (const leerling of actieveSmartschoolRijen) {
+      for (const leerling of actieveRijen) {
         const emailKey = normalizeEmail(leerling.email);
-
-        const key =
-          emailKey ||
-          leerling.username?.trim().toLowerCase() ||
-          "";
-
+        const key = emailKey || leerling.username?.trim().toLowerCase() || "";
         if (!key) continue;
 
         const bestaande = uniekeLeerlingen.get(key);
-
-        if (!bestaande) {
-          uniekeLeerlingen.set(key, leerling);
-          continue;
-        }
-
-        /*
-          Bij dubbele rij:
-          voorkeur voor rij met profiel_id.
-        */
-
-        if (!bestaande.profiel_id && leerling.profiel_id) {
+        if (!bestaande || (!bestaande.profiel_id && leerling.profiel_id)) {
           uniekeLeerlingen.set(key, leerling);
         }
       }
 
-      actieveSmartschoolRijen =
-        Array.from(uniekeLeerlingen.values());
+      actieveRijen = Array.from(uniekeLeerlingen.values());
 
-      /* ---------------------------------------------------
-         6. SMARTSCHOOL -> PROFIEL KOPPELEN
-
-         De view sportdag_class_students_view bevat al profiel_id.
-         We gebruiken dit veld rechtstreeks en normaliseren de UUID.
-         Zo vermijden we een extra query naar profielen en dus ook
-         mogelijke RLS/PostgREST-problemen op die fallback-query.
-      --------------------------------------------------- */
-
-      const gekoppeldeLeerlingen: GekoppeldeLeerling[] =
-        actieveSmartschoolRijen.map((leerling) => {
+      const gekoppeldeLeerlingen: GekoppeldeLeerling[] = actieveRijen.map(
+        (leerling) => {
           const profielId = normalizeId(leerling.profiel_id);
-
-          if (profielId) {
-            return {
-              ...leerling,
-              gekoppeld_profiel_id: profielId,
-              koppeling: "smartschool_profiel_id",
-            };
-          }
-
           return {
             ...leerling,
-            gekoppeld_profiel_id: null,
-            koppeling: "niet_gekoppeld",
+            gekoppeld_profiel_id: profielId || null,
+            koppeling: profielId ? "smartschool_profiel_id" : "niet_gekoppeld",
           };
-        });
+        }
+      );
 
       setLeerlingen(gekoppeldeLeerlingen);
 
-      /* ---------------------------------------------------
-         9. VERVOERSKEUZES
-      --------------------------------------------------- */
-
-      const { data: vervoerData, error: vervoerError } =
-        await supabase
-          .from("sportdag_vervoer")
-          .select(`
-            leerling_id,
-            leerjaar,
-            activiteit,
-            heen,
-            terug,
-            updated_at
-          `)
-          .eq("schooljaar", SCHOOLJAAR_SPORTDAG)
-          .range(0, 4999);
-
+      const { data: vervoerData, error: vervoerError } = await supabase
+        .from("sportdag_vervoer")
+        .select("leerling_id, leerjaar, activiteit, heen, terug, updated_at")
+        .eq("schooljaar", SCHOOLJAAR_SPORTDAG)
+        .range(0, 4999);
 
       if (vervoerError) {
-        console.error(
-          "Vervoerskeuzes laden mislukt:",
-          vervoerError
-        );
-
-        setErrorMessage(
-          "De vervoerskeuzes konden niet worden geladen."
-        );
-
+        console.error("Vervoerskeuzes laden mislukt:", vervoerError);
+        setErrorMessage("De vervoerskeuzes konden niet worden geladen.");
         return;
       }
 
-      setVervoersKeuzes(
-        (vervoerData ?? []) as VervoersKeuze[]
-      );
+      setVervoersKeuzes((vervoerData ?? []) as VervoersKeuze[]);
     } catch (error) {
-      console.error(
-        "Sportdagenoverzicht laden mislukt:",
-        error
-      );
-
-      setErrorMessage(
-        "Er ging iets mis tijdens het laden van het sportdagenoverzicht."
-      );
+      console.error("Sportdagenoverzicht laden mislukt:", error);
+      setErrorMessage("Er ging iets mis tijdens het laden van het sportdagenoverzicht.");
     } finally {
       setLoading(false);
     }
@@ -418,10 +312,6 @@ export default function SportdagenBeheerPage() {
   useEffect(() => {
     loadData();
   }, [loadData]);
-
-  /* =======================================================
-     LEERLINGEN PER LEERJAAR
-  ======================================================= */
 
   const leerlingenPerLeerjaar = useMemo(() => {
     const result: Record<number, GekoppeldeLeerling[]> = {
@@ -432,103 +322,49 @@ export default function SportdagenBeheerPage() {
     };
 
     for (const leerling of leerlingen) {
-      const leerjaar =
-        getLeerjaarUitKlas(leerling.klas_naam);
-
-      if (!leerjaar) continue;
-
-      if (
-        !LEERJAREN_MET_VERVOERSKEUZE.includes(leerjaar)
-      ) {
-        continue;
-      }
-
+      const leerjaar = getLeerjaarUitKlas(leerling.klas_naam);
+      if (!leerjaar || !LEERJAREN_MET_VERVOERSKEUZE.includes(leerjaar)) continue;
       result[leerjaar].push(leerling);
     }
 
     for (const leerjaar of LEERJAREN_MET_VERVOERSKEUZE) {
-      result[leerjaar].sort((a, b) =>
-        getNaam(a).localeCompare(getNaam(b), "nl")
-      );
+      result[leerjaar] = sortOntbrekend(result[leerjaar]);
     }
 
     return result;
   }, [leerlingen]);
 
-  /* =======================================================
-     VERVOER MAP
-
-     Hierdoor moeten we niet telkens .find() uitvoeren.
-  ======================================================= */
-
   const vervoerPerLeerling = useMemo(() => {
     const result = new Map<string, VervoersKeuze>();
-
     for (const keuze of vervoersKeuzes) {
       const leerlingId = normalizeId(keuze.leerling_id);
-
-      if (!leerlingId) continue;
-
-      result.set(leerlingId, keuze);
+      if (leerlingId) result.set(leerlingId, keuze);
     }
-
     return result;
   }, [vervoersKeuzes]);
 
-  /* =======================================================
-     LOADING
-  ======================================================= */
-
   if (loading) {
     return (
-      <AppShell
-        title="LO App"
-        subtitle="Sportdagen"
-        userName={profiel?.volledige_naam ?? null}
-      >
+      <AppShell title="LO App" subtitle="Sportdagen" userName={profiel?.volledige_naam ?? null}>
         <style>{css}</style>
-
         <div className="loading-state">
           <div className="loading-icon">🏆</div>
-
           <strong>Sportdagen laden...</strong>
-
-          <span>
-            Smartschoolgegevens en vervoerskeuzes worden
-            opgehaald.
-          </span>
+          <span>Smartschoolgegevens en vervoerskeuzes worden opgehaald.</span>
         </div>
       </AppShell>
     );
   }
 
-  /* =======================================================
-     GEEN TOEGANG
-  ======================================================= */
-
   if (!allowed) {
     return (
-      <AppShell
-        title="LO App"
-        subtitle="Geen toegang"
-        userName={profiel?.volledige_naam ?? null}
-      >
+      <AppShell title="LO App" subtitle="Geen toegang" userName={profiel?.volledige_naam ?? null}>
         <style>{css}</style>
-
         <section className="access-card">
           <div className="access-icon">🔒</div>
-
           <h1>Geen toegang</h1>
-
-          <p>
-            Deze pagina is alleen toegankelijk voor
-            LO-leerkrachten en admins.
-          </p>
-
-          <Link
-            href="/dashboard"
-            className="back-button"
-          >
+          <p>Deze pagina is alleen toegankelijk voor LO-leerkrachten en admins.</p>
+          <Link href="/dashboard" className="back-button">
             ← Terug naar dashboard
           </Link>
         </section>
@@ -536,739 +372,496 @@ export default function SportdagenBeheerPage() {
     );
   }
 
-  /* =======================================================
-     PAGE
-  ======================================================= */
-
   return (
-    <AppShell
-      title="LO App"
-      subtitle="Sportdagen"
-      userName={profiel?.volledige_naam ?? null}
-    >
+    <AppShell title="LO App" subtitle="Sportdagen" userName={profiel?.volledige_naam ?? null}>
       <style>{css}</style>
 
       <main className="page">
-        {/* HERO */}
-
         <BaseHero
           label="EXTRAMURALE SPORTACTIVITEITEN"
           title={
             <>
-              Beheer{" "}
-              <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
-                sportdagen
-              </span>
+              Beheer <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">sportdagen</span>
             </>
           }
-          description="Bekijk per leerjaar wie zijn vervoerskeuze al heeft ingevuld en wie nog ontbreekt."
+          description="Bekijk per sportdag meteen wie met de fiets vertrekt, wie rechtstreeks gaat en wie zijn keuze nog niet heeft ingevuld."
           imageSrc="/lo/LO.png"
           imageAlt="Sportdagen"
           quoteTitle="Sportdagen"
-          quote="Alle vervoerskeuzes overzichtelijk per leerjaar."
+          quote="Alle vervoerskeuzes in één werkoverzicht."
           quoteAuthor="LO team"
           actions={
             <div className="hero-actions">
-              <Link
-                href="/leerkrachten-lo/extramurale-sportactiviteiten"
-                className="hero-button"
-              >
+              <Link href="/leerkrachten-lo/extramurale-sportactiviteiten" className="hero-button">
                 ← Terug
               </Link>
-
-              <button
-                type="button"
-                className="hero-button"
-                onClick={loadData}
-              >
+              <button type="button" className="hero-button" onClick={loadData}>
                 ↻ Vernieuwen
               </button>
             </div>
           }
         />
 
-        {/* BRONINFO */}
-
         <section className="source-bar">
           <div className="source-left">
             <span className="source-dot" />
-
             <div>
-              <strong>
-                Leerlingen uit Smartschool
-              </strong>
-
+              <strong>Leerlingen uit Smartschool</strong>
               <span>
                 {leerlingen.length} leerlingen geladen
-                {smartschoolSchooljaar
-                  ? ` • schooljaar ${smartschoolSchooljaar}`
-                  : ""}
+                {smartschoolSchooljaar ? ` • schooljaar ${smartschoolSchooljaar}` : ""}
               </span>
             </div>
           </div>
 
-          <div className="source-badges">
-            {smartschoolSchooljaar &&
-              smartschoolSchooljaar !==
-                SCHOOLJAAR_SPORTDAG && (
-                <div className="schoolyear-warning">
-                  ⚠️ Smartschool bevat momenteel nog{" "}
-                  {smartschoolSchooljaar}
-                </div>
-              )}
-          </div>
+          {smartschoolSchooljaar && smartschoolSchooljaar !== SCHOOLJAAR_SPORTDAG && (
+            <div className="schoolyear-warning">
+              ⚠️ Smartschool bevat momenteel nog {smartschoolSchooljaar}
+            </div>
+          )}
         </section>
 
-        {errorMessage && (
-          <section className="error-card">
-            ⚠️ {errorMessage}
-          </section>
-        )}
+        {errorMessage && <section className="error-card">⚠️ {errorMessage}</section>}
 
-        {/* LEERJAREN */}
+        <section className="teacher-overview">
+          {LEERJAREN_MET_VERVOERSKEUZE.map((leerjaar) => {
+            const leerlingenVanLeerjaar = leerlingenPerLeerjaar[leerjaar] ?? [];
+            const leerlingenMetKeuze: LeerlingMetKeuze[] = [];
+            const ontbrekendeLeerlingen: GekoppeldeLeerling[] = [];
 
-        <section className="year-grid">
-          {LEERJAREN_MET_VERVOERSKEUZE.map(
-            (leerjaar) => {
-              const leerlingenVanLeerjaar =
-                leerlingenPerLeerjaar[leerjaar] ?? [];
-
-              /*
-                INGevuld:
-
-                leerling heeft gekoppeld profiel
-                EN
-                sportdag_vervoer bevat dat leerling_id
-                EN
-                keuze hoort bij dit leerjaar
-              */
-
-              const ingevuldeLeerlingen =
-                leerlingenVanLeerjaar.filter(
-                  (leerling) => {
-                    const profielId = normalizeId(
-                      leerling.gekoppeld_profiel_id
-                    );
-
-                    if (!profielId) {
-                      return false;
-                    }
-
-                    const keuze =
-                      vervoerPerLeerling.get(profielId);
-
-                    if (!keuze) {
-                      return false;
-                    }
-
-                    return (
-                      Number(keuze.leerjaar) ===
-                      Number(leerjaar)
-                    );
-                  }
-                );
-
-              /*
-                Ontbrekend = iedereen die niet bij
-                ingevuld zit.
-              */
-
-              const ingevuldeIds = new Set(
-                ingevuldeLeerlingen
-                  .map((leerling) =>
-                    normalizeId(
-                      leerling.gekoppeld_profiel_id
-                    )
-                  )
-                  .filter(Boolean)
-              );
-
-              const ontbrekendeLeerlingen =
-                leerlingenVanLeerjaar.filter(
-                  (leerling) => {
-                    const profielId = normalizeId(
-                      leerling.gekoppeld_profiel_id
-                    );
-
-                    if (!profielId) {
-                      return true;
-                    }
-
-                    return !ingevuldeIds.has(profielId);
-                  }
-                );
-
-              /* ------------------------------------------------
-                 ACTIVITEIT + VERVOERSTOTALEN
-              ------------------------------------------------ */
-
-              let fietsHeen = 0;
-              let eigenHeen = 0;
-              let fietsTerug = 0;
-              let eigenTerug = 0;
-              let donkAantal = 0;
-              let koersGolfAantal = 0;
-
-              for (const leerling of ingevuldeLeerlingen) {
-                const profielId = normalizeId(
-                  leerling.gekoppeld_profiel_id
-                );
-
-                if (!profielId) continue;
-
-                const keuze =
-                  vervoerPerLeerling.get(profielId);
-
-                if (!keuze) continue;
-
-                const isKoersGolf =
-                  leerjaar >= 6 && keuze.activiteit === "koers_golf";
-
-                if (leerjaar >= 6) {
-                  if (isKoersGolf) {
-                    koersGolfAantal += 1;
-                  } else {
-                    donkAantal += 1;
-                  }
-                }
-
-                // Koers + golf heeft geen vervoerskeuze.
-                if (isKoersGolf) continue;
-
-                if (keuze.heen === "fiets") {
-                  fietsHeen += 1;
-                }
-
-                if (keuze.heen === "eigen_vervoer") {
-                  eigenHeen += 1;
-                }
-
-                if (keuze.terug === "fiets") {
-                  fietsTerug += 1;
-                }
-
-                if (keuze.terug === "eigen_vervoer") {
-                  eigenTerug += 1;
-                }
+            for (const leerling of leerlingenVanLeerjaar) {
+              const profielId = normalizeId(leerling.gekoppeld_profiel_id);
+              if (!profielId) {
+                ontbrekendeLeerlingen.push(leerling);
+                continue;
               }
 
-              const koersGolfVrij = Math.max(0, 20 - koersGolfAantal);
+              const keuze = vervoerPerLeerling.get(profielId);
+              if (!keuze || Number(keuze.leerjaar) !== Number(leerjaar)) {
+                ontbrekendeLeerlingen.push(leerling);
+                continue;
+              }
 
-              const percentage =
-                leerlingenVanLeerjaar.length > 0
-                  ? Math.round(
-                      (ingevuldeLeerlingen.length /
-                        leerlingenVanLeerjaar.length) *
-                        100
-                    )
-                  : 0;
-
-              return (
-                <article
-                  key={leerjaar}
-                  className="year-card"
-                >
-                  {/* HEADER */}
-
-                  <div className="year-header">
-                    <div>
-                      <span className="year-label">
-                        SPORTDAG
-                      </span>
-
-                      <h2>{leerjaar}e jaar</h2>
-                    </div>
-
-                    <div className="percentage">
-                      {percentage}%
-                    </div>
-                  </div>
-
-                  {/* STATS */}
-
-                  <div className="stats-grid">
-                    <StatCard
-                      value={
-                        leerlingenVanLeerjaar.length
-                      }
-                      label="Leerlingen"
-                      icon="👥"
-                    />
-
-                    <StatCard
-                      value={
-                        ingevuldeLeerlingen.length
-                      }
-                      label="Ingevuld"
-                      icon="✓"
-                      variant="success"
-                    />
-
-                    <StatCard
-                      value={
-                        ontbrekendeLeerlingen.length
-                      }
-                      label="Ontbrekend"
-                      icon="!"
-                      variant={
-                        ontbrekendeLeerlingen.length >
-                        0
-                          ? "warning"
-                          : "success"
-                      }
-                    />
-                  </div>
-
-                  {/* PROGRESS */}
-
-                  <div className="progress-track">
-                    <div
-                      className="progress-bar"
-                      style={{
-                        width: `${percentage}%`,
-                      }}
-                    />
-                  </div>
-
-                  {/* ACTIVITEITSKEUZE 6e / 7e */}
-
-                  {leerjaar >= 6 && (
-                    <>
-                      <div className="transport-title">
-                        Activiteitskeuze
-                      </div>
-
-                      <div className="activity-choice-grid">
-                        <ActivityCounter
-                          emoji="🏄‍♂️"
-                          value={donkAantal}
-                          label="Den Donk"
-                        />
-
-                        <ActivityCounter
-                          emoji="🚴"
-                          value={koersGolfAantal}
-                          label="Koers + golf"
-                          detail={`${koersGolfVrij} van 20 plaatsen vrij`}
-                          full={koersGolfAantal >= 20}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {/* VERVOER */}
-
-                  <div className="transport-title">
-                    {leerjaar >= 6
-                      ? "Vervoerskeuzes Den Donk"
-                      : "Vervoerskeuzes"}
-                  </div>
-
-                  <div className="transport-grid">
-                    <TransportCounter
-                      emoji="🚲"
-                      value={fietsHeen}
-                      label="Fiets heen"
-                    />
-
-                    <TransportCounter
-                      emoji="🚗"
-                      value={eigenHeen}
-                      label="Eigen vervoer heen"
-                    />
-
-                    <TransportCounter
-                      emoji="🚲"
-                      value={fietsTerug}
-                      label="Fiets terug"
-                    />
-
-                    <TransportCounter
-                      emoji="🚗"
-                      value={eigenTerug}
-                      label="Eigen vervoer terug"
-                    />
-                  </div>
-
-                  {/* GEEN LEERLINGEN */}
-
-                  {leerlingenVanLeerjaar.length ===
-                    0 && (
-                    <div className="no-students">
-                      <strong>
-                        Geen leerlingen gevonden
-                      </strong>
-
-                      <span>
-                        Voor het {leerjaar}e jaar werden
-                        geen Smartschool-leerlingen
-                        gevonden.
-                      </span>
-                    </div>
-                  )}
-
-                  {/* ONTBREKEND */}
-
-                  {leerlingenVanLeerjaar.length > 0 &&
-                    ontbrekendeLeerlingen.length >
-                      0 && (
-                      <div className="missing-card">
-                        <div className="missing-header">
-                          <div>
-                            <span>⚠️</span>
-
-                            <strong>
-                              Nog niet ingevuld
-                            </strong>
-                          </div>
-
-                          <span className="missing-badge">
-                            {
-                              ontbrekendeLeerlingen.length
-                            }
-                          </span>
-                        </div>
-
-                        <div className="student-list">
-                          {ontbrekendeLeerlingen.map(
-                            (leerling) => (
-                              <div
-                                key={
-                                  leerling.email ??
-                                  leerling.username ??
-                                  getNaam(leerling)
-                                }
-                                className="student-row"
-                              >
-                                <div className="student-avatar">
-                                  {getNaam(leerling)
-                                    .charAt(0)
-                                    .toUpperCase()}
-                                </div>
-
-                                <div className="student-main">
-                                  <strong>
-                                    {getNaam(leerling)}
-                                  </strong>
-
-                                  <span>
-                                    {leerling.klas_naam ??
-                                      "Geen klas"}
-                                  </span>
-                                </div>
-
-                                {!leerling.gekoppeld_profiel_id && (
-                                  <span className="profile-badge">
-                                    Nog niet ingelogd
-                                  </span>
-                                )}
-                              </div>
-                            )
-                          )}
-                        </div>
-
-                        <div className="reminder-info">
-                          🔔 Vanaf 8 september krijgen
-                          leerlingen die nog niets hebben
-                          ingevuld automatisch een reminder
-                          in de app.
-                        </div>
-                      </div>
-                    )}
-
-                  {/* ALLES INGEVULD */}
-
-                  {leerlingenVanLeerjaar.length > 0 &&
-                    ontbrekendeLeerlingen.length ===
-                      0 && (
-                      <div className="complete-card">
-                        <span className="complete-icon">
-                          ✓
-                        </span>
-
-                        <div>
-                          <strong>
-                            Alle leerlingen hebben hun
-                            vervoerskeuze ingevuld.
-                          </strong>
-
-                          <span>
-                            {
-                              leerlingenVanLeerjaar.length
-                            }{" "}
-                            van{" "}
-                            {
-                              leerlingenVanLeerjaar.length
-                            }{" "}
-                            leerlingen zijn in orde.
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                  {/* INGEVULDE KEUZES */}
-
-                  {ingevuldeLeerlingen.length > 0 && (
-                    <details className="filled-details">
-                      <summary>
-                        <span>
-                          ✓ Bekijk ingevulde keuzes
-                        </span>
-
-                        <span className="summary-count">
-                          {
-                            ingevuldeLeerlingen.length
-                          }
-                        </span>
-                      </summary>
-
-                      <div className="filled-list">
-                        {ingevuldeLeerlingen.map(
-                          (leerling) => {
-                            const profielId = normalizeId(
-                              leerling.gekoppeld_profiel_id
-                            );
-
-                            if (!profielId) {
-                              return null;
-                            }
-
-                            const keuze =
-                              vervoerPerLeerling.get(
-                                profielId
-                              );
-
-                            if (!keuze) {
-                              return null;
-                            }
-
-                            return (
-                              <div
-                                key={
-                                  profielId ??
-                                  leerling.email ??
-                                  ""
-                                }
-                                className="filled-row"
-                              >
-                                <div className="filled-header">
-                                  <div className="filled-student">
-                                    <strong>
-                                      {getNaam(leerling)}
-                                    </strong>
-
-                                    <span>
-                                      {leerling.klas_naam ??
-                                        "Geen klas"}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                <div className="filled-choices">
-                                  {leerjaar >= 6 && (
-                                    <div className="choice-pill activity-pill">
-                                      <span>
-                                        {keuze.activiteit === "koers_golf"
-                                          ? "🚴"
-                                          : "🏄‍♂️"}
-                                      </span>
-
-                                      <div>
-                                        <small>
-                                          ACTIVITEIT
-                                        </small>
-
-                                        <strong>
-                                          {keuze.activiteit === "koers_golf"
-                                            ? "Koers + golf"
-                                            : "Den Donk"}
-                                        </strong>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  {!(
-                                    leerjaar >= 6 &&
-                                    keuze.activiteit === "koers_golf"
-                                  ) && (
-                                    <>
-                                      <div className="choice-pill">
-                                        <span>
-                                          {keuze.heen === "fiets"
-                                            ? "🚲"
-                                            : "🚗"}
-                                        </span>
-
-                                        <div>
-                                          <small>HEEN</small>
-
-                                          <strong>
-                                            {formatTransport(keuze.heen)}
-                                          </strong>
-                                        </div>
-                                      </div>
-
-                                      <div className="choice-pill">
-                                        <span>
-                                          {keuze.terug === "fiets"
-                                            ? "🚲"
-                                            : "🚗"}
-                                        </span>
-
-                                        <div>
-                                          <small>TERUG</small>
-
-                                          <strong>
-                                            {formatTransport(keuze.terug)}
-                                          </strong>
-                                        </div>
-                                      </div>
-                                    </>
-                                  )}
-
-                                  {leerjaar >= 6 &&
-                                    keuze.activiteit === "koers_golf" && (
-                                      <div className="choice-pill no-transport-pill">
-                                        <span>✓</span>
-
-                                        <div>
-                                          <small>VERVOER</small>
-                                          <strong>Niet nodig</strong>
-                                        </div>
-                                      </div>
-                                    )}
-                                </div>
-
-                                <span className="updated">
-                                  Laatst opgeslagen:{" "}
-                                  {formatDate(
-                                    keuze.updated_at
-                                  )}
-                                </span>
-                              </div>
-                            );
-                          }
-                        )}
-                      </div>
-                    </details>
-                  )}
-                </article>
-              );
+              leerlingenMetKeuze.push({ leerling, keuze });
             }
-          )}
+
+            const koersGolf = sortLeerlingen(
+              leerlingenMetKeuze.filter(
+                ({ keuze }) => leerjaar >= 6 && keuze.activiteit === "koers_golf"
+              )
+            );
+
+            const gewoneActiviteit = sortLeerlingen(
+              leerlingenMetKeuze.filter(
+                ({ keuze }) => !(leerjaar >= 6 && keuze.activiteit === "koers_golf")
+              )
+            );
+
+            const fietsHeen = gewoneActiviteit.filter(({ keuze }) => keuze.heen === "fiets");
+            const rechtstreeksHeen = gewoneActiviteit.filter(
+              ({ keuze }) => keuze.heen === "eigen_vervoer"
+            );
+            const fietsTerug = gewoneActiviteit.filter(({ keuze }) => keuze.terug === "fiets");
+            const eigenTerug = gewoneActiviteit.filter(
+              ({ keuze }) => keuze.terug === "eigen_vervoer"
+            );
+
+            const totaal = leerlingenVanLeerjaar.length;
+            const ingevuld = leerlingenMetKeuze.length;
+            const percentage = totaal > 0 ? Math.round((ingevuld / totaal) * 100) : 0;
+            const info = SPORTDAG_INFO[leerjaar];
+
+            const volledigeExcelLijst: CopyRow[] = sortLeerlingen(leerlingenMetKeuze).map(
+              ({ leerling, keuze }) => ({
+                naam: getNaam(leerling),
+                klas: leerling.klas_naam ?? "",
+                activiteit:
+                  leerjaar >= 6
+                    ? keuze.activiteit === "koers_golf"
+                      ? "Koers + golf"
+                      : "Den Donk"
+                    : info?.titel ?? "",
+                heen:
+                  keuze.activiteit === "koers_golf"
+                    ? "Niet van toepassing"
+                    : formatTransport(keuze.heen),
+                terug:
+                  keuze.activiteit === "koers_golf"
+                    ? "Niet van toepassing"
+                    : formatTransport(keuze.terug),
+              })
+            );
+
+            return (
+              <article key={leerjaar} className="teacher-sportday">
+                <div className="teacher-sportday-header">
+                  <div className="sportday-heading-row">
+                    <span className="sportday-emoji">{info?.emoji ?? "🏆"}</span>
+                    <div className="sportday-heading">
+                      <span className="year-label">SPORTDAG</span>
+                      <h2>{leerjaar}e jaar</h2>
+                      <span className="sportday-subtitle">
+                        {info?.titel} • {info?.locatie}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="excel-main-button"
+                    onClick={() =>
+                      copyForExcel(
+                        `Sportdag ${leerjaar}e jaar - ${info?.titel ?? ""}`,
+                        volledigeExcelLijst
+                      )
+                    }
+                    disabled={volledigeExcelLijst.length === 0}
+                  >
+                    📋 Volledig overzicht voor Excel
+                  </button>
+                </div>
+
+                <div className="overview-stats">
+                  <OverviewStat value={totaal} label="Leerlingen" icon="👥" />
+                  <OverviewStat value={ingevuld} label="Ingevuld" icon="✓" variant="green" />
+                  <OverviewStat
+                    value={ontbrekendeLeerlingen.length}
+                    label="Ontbrekend"
+                    icon="!"
+                    variant={ontbrekendeLeerlingen.length > 0 ? "yellow" : "green"}
+                  />
+                  <OverviewStat value={`${percentage}%`} label="In orde" icon="📊" />
+                </div>
+
+                <div className="overview-progress">
+                  <div style={{ width: `${percentage}%` }} />
+                </div>
+
+                {leerjaar >= 6 && (
+                  <section className="activity-overview">
+                    <div className="overview-section-title">
+                      <div>
+                        <span className="section-kicker">ACTIVITEITSKEUZE</span>
+                        <h3>6e/7e jaar</h3>
+                      </div>
+                    </div>
+
+                    <div className="activity-overview-grid">
+                      <div className="activity-summary">
+                        <span className="activity-big-icon">🏄‍♂️</span>
+                        <div>
+                          <strong>{gewoneActiviteit.length}</strong>
+                          <span>Den Donk</span>
+                        </div>
+                      </div>
+
+                      <div className="activity-summary">
+                        <span className="activity-big-icon">🚴</span>
+                        <div>
+                          <strong>{koersGolf.length}</strong>
+                          <span>Koers + golf</span>
+                          <small>{Math.max(0, MAX_KOERS_GOLF - koersGolf.length)} van 20 plaatsen vrij</small>
+                        </div>
+                      </div>
+                    </div>
+
+                    {koersGolf.length > 0 && (
+                      <div className="single-list-wrap">
+                        <TransportList
+                          icon="🚴"
+                          title="Koers + golf"
+                          subtitle="Geen aparte vervoerskeuze nodig."
+                          items={koersGolf}
+                          onCopy={() =>
+                            copyForExcel(
+                              `${leerjaar}e jaar - Koers + golf`,
+                              koersGolf.map(({ leerling }) => ({
+                                naam: getNaam(leerling),
+                                klas: leerling.klas_naam ?? "",
+                                activiteit: "Koers + golf",
+                                heen: "Niet van toepassing",
+                                terug: "Niet van toepassing",
+                              }))
+                            )
+                          }
+                        />
+                      </div>
+                    )}
+                  </section>
+                )}
+
+                <section className="transport-section">
+                  <div className="overview-section-title">
+                    <div>
+                      <span className="section-kicker">HEENREIS</span>
+                      <h3>Naar de activiteit</h3>
+                      <p>Dit is het overzicht dat je bij vertrek het snelst nodig hebt.</p>
+                    </div>
+                    <div className="section-total">{gewoneActiviteit.length} leerlingen</div>
+                  </div>
+
+                  <div className="transport-lists-grid">
+                    <TransportList
+                      icon="🚲"
+                      title="Met de fiets"
+                      subtitle="Vertrekt samen met de fietsgroep."
+                      items={fietsHeen}
+                      onCopy={() =>
+                        copyForExcel(
+                          `${leerjaar}e jaar - Fiets heen`,
+                          fietsHeen.map(({ leerling, keuze }) => ({
+                            naam: getNaam(leerling),
+                            klas: leerling.klas_naam ?? "",
+                            activiteit: leerjaar >= 6 ? "Den Donk" : info?.titel ?? "",
+                            heen: formatTransport(keuze.heen),
+                            terug: formatTransport(keuze.terug),
+                          }))
+                        )
+                      }
+                    />
+
+                    <TransportList
+                      icon="📍"
+                      title="Rechtstreeks"
+                      subtitle="Gaat op eigen vervoer rechtstreeks naar de activiteit."
+                      items={rechtstreeksHeen}
+                      onCopy={() =>
+                        copyForExcel(
+                          `${leerjaar}e jaar - Rechtstreeks heen`,
+                          rechtstreeksHeen.map(({ leerling, keuze }) => ({
+                            naam: getNaam(leerling),
+                            klas: leerling.klas_naam ?? "",
+                            activiteit: leerjaar >= 6 ? "Den Donk" : info?.titel ?? "",
+                            heen: formatTransport(keuze.heen),
+                            terug: formatTransport(keuze.terug),
+                          }))
+                        )
+                      }
+                    />
+                  </div>
+                </section>
+
+                <details className="return-details">
+                  <summary>
+                    <div className="summary-left">
+                      <span className="return-icon">🏁</span>
+                      <div>
+                        <strong>Terugreis bekijken</strong>
+                        <span>{fietsTerug.length} fiets • {eigenTerug.length} eigen vervoer</span>
+                      </div>
+                    </div>
+                    <span className="details-arrow">↓</span>
+                  </summary>
+
+                  <div className="return-content">
+                    <div className="transport-lists-grid">
+                      <TransportList
+                        icon="🚲"
+                        title="Met de fiets terug"
+                        subtitle="Keert samen met de fietsgroep terug."
+                        items={fietsTerug}
+                        onCopy={() =>
+                          copyForExcel(
+                            `${leerjaar}e jaar - Fiets terug`,
+                            fietsTerug.map(({ leerling, keuze }) => ({
+                              naam: getNaam(leerling),
+                              klas: leerling.klas_naam ?? "",
+                              activiteit: leerjaar >= 6 ? "Den Donk" : info?.titel ?? "",
+                              heen: formatTransport(keuze.heen),
+                              terug: formatTransport(keuze.terug),
+                            }))
+                          )
+                        }
+                      />
+
+                      <TransportList
+                        icon="🚗"
+                        title="Eigen vervoer terug"
+                        subtitle="Wordt opgehaald of gaat zelfstandig naar huis."
+                        items={eigenTerug}
+                        onCopy={() =>
+                          copyForExcel(
+                            `${leerjaar}e jaar - Eigen vervoer terug`,
+                            eigenTerug.map(({ leerling, keuze }) => ({
+                              naam: getNaam(leerling),
+                              klas: leerling.klas_naam ?? "",
+                              activiteit: leerjaar >= 6 ? "Den Donk" : info?.titel ?? "",
+                              heen: formatTransport(keuze.heen),
+                              terug: formatTransport(keuze.terug),
+                            }))
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                </details>
+
+                {ontbrekendeLeerlingen.length > 0 ? (
+                  <details className="missing-details" open>
+                    <summary>
+                      <div className="summary-left">
+                        <span className="missing-warning">!</span>
+                        <div>
+                          <strong>Nog niet ingevuld</strong>
+                          <span>{ontbrekendeLeerlingen.length} leerlingen</span>
+                        </div>
+                      </div>
+                      <span className="details-arrow">↓</span>
+                    </summary>
+
+                    <div className="missing-content">
+                      <div className="missing-actions">
+                        <p>Deze leerlingen hebben nog geen geldige keuze opgeslagen.</p>
+                        <button
+                          type="button"
+                          className="copy-small-button warning"
+                          onClick={() =>
+                            copyForExcel(
+                              `${leerjaar}e jaar - Nog niet ingevuld`,
+                              sortOntbrekend(ontbrekendeLeerlingen).map((leerling) => ({
+                                naam: getNaam(leerling),
+                                klas: leerling.klas_naam ?? "",
+                              }))
+                            )
+                          }
+                        >
+                          📋 Kopieer lijst
+                        </button>
+                      </div>
+
+                      <div className="missing-student-grid">
+                        {sortOntbrekend(ontbrekendeLeerlingen).map((leerling) => (
+                          <div
+                            key={leerling.email ?? leerling.username ?? getNaam(leerling)}
+                            className="missing-student"
+                          >
+                            <span className="student-avatar">
+                              {getNaam(leerling).charAt(0).toUpperCase()}
+                            </span>
+                            <div>
+                              <strong>{getNaam(leerling)}</strong>
+                              <span>{leerling.klas_naam ?? "Geen klas"}</span>
+                            </div>
+                            {!leerling.gekoppeld_profiel_id && <small>Nog niet ingelogd</small>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </details>
+                ) : totaal > 0 ? (
+                  <div className="all-complete">
+                    <span>✓</span>
+                    <div>
+                      <strong>Iedereen heeft zijn keuze bevestigd</strong>
+                      <small>Alle {totaal} leerlingen zijn in orde.</small>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="no-students">Geen leerlingen gevonden voor het {leerjaar}e jaar.</div>
+                )}
+              </article>
+            );
+          })}
         </section>
       </main>
     </AppShell>
   );
 }
 
-/* =========================================================
-   STAT CARD
-========================================================= */
-
-function StatCard({
+function OverviewStat({
   value,
   label,
   icon,
   variant = "default",
 }: {
-  value: number;
+  value: number | string;
   label: string;
   icon: string;
-  variant?: "default" | "success" | "warning";
+  variant?: "default" | "green" | "yellow";
 }) {
   return (
-    <div className={`stat-card ${variant}`}>
-      <div className="stat-top">
-        <span className="stat-icon">
-          {icon}
-        </span>
-
+    <div className={`overview-stat ${variant}`}>
+      <div className="overview-stat-top">
+        <span>{icon}</span>
         <strong>{value}</strong>
       </div>
-
-      <span className="stat-label">
-        {label}
-      </span>
+      <small>{label}</small>
     </div>
   );
 }
 
-/* =========================================================
-   ACTIVITEIT COUNTER
-========================================================= */
-
-function ActivityCounter({
-  emoji,
-  value,
-  label,
-  detail,
-  full = false,
+function TransportList({
+  icon,
+  title,
+  subtitle,
+  items,
+  onCopy,
 }: {
-  emoji: string;
-  value: number;
-  label: string;
-  detail?: string;
-  full?: boolean;
+  icon: string;
+  title: string;
+  subtitle: string;
+  items: LeerlingMetKeuze[];
+  onCopy: () => void;
 }) {
   return (
-    <div className={`activity-counter ${full ? "full" : ""}`}>
-      <span className="activity-counter-icon">{emoji}</span>
-
-      <div className="activity-counter-copy">
-        <div className="activity-counter-top">
-          <strong>{value}</strong>
-          {full && <span className="full-badge">VOLZET</span>}
+    <div className="transport-list-card">
+      <div className="transport-list-header">
+        <div className="transport-list-heading">
+          <span className="transport-list-icon">{icon}</span>
+          <div>
+            <h4>{title}</h4>
+            <p>{subtitle}</p>
+          </div>
         </div>
-
-        <span>{label}</span>
-        {detail && <small>{detail}</small>}
+        <span className="transport-list-count">{items.length}</span>
       </div>
+
+      <button
+        type="button"
+        className="copy-small-button"
+        onClick={onCopy}
+        disabled={items.length === 0}
+      >
+        📋 Kopieer voor Excel
+      </button>
+
+      {items.length === 0 ? (
+        <div className="empty-transport-list">Geen leerlingen</div>
+      ) : (
+        <div className="transport-students">
+          <div className="transport-table-header">
+            <span>Naam</span>
+            <span>Klas</span>
+          </div>
+
+          {items.map(({ leerling }) => (
+            <div
+              key={
+                leerling.gekoppeld_profiel_id ??
+                leerling.email ??
+                leerling.username ??
+                getNaam(leerling)
+              }
+              className="transport-student-row"
+            >
+              <span>{getNaam(leerling)}</span>
+              <strong>{leerling.klas_naam ?? "—"}</strong>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
-
-/* =========================================================
-   TRANSPORT COUNTER
-========================================================= */
-
-function TransportCounter({
-  emoji,
-  value,
-  label,
-}: {
-  emoji: string;
-  value: number;
-  label: string;
-}) {
-  return (
-    <div className="transport-counter">
-      <span className="transport-icon">
-        {emoji}
-      </span>
-
-      <div>
-        <strong>{value}</strong>
-        <span>{label}</span>
-      </div>
-    </div>
-  );
-}
-
-/* =========================================================
-   CSS
-========================================================= */
 
 const css = `
-  * {
-    box-sizing: border-box;
-  }
+  * { box-sizing: border-box; }
 
   .page {
     width: 100%;
-    max-width: 1250px;
+    max-width: 1280px;
     margin: 0 auto;
-    padding-bottom: 50px;
+    padding-bottom: 55px;
     color: ${ui.text};
   }
 
@@ -1292,19 +885,7 @@ const css = `
     font-weight: 950;
     text-decoration: none;
     cursor: pointer;
-    transition:
-      transform 150ms ease,
-      border-color 150ms ease,
-      background 150ms ease;
   }
-
-  .hero-button:hover {
-    transform: translateY(-1px);
-    border-color: rgba(203,213,225,0.30);
-    background: rgba(0,0,0,0.45);
-  }
-
-  /* LOADING */
 
   .loading-state {
     min-height: 55vh;
@@ -1327,17 +908,11 @@ const css = `
     font-size: 29px;
   }
 
-  .loading-state strong {
-    font-size: 15px;
-  }
-
   .loading-state span {
     margin-top: 5px;
     color: ${ui.muted};
     font-size: 12px;
   }
-
-  /* ACCESS */
 
   .access-card {
     max-width: 650px;
@@ -1360,23 +935,11 @@ const css = `
     font-size: 25px;
   }
 
-  .access-card h1 {
-    margin: 14px 0 0;
-    font-size: 25px;
-  }
-
-  .access-card p {
-    color: ${ui.muted};
-    line-height: 1.6;
-  }
-
   .back-button {
     color: ${ui.text};
     font-weight: 900;
     text-decoration: none;
   }
-
-  /* SOURCE */
 
   .source-bar {
     margin-top: 16px;
@@ -1406,25 +969,14 @@ const css = `
   }
 
   .source-left strong,
-  .source-left span {
-    display: block;
-  }
+  .source-left span { display: block; }
 
-  .source-left strong {
-    font-size: 12px;
-  }
+  .source-left strong { font-size: 12px; }
 
   .source-left span {
     margin-top: 2px;
     color: ${ui.muted};
     font-size: 10px;
-  }
-
-  .source-badges {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 6px;
   }
 
   .schoolyear-warning {
@@ -1447,324 +999,438 @@ const css = `
     font-size: 12px;
   }
 
-  /* YEARS */
-
-  .year-grid {
-    margin-top: 16px;
+  .teacher-overview {
+    margin-top: 18px;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0,1fr));
-    gap: 16px;
-    align-items: start;
+    gap: 22px;
   }
 
-  .year-card {
-    min-width: 0;
-    padding: 20px;
+  .teacher-sportday {
     overflow: hidden;
-    border-radius: 25px;
+    padding: 22px;
+    border-radius: 26px;
     border: 1px solid ${ui.border};
     background:
-      radial-gradient(
-        500px 220px at 100% 0%,
-        rgba(75,142,141,0.09),
-        transparent 72%
-      ),
+      radial-gradient(700px 260px at 100% 0%, rgba(75,142,141,0.10), transparent 70%),
       ${ui.glass};
-    box-shadow: 0 16px 42px rgba(0,0,0,0.16);
+    box-shadow: 0 18px 50px rgba(0,0,0,0.17);
   }
 
-  .year-header {
+  .teacher-sportday-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 18px;
+  }
+
+  .sportday-heading-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+    gap: 12px;
+  }
+
+  .sportday-emoji {
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 15px;
+    border: 1px solid rgba(255,255,255,0.09);
+    background: rgba(255,255,255,0.04);
+    font-size: 23px;
   }
 
   .year-label {
     color: rgba(137,194,170,0.88);
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 1000;
     letter-spacing: 1.3px;
   }
 
-  .year-header h2 {
-    margin: 3px 0 0;
-    font-size: 26px;
-    line-height: 1.1;
+  .sportday-heading h2 {
+    margin: 3px 0 4px;
+    font-size: 28px;
+    line-height: 1.05;
   }
 
-  .percentage {
-    width: 55px;
-    height: 55px;
-    flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    border-radius: 17px;
-    border: 1px solid rgba(137,194,170,0.18);
-    background: rgba(137,194,170,0.07);
-    font-size: 14px;
-    font-weight: 1000;
+  .sportday-subtitle {
+    display: block;
+    color: rgba(234,240,255,0.64);
+    font-size: 11px;
   }
 
-  /* STATS */
+  .excel-main-button {
+    min-height: 44px;
+    padding: 0 15px;
+    border: 1px solid rgba(137,194,170,0.25);
+    border-radius: 14px;
+    background: rgba(137,194,170,0.09);
+    color: ${ui.text};
+    font-size: 10px;
+    font-weight: 950;
+    cursor: pointer;
+  }
 
-  .stats-grid {
-    margin-top: 17px;
+  .excel-main-button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+
+  .overview-stats {
+    margin-top: 18px;
     display: grid;
-    grid-template-columns: repeat(3,1fr);
+    grid-template-columns: repeat(4, minmax(0,1fr));
     gap: 8px;
   }
 
-  .stat-card {
-    min-width: 0;
+  .overview-stat {
     padding: 12px;
     border-radius: 15px;
-    border: 1px solid rgba(255,255,255,0.075);
+    border: 1px solid rgba(255,255,255,0.07);
     background: rgba(255,255,255,0.035);
   }
 
-  .stat-top {
+  .overview-stat-top {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 6px;
   }
 
-  .stat-top strong {
-    font-size: 23px;
-    line-height: 1;
-  }
+  .overview-stat-top strong { font-size: 22px; }
+  .overview-stat-top span { color: rgba(234,240,255,0.55); }
 
-  .stat-icon {
-    color: rgba(234,240,255,0.56);
-    font-size: 12px;
-    font-weight: 1000;
-  }
-
-  .stat-label {
+  .overview-stat small {
     display: block;
-    margin-top: 6px;
+    margin-top: 5px;
     color: ${ui.muted};
-    font-size: 10px;
+    font-size: 9px;
   }
 
-  .stat-card.success .stat-top strong,
-  .stat-card.success .stat-icon {
-    color: #86efac;
-  }
+  .overview-stat.green strong,
+  .overview-stat.green .overview-stat-top span { color: #86efac; }
 
-  .stat-card.warning .stat-top strong,
-  .stat-card.warning .stat-icon {
-    color: #fcd34d;
-  }
+  .overview-stat.yellow strong,
+  .overview-stat.yellow .overview-stat-top span { color: #fcd34d; }
 
-  /* PROGRESS */
-
-  .progress-track {
+  .overview-progress {
     height: 7px;
-    margin-top: 10px;
+    margin-top: 9px;
     overflow: hidden;
     border-radius: 999px;
-    background: rgba(255,255,255,0.055);
+    background: rgba(255,255,255,0.05);
   }
 
-  .progress-bar {
+  .overview-progress div {
     height: 100%;
     border-radius: inherit;
-    background: linear-gradient(
-      90deg,
-      #4B8E8D,
-      #89C2AA
-    );
-    transition: width 300ms ease;
+    background: linear-gradient(90deg, #4B8E8D, #89C2AA);
   }
 
-  /* ACTIVITEITSKEUZE 6e / 7e */
+  .transport-section,
+  .activity-overview { margin-top: 22px; }
 
-  .activity-choice-grid {
-    margin-top: 8px;
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-  }
-
-  .activity-counter {
-    min-width: 0;
-    padding: 12px;
-    border-radius: 15px;
-    border: 1px solid rgba(137,194,170,0.14);
-    background: rgba(137,194,170,0.05);
+  .overview-section-title {
     display: flex;
-    align-items: center;
-    gap: 10px;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 12px;
   }
 
-  .activity-counter.full {
-    border-color: rgba(251,191,36,0.22);
-    background: rgba(251,191,36,0.06);
-  }
-
-  .activity-counter-icon {
-    width: 38px;
-    height: 38px;
-    flex: 0 0 auto;
-    display: grid;
-    place-items: center;
-    border-radius: 12px;
-    background: rgba(255,255,255,0.04);
-    font-size: 19px;
-  }
-
-  .activity-counter-copy {
-    min-width: 0;
-  }
-
-  .activity-counter-top {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-
-  .activity-counter-top strong {
-    font-size: 18px;
-    line-height: 1;
-  }
-
-  .activity-counter-copy > span {
-    display: block;
-    margin-top: 3px;
-    font-size: 10px;
-    font-weight: 900;
-  }
-
-  .activity-counter-copy small {
-    display: block;
-    margin-top: 2px;
-    color: ${ui.muted};
+  .section-kicker {
+    color: rgba(137,194,170,0.85);
     font-size: 8px;
-  }
-
-  .full-badge {
-    padding: 3px 5px;
-    border-radius: 6px;
-    background: rgba(251,191,36,0.10);
-    color: #fde68a;
-    font-size: 7px;
     font-weight: 1000;
+    letter-spacing: 1.2px;
   }
 
-  /* TRANSPORT */
-
-  .transport-title {
-    margin-top: 18px;
-    color: ${ui.muted};
-    font-size: 10px;
-    font-weight: 950;
-    letter-spacing: 0.8px;
-    text-transform: uppercase;
+  .overview-section-title h3 {
+    margin: 3px 0 0;
+    font-size: 17px;
   }
 
-  .transport-grid {
-    margin-top: 8px;
+  .overview-section-title p {
+    margin: 4px 0 0;
+    color: rgba(234,240,255,0.58);
+    font-size: 9px;
+  }
+
+  .section-total {
+    color: rgba(234,240,255,0.56);
+    font-size: 9px;
+  }
+
+  .activity-overview-grid {
+    margin-top: 10px;
     display: grid;
     grid-template-columns: repeat(2,1fr);
     gap: 8px;
   }
 
-  .transport-counter {
+  .activity-summary {
+    padding: 13px;
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    border-radius: 16px;
+    border: 1px solid rgba(137,194,170,0.13);
+    background: rgba(137,194,170,0.045);
+  }
+
+  .activity-big-icon {
+    width: 40px;
+    height: 40px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 12px;
+    background: rgba(255,255,255,0.04);
+    font-size: 20px;
+  }
+
+  .activity-summary strong,
+  .activity-summary span,
+  .activity-summary small { display: block; }
+
+  .activity-summary strong { font-size: 20px; }
+  .activity-summary span { font-size: 10px; font-weight: 900; }
+  .activity-summary small { margin-top: 2px; color: ${ui.muted}; font-size: 8px; }
+
+  .single-list-wrap {
+    max-width: 600px;
+    margin-top: 10px;
+  }
+
+  .transport-lists-grid {
+    margin-top: 11px;
+    display: grid;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 12px;
+  }
+
+  .transport-list-card {
     min-width: 0;
-    padding: 11px;
-    border-radius: 14px;
-    border: 1px solid rgba(255,255,255,0.065);
-    background: rgba(255,255,255,0.03);
+    padding: 14px;
+    border-radius: 18px;
+    border: 1px solid rgba(255,255,255,0.075);
+    background: rgba(0,0,0,0.13);
+  }
+
+  .transport-list-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .transport-list-heading {
     display: flex;
     align-items: center;
     gap: 9px;
   }
 
-  .transport-icon {
-    width: 34px;
-    height: 34px;
+  .transport-list-icon {
+    width: 37px;
+    height: 37px;
     flex: 0 0 auto;
-    border-radius: 10px;
-    background: rgba(255,255,255,0.04);
+    border-radius: 12px;
     display: grid;
     place-items: center;
-    font-size: 17px;
+    background: rgba(255,255,255,0.045);
+    font-size: 18px;
   }
 
-  .transport-counter strong,
-  .transport-counter span {
-    display: block;
+  .transport-list-heading h4 { margin: 0; font-size: 12px; }
+
+  .transport-list-heading p {
+    margin: 2px 0 0;
+    color: rgba(234,240,255,0.52);
+    font-size: 8px;
+    line-height: 1.4;
   }
 
-  .transport-counter strong {
-    font-size: 16px;
+  .transport-list-count {
+    min-width: 32px;
+    height: 32px;
+    padding: 0 7px;
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    border-radius: 10px;
+    background: rgba(137,194,170,0.08);
+    color: #a7d9c3;
+    font-size: 12px;
+    font-weight: 1000;
   }
 
-  .transport-counter div > span {
-    margin-top: 1px;
-    color: ${ui.muted};
+  .copy-small-button {
+    width: 100%;
+    min-height: 34px;
+    margin-top: 10px;
+    border-radius: 10px;
+    border: 1px solid rgba(137,194,170,0.16);
+    background: rgba(137,194,170,0.06);
+    color: rgba(234,240,255,0.82);
+    font-size: 9px;
+    font-weight: 900;
+    cursor: pointer;
+  }
+
+  .copy-small-button:disabled { opacity: 0.35; cursor: default; }
+
+  .copy-small-button.warning {
+    width: auto;
+    min-width: 135px;
+    margin: 0;
+    border-color: rgba(251,191,36,0.18);
+    background: rgba(251,191,36,0.06);
+    color: #fde68a;
+  }
+
+  .transport-students { margin-top: 9px; }
+
+  .transport-table-header,
+  .transport-student-row {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) 110px;
+    gap: 8px;
+  }
+
+  .transport-table-header {
+    padding: 5px 7px;
+    color: rgba(234,240,255,0.38);
+    font-size: 7px;
+    font-weight: 1000;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+  }
+
+  .transport-student-row {
+    padding: 8px 7px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    font-size: 10px;
+  }
+
+  .transport-student-row > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .transport-student-row strong {
+    color: rgba(234,240,255,0.59);
     font-size: 9px;
   }
 
-  /* MISSING */
-
-  .missing-card {
-    margin-top: 15px;
-    padding: 14px;
-    border-radius: 17px;
-    border: 1px solid rgba(251,191,36,0.17);
-    background: rgba(251,191,36,0.05);
+  .empty-transport-list,
+  .no-students {
+    margin-top: 9px;
+    padding: 15px;
+    border-radius: 11px;
+    background: rgba(255,255,255,0.02);
+    color: rgba(234,240,255,0.38);
+    text-align: center;
+    font-size: 9px;
   }
 
-  .missing-header {
+  .return-details,
+  .missing-details {
+    margin-top: 16px;
+    border-radius: 17px;
+    border: 1px solid rgba(255,255,255,0.075);
+    background: rgba(255,255,255,0.025);
+    overflow: hidden;
+  }
+
+  .return-details summary,
+  .missing-details summary {
+    list-style: none;
+    padding: 13px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+  }
+
+  .return-details summary::-webkit-details-marker,
+  .missing-details summary::-webkit-details-marker { display: none; }
+
+  .summary-left {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .summary-left strong,
+  .summary-left span { display: block; }
+
+  .summary-left strong { font-size: 11px; }
+
+  .summary-left div > span {
+    margin-top: 2px;
+    color: rgba(234,240,255,0.5);
+    font-size: 8px;
+  }
+
+  .return-icon,
+  .missing-warning {
+    width: 32px;
+    height: 32px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.045);
+  }
+
+  .missing-warning {
+    background: rgba(251,191,36,0.08);
+    color: #fcd34d;
+    font-weight: 1000;
+  }
+
+  .details-arrow { transition: transform 170ms ease; }
+  .return-details[open] .details-arrow,
+  .missing-details[open] .details-arrow { transform: rotate(180deg); }
+
+  .return-content,
+  .missing-content { padding: 0 14px 14px; }
+
+  .missing-details {
+    border-color: rgba(251,191,36,0.15);
+    background: rgba(251,191,36,0.035);
+  }
+
+  .missing-details summary strong { color: #fde68a; }
+
+  .missing-actions {
+    margin-bottom: 10px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(251,191,36,0.10);
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
   }
 
-  .missing-header > div {
-    display: flex;
-    align-items: center;
-    gap: 7px;
+  .missing-actions p {
+    margin: 0;
+    color: rgba(253,230,138,0.65);
+    font-size: 9px;
   }
 
-  .missing-header strong {
-    color: #fde68a;
-    font-size: 12px;
-  }
-
-  .missing-badge {
-    min-width: 28px;
-    height: 28px;
-    padding: 0 7px;
-    border-radius: 9px;
+  .missing-student-grid {
     display: grid;
-    place-items: center;
-    background: rgba(251,191,36,0.09);
-    color: #fde68a;
-    font-size: 11px;
-    font-weight: 950;
+    grid-template-columns: repeat(2,minmax(0,1fr));
+    gap: 6px;
   }
 
-  .student-list {
-    margin-top: 8px;
-    max-height: 300px;
-    overflow-y: auto;
-  }
-
-  .student-row {
-    padding: 9px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.055);
+  .missing-student {
+    padding: 8px;
     display: flex;
     align-items: center;
-    gap: 9px;
-  }
-
-  .student-row:last-child {
-    border-bottom: 0;
+    gap: 8px;
+    border-radius: 11px;
+    background: rgba(0,0,0,0.10);
   }
 
   .student-avatar {
@@ -1780,76 +1446,27 @@ const css = `
     font-weight: 1000;
   }
 
-  .student-main {
-    min-width: 0;
-    flex: 1;
-  }
+  .missing-student > div { min-width: 0; flex: 1; }
+  .missing-student strong,
+  .missing-student div span { display: block; }
+  .missing-student strong { font-size: 9px; }
+  .missing-student div span { color: ${ui.muted}; font-size: 8px; }
+  .missing-student small { color: rgba(253,230,138,0.55); font-size: 7px; }
 
-  .student-main strong,
-  .student-main span {
-    display: block;
-  }
-
-  .student-main strong {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 11px;
-  }
-
-  .student-main span {
-    margin-top: 2px;
-    color: ${ui.muted};
-    font-size: 9px;
-  }
-
-  .profile-badge,
-  .linked-badge {
-    flex: 0 0 auto;
-    padding: 5px 7px;
-    border-radius: 8px;
-    font-size: 8px;
-    font-weight: 800;
-  }
-
-  .profile-badge {
-    background: rgba(255,255,255,0.04);
-    color: ${ui.muted};
-  }
-
-  .linked-badge {
-    border: 1px solid rgba(137,194,170,0.15);
-    background: rgba(137,194,170,0.07);
-    color: #a7d9c3;
-  }
-
-  .reminder-info {
-    margin-top: 9px;
-    padding: 9px;
-    border-radius: 11px;
-    background: rgba(0,0,0,0.11);
-    color: rgba(253,230,138,0.78);
-    font-size: 9px;
-    line-height: 1.5;
-  }
-
-  /* COMPLETE */
-
-  .complete-card {
-    margin-top: 15px;
-    padding: 13px;
-    border-radius: 15px;
-    border: 1px solid rgba(34,197,94,0.18);
-    background: rgba(34,197,94,0.065);
+  .all-complete {
+    margin-top: 16px;
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(34,197,94,0.16);
+    background: rgba(34,197,94,0.055);
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 9px;
   }
 
-  .complete-icon {
-    width: 32px;
-    height: 32px;
-    flex: 0 0 auto;
+  .all-complete > span {
+    width: 30px;
+    height: 30px;
     display: grid;
     place-items: center;
     border-radius: 10px;
@@ -1858,230 +1475,31 @@ const css = `
     font-weight: 1000;
   }
 
-  .complete-card strong,
-  .complete-card span {
-    display: block;
-  }
+  .all-complete strong,
+  .all-complete small { display: block; }
+  .all-complete strong { color: #86efac; font-size: 10px; }
+  .all-complete small { color: rgba(134,239,172,0.58); font-size: 8px; }
 
-  .complete-card strong {
-    color: #86efac;
-    font-size: 11px;
-  }
-
-  .complete-card div > span {
-    margin-top: 2px;
-    color: rgba(134,239,172,0.65);
-    font-size: 9px;
-  }
-
-  /* NO STUDENTS */
-
-  .no-students {
-    margin-top: 15px;
-    padding: 13px;
-    border-radius: 15px;
-    border: 1px solid rgba(255,255,255,0.08);
-    background: rgba(255,255,255,0.03);
-  }
-
-  .no-students strong,
-  .no-students span {
-    display: block;
-  }
-
-  .no-students strong {
-    font-size: 11px;
-  }
-
-  .no-students span {
-    margin-top: 3px;
-    color: ${ui.muted};
-    font-size: 9px;
-  }
-
-  /* FILLED */
-
-  .filled-details {
-    margin-top: 13px;
-    border-top: 1px solid rgba(255,255,255,0.065);
-    padding-top: 12px;
-  }
-
-  .filled-details summary {
-    list-style: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
-    color: ${ui.muted};
-    font-size: 10px;
-    font-weight: 900;
-  }
-
-  .filled-details summary::-webkit-details-marker {
-    display: none;
-  }
-
-  .summary-count {
-    min-width: 25px;
-    height: 25px;
-    padding: 0 6px;
-    display: grid;
-    place-items: center;
-    border-radius: 8px;
-    background: rgba(137,194,170,0.07);
-    color: #a7d9c3;
-  }
-
-  .filled-list {
-    margin-top: 10px;
-  }
-
-  .filled-row {
-    padding: 10px 0;
-    border-bottom: 1px solid rgba(255,255,255,0.055);
-  }
-
-  .filled-row:last-child {
-    border-bottom: 0;
-  }
-
-  .filled-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
-  }
-
-  .filled-student {
-    min-width: 0;
-  }
-
-  .filled-student strong,
-  .filled-student span {
-    display: block;
-  }
-
-  .filled-student strong {
-    font-size: 11px;
-  }
-
-  .filled-student span {
-    margin-top: 2px;
-    color: ${ui.muted};
-    font-size: 9px;
-  }
-
-  .filled-choices {
-    margin-top: 7px;
-    display: grid;
-    grid-template-columns: repeat(2,1fr);
-    gap: 6px;
-  }
-
-  .choice-pill {
-    padding: 8px;
-    border-radius: 11px;
-    border: 1px solid rgba(255,255,255,0.06);
-    background: rgba(255,255,255,0.025);
-    display: flex;
-    align-items: center;
-    gap: 7px;
-  }
-
-  .choice-pill > span {
-    font-size: 17px;
-  }
-
-  .choice-pill.activity-pill {
-    border-color: rgba(137,194,170,0.15);
-    background: rgba(137,194,170,0.05);
-  }
-
-  .choice-pill.no-transport-pill {
-    border-color: rgba(34,197,94,0.14);
-    background: rgba(34,197,94,0.045);
-  }
-
-  .choice-pill small,
-  .choice-pill strong {
-    display: block;
-  }
-
-  .choice-pill small {
-    color: ${ui.muted};
-    font-size: 7px;
-    font-weight: 900;
-  }
-
-  .choice-pill strong {
-    margin-top: 1px;
-    font-size: 9px;
-  }
-
-  .updated {
-    display: block;
-    margin-top: 6px;
-    color: rgba(234,240,255,0.40);
-    font-size: 8px;
-  }
-
-  /* RESPONSIVE */
-
-  @media(max-width: 900px) {
-    .year-grid {
-      grid-template-columns: 1fr;
-    }
+  @media(max-width: 800px) {
+    .teacher-sportday-header { flex-direction: column; }
+    .excel-main-button { width: 100%; }
+    .overview-stats { grid-template-columns: repeat(2,1fr); }
+    .transport-lists-grid { grid-template-columns: 1fr; }
+    .missing-student-grid { grid-template-columns: 1fr; }
   }
 
   @media(max-width: 640px) {
-    .activity-choice-grid {
-      grid-template-columns: 1fr;
-    }
+    .source-bar { align-items: flex-start; flex-direction: column; }
+    .schoolyear-warning { width: 100%; }
+    .teacher-sportday { padding: 16px; border-radius: 21px; }
+    .sportday-heading h2 { font-size: 24px; }
+    .activity-overview-grid { grid-template-columns: 1fr; }
+    .missing-actions { align-items: stretch; flex-direction: column; }
+    .copy-small-button.warning { width: 100%; }
+  }
 
-    .source-bar {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-
-    .source-badges {
-      width: 100%;
-      justify-content: flex-start;
-    }
-
-    .schoolyear-warning {
-      width: 100%;
-    }
-
-    .year-card {
-      padding: 16px;
-      border-radius: 21px;
-    }
-
-    .year-header h2 {
-      font-size: 23px;
-    }
-
-    .stats-grid {
-      gap: 6px;
-    }
-
-    .stat-card {
-      padding: 10px 8px;
-    }
-
-    .stat-top strong {
-      font-size: 20px;
-    }
-
-    .transport-grid {
-      grid-template-columns: 1fr 1fr;
-    }
-
-    .profile-badge,
-    .linked-badge {
-      display: none;
-    }
+  @media(max-width: 480px) {
+    .transport-table-header,
+    .transport-student-row { grid-template-columns: minmax(0,1fr) 80px; }
   }
 `;

@@ -1,4 +1,8 @@
-export type Entry = { name: string; record: string; extra?: string };
+export type Entry = {
+  name: string;
+  record: string;
+  extra?: string;
+};
 
 export type GenderSet = {
   allTime: Entry[];
@@ -10,7 +14,6 @@ export type Discipline = {
   title: string;
   boys: GenderSet;
   girls: GenderSet;
-  isTriatlon?: boolean;
 };
 
 export type ThemeName = "blue" | "green" | "greenDark";

@@ -1026,6 +1026,7 @@ export default function IdeeenbusPage() {
                 stats={stats}
                 publicIdeeen={publicIdeeen}
                 voteCountMap={voteCountMap}
+                authorNames={authorNames}
               />
             )}
 
@@ -1415,9 +1416,21 @@ function PublicIdeaCard({
         {idee.titel}
       </h3>
 
-      <p className="mt-2 flex-1 whitespace-pre-wrap text-sm leading-6 text-white/60">
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-white/60">
         {idee.omschrijving}
       </p>
+
+      {idee.teacher_note && (
+        <div className="mt-4 rounded-2xl border border-[#89C2AA]/20 bg-[#89C2AA]/10 p-3">
+          <div className="text-[11px] font-black uppercase tracking-[0.1em] text-[#bde6d5]">
+            Reactie van het LO-team
+          </div>
+
+          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-5 text-white/75">
+            {idee.teacher_note}
+          </p>
+        </div>
+      )}
 
       <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/[0.07] pt-4">
         <span className="text-[11px] text-white/35">
@@ -1499,6 +1512,7 @@ function StaffOverview({
   stats,
   publicIdeeen,
   voteCountMap,
+  authorNames,
 }: {
   stats: {
     totaal: number;
@@ -1509,6 +1523,7 @@ function StaffOverview({
   };
   publicIdeeen: Idee[];
   voteCountMap: Record<string, number>;
+  authorNames: Record<string, string>;
 }) {
   const popular = [...publicIdeeen]
     .sort(
@@ -1554,11 +1569,11 @@ function StaffOverview({
 
       <div className="mt-5 rounded-[24px] border border-white/10 bg-white/[0.04] p-4 sm:p-5">
         <div className="text-xs font-black uppercase tracking-[0.12em] text-white/45">
-          Populaire ideeën
+          Publieke ideeën
         </div>
 
         <h3 className="mt-1 text-base font-black text-white">
-          Meeste stemmen
+          Zichtbaar voor leerlingen
         </h3>
 
         {popular.length === 0 ? (
@@ -1578,16 +1593,42 @@ function StaffOverview({
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-black text-white">
-                    {idee.titel}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="text-sm font-black text-white">
+                      {idee.titel}
+                    </div>
+
+                    <StatusBadge status={idee.status} />
+
+                    <span className="rounded-full border border-[#89C2AA]/20 bg-[#89C2AA]/10 px-2.5 py-1 text-[10px] font-black text-[#bde6d5]">
+                      👁 Publiek
+                    </span>
                   </div>
 
-                  <div className="mt-0.5 text-xs text-white/40">
-                    {
-                      categoryInfo(
-                        idee.categorie
-                      ).label
-                    }
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-5 text-white/65">
+                    {idee.omschrijving}
+                  </p>
+
+                  {idee.teacher_note && (
+                    <div className="mt-2 rounded-xl border border-[#89C2AA]/15 bg-[#89C2AA]/[0.07] px-3 py-2">
+                      <div className="text-[10px] font-black uppercase tracking-[0.08em] text-[#bde6d5]">
+                        Reactie LO-team
+                      </div>
+                      <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-white/60">
+                        {idee.teacher_note}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-white/40">
+                    <span>
+                      {categoryInfo(idee.categorie).emoji}{" "}
+                      {categoryInfo(idee.categorie).label}
+                    </span>
+                    <span>
+                      👤 {authorNames[idee.user_id] ?? "Leerling"}
+                    </span>
+                    <span>🕒 {formatDate(idee.created_at)}</span>
                   </div>
                 </div>
 
@@ -1679,7 +1720,6 @@ function StaffIdeaCard({
   const approve = () => {
     void onUpdate({
       status: "goedgekeurd",
-      is_public: true,
       teacher_note:
         note.trim().length > 0
           ? note.trim()
@@ -1701,7 +1741,6 @@ function StaffIdeaCard({
   const schedule = () => {
     void onUpdate({
       status: "ingepland",
-      is_public: true,
       teacher_note:
         note.trim().length > 0
           ? note.trim()
@@ -1712,7 +1751,6 @@ function StaffIdeaCard({
   const complete = () => {
     void onUpdate({
       status: "uitgevoerd",
-      is_public: true,
       teacher_note:
         note.trim().length > 0
           ? note.trim()
@@ -1764,20 +1802,50 @@ function StaffIdeaCard({
           </div>
         </div>
 
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onDelete}
-          className="inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border border-rose-400/20 bg-rose-400/[0.07] px-3 text-xs font-black text-rose-200 transition hover:bg-rose-400/15 disabled:opacity-50"
-        >
-          🗑 Verwijderen
-        </button>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() =>
+              void onUpdate({
+                is_public: !idee.is_public,
+              })
+            }
+            className={[
+              "inline-flex min-h-10 items-center justify-center rounded-xl border px-3 text-xs font-black transition disabled:opacity-50",
+              idee.is_public
+                ? "border-[#89C2AA]/30 bg-[#89C2AA]/10 text-[#bde6d5] hover:bg-[#89C2AA]/15"
+                : "border-white/10 bg-white/[0.05] text-white/65 hover:bg-white/[0.09]",
+            ].join(" ")}
+          >
+            {idee.is_public
+              ? "🙈 Verbergen voor leerlingen"
+              : "👁 Tonen aan leerlingen"}
+          </button>
+
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onDelete}
+            className="inline-flex min-h-10 items-center justify-center rounded-xl border border-rose-400/20 bg-rose-400/[0.07] px-3 text-xs font-black text-rose-200 transition hover:bg-rose-400/15 disabled:opacity-50"
+          >
+            🗑 Verwijderen
+          </button>
+        </div>
       </div>
 
       <div className="mt-5 border-t border-white/[0.07] pt-4">
-        <label className="text-[11px] font-black uppercase tracking-[0.1em] text-white/45">
-          Bericht voor de leerling
-        </label>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label className="text-[11px] font-black uppercase tracking-[0.1em] text-white/45">
+            Reactie van het LO-team
+          </label>
+
+          <span className="text-[11px] font-bold text-white/35">
+            {idee.is_public
+              ? "👁 Ook zichtbaar voor alle leerlingen"
+              : "🔒 Alleen zichtbaar voor de indiener"}
+          </span>
+        </div>
 
         <textarea
           value={note}
@@ -1785,7 +1853,7 @@ function StaffIdeaCard({
             setNote(e.target.value)
           }
           rows={3}
-          placeholder="Bijvoorbeeld: Goed idee! We bekijken wanneer we dit kunnen organiseren."
+          placeholder="Bijvoorbeeld: Goed idee! We bekijken wanneer we dit kunnen organiseren. Als je het idee publiceert, zien andere leerlingen deze reactie ook."
           className="mt-2 w-full resize-y rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm leading-5 text-white outline-none transition placeholder:text-white/25 focus:border-[#89C2AA]/40"
         />
 

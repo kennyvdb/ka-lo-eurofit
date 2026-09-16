@@ -32,37 +32,51 @@ export default function ScoreTable({ title, entries }: { title: string; entries:
 
       <table style={{ width: "100%", borderCollapse: "collapse" }}>
         <tbody>
-          {top1.map((e, i) => (
-            <tr key={i}>
+          {top1.length === 0 ? (
+            <tr>
               <td
+                colSpan={2}
                 style={{
-                  padding: "7px 10px",
-                  fontSize: 12.5,
-                  color: "rgba(234,240,255,0.84)",
-                  borderTop: "none",
-                  width: "72%",
+                  padding: "8px 10px",
+                  fontSize: 12,
+                  color: "rgba(234,240,255,0.52)",
                 }}
               >
-                <span style={{ opacity: 0.75, marginRight: 8 }}>1.</span>
-                {e.name}
-                {e.extra ? <span style={{ opacity: 0.75 }}> • {e.extra}</span> : null}
-              </td>
-              <td
-                style={{
-                  padding: "7px 10px",
-                  fontSize: 12.5,
-                  color: "rgba(234,240,255,0.92)",
-                  borderTop: "none",
-                  width: "28%",
-                  textAlign: "right",
-                  fontWeight: 950,
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {e.record}
+                Nog geen record
               </td>
             </tr>
-          ))}
+          ) : (
+            top1.map((e, i) => (
+              <tr key={`${e.name}-${i}`}>
+                <td
+                  style={{
+                    padding: "7px 10px",
+                    fontSize: 11.5,
+                    color: "rgba(234,240,255,0.84)",
+                    width: "72%",
+                  }}
+                  title={e.name}
+                >
+                  <span style={{ opacity: 0.75, marginRight: 8 }}>1.</span>
+                  {e.name}
+                  {e.extra ? <span style={{ opacity: 0.75 }}> • {e.extra}</span> : null}
+                </td>
+                <td
+                  style={{
+                    padding: "7px 10px",
+                    fontSize: 12.5,
+                    color: "rgba(234,240,255,0.92)",
+                    width: "28%",
+                    textAlign: "right",
+                    fontWeight: 950,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {e.record}
+                </td>
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>

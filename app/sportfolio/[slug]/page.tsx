@@ -58,19 +58,15 @@ type RubricRow = {
   volgorde: number | null;
 };
 
-type LeaderboardJoinedRow = {
-  id: string;
+type LeaderboardRow = {
   leerling_id: string;
+  volledige_naam: string | null;
+  klas_naam: string | null;
+  geslacht: string | null;
+  graad: number | null;
   score_nummer: number | null;
   score_tekst: string | null;
   eenheid: string | null;
-  aangemaakt_op: string;
-  leerling: {
-    volledige_naam: string | null;
-    klas_naam: string | null;
-    leerjaar: string | null;
-    graad: string | null;
-  } | null;
 };
 
 const ui = {
@@ -232,7 +228,8 @@ export default function DisciplineDetailPage() {
   const [scoresHuidigSchooljaar, setScoresHuidigSchooljaar] = useState<ScoreRow[]>([]);
   const [rubrics, setRubrics] = useState<RubricRow[]>([]);
   const [disciplineOpen, setDisciplineOpen] = useState(false);
-  const [leaderboard, setLeaderboard] = useState<LeaderboardJoinedRow[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
+  const [openLeaderboardName, setOpenLeaderboardName] = useState<string | null>(null);
 
   const [scoreInput, setScoreInput] = useState("");
   const [tekstInput, setTekstInput] = useState("");
@@ -375,68 +372,35 @@ export default function DisciplineDetailPage() {
       if (openstellingError) throw openstellingError;
       setDisciplineOpen(Boolean(openData));
 
-      const { data: leaderboardData, error: leaderboardError } = await supabase
-        .from("sportfolio_scores")
-        .select(`
-          id,
-          leerling_id,
-          score_nummer,
-          score_tekst,
-          eenheid,
-          aangemaakt_op,
-          leerling:profielen!sportfolio_scores_leerling_id_fkey (
-            volledige_naam,
-            klas_naam,
-            leerjaar,
-            graad
-          )
-        `)
-        .eq("discipline_id", disciplineValue.id)
-        .eq("schooljaar", profielValue.schooljaar ?? "")
-        .eq("status", "bevestigd");
+      const profielGraad = Number(profielValue.graad);
 
-      if (leaderboardError) throw leaderboardError;
+      if (Number.isFinite(profielGraad) && profielGraad >= 1 && profielGraad <= 3) {
+        const { data: leaderboardData, error: leaderboardError } = await supabase.rpc(
+          "sportfolio_leaderboard",
+          {
+            p_discipline_id: disciplineValue.id,
+            p_schooljaar: profielValue.schooljaar ?? "",
+            p_graad: profielGraad,
+          }
+        );
 
-      const rawLeaderboard = (leaderboardData ?? []) as unknown as LeaderboardJoinedRow[];
+        if (leaderboardError) throw leaderboardError;
 
-      const bestPerLeerling = new Map<string, LeaderboardJoinedRow>();
+        const rawLeaderboard = (leaderboardData ?? []) as LeaderboardRow[];
+        const sortedLeaderboard = [...rawLeaderboard].sort((a, b) => {
+          const av = a.score_nummer;
+          const bv = b.score_nummer;
 
-      for (const row of rawLeaderboard) {
-        const existing = bestPerLeerling.get(row.leerling_id);
+          if (av === null || av === undefined) return 1;
+          if (bv === null || bv === undefined) return -1;
 
-        if (!existing) {
-          bestPerLeerling.set(row.leerling_id, row);
-          continue;
-        }
+          return disciplineValue.hoger_is_beter ? bv - av : av - bv;
+        });
 
-        const current = row.score_nummer;
-        const previous = existing.score_nummer;
-
-        if (current === null || current === undefined) continue;
-        if (previous === null || previous === undefined) {
-          bestPerLeerling.set(row.leerling_id, row);
-          continue;
-        }
-
-        const hogerIsBeter = Boolean(disciplineValue.hoger_is_beter);
-        const rowIsBetter = hogerIsBeter ? current > previous : current < previous;
-
-        if (rowIsBetter) {
-          bestPerLeerling.set(row.leerling_id, row);
-        }
+        setLeaderboard(sortedLeaderboard);
+      } else {
+        setLeaderboard([]);
       }
-
-      const sortedLeaderboard = Array.from(bestPerLeerling.values()).sort((a, b) => {
-        const av = a.score_nummer;
-        const bv = b.score_nummer;
-
-        if (av === null || av === undefined) return 1;
-        if (bv === null || bv === undefined) return -1;
-
-        return disciplineValue.hoger_is_beter ? bv - av : av - bv;
-      });
-
-      setLeaderboard(sortedLeaderboard);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Kon discipline niet laden.";
       setError(message);
@@ -450,6 +414,18 @@ export default function DisciplineDetailPage() {
     loadPage();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
+
+  const meisjesLeaderboard = useMemo(
+    () => leaderboard.filter((row) => row.geslacht === "meisje"),
+    [leaderboard]
+  );
+
+  const jongensLeaderboard = useMemo(
+    () => leaderboard.filter((row) => row.geslacht === "jongen"),
+    [leaderboard]
+  );
+
+  const graadLabel = profiel?.graad ? `${profiel.graad}e graad` : "jouw graad";
 
   async function handleSubmitScore(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -817,7 +793,7 @@ export default function DisciplineDetailPage() {
               <div>
                 <div className="text-sm font-black text-white">Automatisch klassement</div>
                 <div className="mt-1 text-xs text-white/60">
-                  Enkel bevestigde scores van dit schooljaar. Per leerling telt de beste bevestigde score.
+                  Enkel bevestigde scores van dit schooljaar en jouw graad. Meisjes en jongens hebben een apart klassement.
                 </div>
               </div>
 
@@ -826,44 +802,88 @@ export default function DisciplineDetailPage() {
               </div>
             </div>
 
-            <div className="mt-4 grid gap-3">
-              {leaderboard.length === 0 ? (
-                <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/60">
-                  Nog geen bevestigde scores beschikbaar.
-                </div>
-              ) : (
-                leaderboard.slice(0, 20).map((row, index) => (
-                  <div
-                    key={`${row.leerling_id}-${row.id}`}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 p-4"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="grid h-10 w-10 place-items-center rounded-2xl border border-white/10 bg-white/5 text-sm font-black text-white">
-                        {index + 1}
-                      </div>
-
-                      <div>
-                        <div className="text-sm font-black text-white">
-                          {row.leerling?.volledige_naam ?? "Onbekende leerling"}
-                        </div>
-                        <div className="mt-1 text-xs text-white/55">
-                          {row.leerling?.klas_naam ?? "Geen klas"}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
+            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+              {[
+                { titel: "Meisjes", rows: meisjesLeaderboard },
+                { titel: "Jongens", rows: jongensLeaderboard },
+              ].map((groep) => (
+                <div
+                  key={groep.titel}
+                  className="overflow-hidden rounded-2xl border border-white/10 bg-black/20"
+                >
+                  <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                    <div>
                       <div className="text-sm font-black text-white">
-                        {formatScoreValue({
-                          score_nummer: row.score_nummer,
-                          score_tekst: row.score_tekst,
-                          eenheid: discipline.eenheid,
-                        })}
+                        {groep.titel} · {graadLabel}
+                      </div>
+                      <div className="mt-0.5 text-[11px] text-white/50">
+                        {groep.rows.length} bevestigde leerlingen
                       </div>
                     </div>
                   </div>
-                ))
-              )}
+
+                  <div className="grid gap-2 p-3">
+                    {groep.rows.length === 0 ? (
+                      <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/55">
+                        Nog geen bevestigde scores.
+                      </div>
+                    ) : (
+                      groep.rows.slice(0, 20).map((row, index) => (
+                        <div
+                          key={`${groep.titel}-${row.leerling_id}`}
+                          className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-3"
+                        >
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-sm font-black text-white">
+                              {index + 1}
+                            </div>
+
+                            <div className="min-w-0">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setOpenLeaderboardName((current) =>
+                                    current === `${groep.titel}-${row.leerling_id}`
+                                      ? null
+                                      : `${groep.titel}-${row.leerling_id}`
+                                  )
+                                }
+                                className="block max-w-full text-left"
+                                title={row.volledige_naam ?? "Onbekende leerling"}
+                                aria-expanded={
+                                  openLeaderboardName === `${groep.titel}-${row.leerling_id}`
+                                }
+                              >
+                                <span className="block truncate text-xs font-black text-white sm:text-[13px]">
+                                  {row.volledige_naam ?? "Onbekende leerling"}
+                                </span>
+                              </button>
+
+                              {openLeaderboardName === `${groep.titel}-${row.leerling_id}` ? (
+                                <div className="mt-1 max-w-[220px] rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-[11px] font-bold leading-snug text-white/90 shadow-lg">
+                                  {row.volledige_naam ?? "Onbekende leerling"}
+                                </div>
+                              ) : null}
+
+                              <div className="mt-0.5 truncate text-[11px] text-white/50">
+                                {row.klas_naam ?? "Geen klas"}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 text-right text-sm font-black text-white">
+                            {formatScoreValue({
+                              score_nummer: row.score_nummer,
+                              score_tekst: row.score_tekst,
+                              eenheid: discipline.eenheid,
+                            })}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
@@ -871,7 +891,8 @@ export default function DisciplineDetailPage() {
             <div className="text-sm font-black text-white">Hoe werkt het klassement?</div>
             <div className="mt-3 grid gap-2 text-sm text-white/65">
               <div>• Alleen scores met status <span className="font-black text-white">bevestigd</span> tellen mee.</div>
-              <div>• Het klassement kijkt enkel naar <span className="font-black text-white">dit schooljaar</span>.</div>
+              <div>• Het klassement kijkt enkel naar <span className="font-black text-white">dit schooljaar en jouw graad</span>.</div>
+              <div>• <span className="font-black text-white">Meisjes en jongens</span> worden afzonderlijk gerangschikt.</div>
               <div>• Per leerling telt automatisch de <span className="font-black text-white">beste bevestigde score</span>.</div>
               <div>
                 • Bij <span className="font-black text-white">sprint / triatlon / 3000m</span> is lager beter.

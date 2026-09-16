@@ -137,7 +137,7 @@ const sportdagen: Sportdag[] = [
     vervoerKeuze: true,
     vertrek: [
       "Met de fiets: om 8.15 uur aan de fietsenstalling.",
-      "Eigen vervoer: om 8.30 uur aan parking Eikenstraat van Provinciedomein De Gavers, ter hoogte van Koutermolen.",
+      "Rechtstreeks / eigen vervoer: om 8.30 uur aan parking Eikenstraat van Provinciedomein De Gavers, ter hoogte van Koutermolen.",
     ],
     terug: [
       "Met de fiets terug op school rond 16.45 uur.",
@@ -200,7 +200,7 @@ const sportdagen: Sportdag[] = [
     activiteiten: "Padel • Teambuilding • Kickboks • Bumball • Arrow Tag",
     vertrek: [
       "Met de fiets: om 8.15 uur op de parking van Spikkerelle.",
-      "Eigen vervoer: om 8.30 uur aan De Recrean in Oudenaarde.",
+      "Rechtstreeks / eigen vervoer: om 8.30 uur aan De Recrean in Oudenaarde.",
     ],
     terug: [
       "Met de fiets terug aan Spikkerelle rond 16.30 uur.",
@@ -233,7 +233,7 @@ const sportdagen: Sportdag[] = [
     vervoerKeuze: true,
     vertrek: [
       "Met de fiets: verzamelen om 8.15 uur op de parking aan kerk/grasveld, Daniël Vermandereplein.",
-      "Eigen vervoer: om 8.30 uur aan de parking van Den Donk, Donkstraat in Oudenaarde.",
+      "Rechtstreeks / eigen vervoer: om 8.30 uur aan de parking van Den Donk, Donkstraat in Oudenaarde.",
     ],
     terug: [
       "Met de fiets: vermoedelijke aankomst om 16.30 uur aan Spikkerelle.",
@@ -1041,8 +1041,8 @@ function SportdagKeuze({
             <TransportOption
               selected={heen === "eigen_vervoer"}
               emoji="🚗"
-              title="Eigen vervoer"
-              subtitle="Ik ga rechtstreeks naar de locatie."
+              title="Rechtstreeks naar de activiteit"
+              subtitle="Ik ga op eigen vervoer rechtstreeks naar de locatie."
               onClick={() => {
                 setHeen("eigen_vervoer");
                 setSaved(false);
