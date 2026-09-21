@@ -59,6 +59,8 @@ type Leerling = {
   leerjaar: number | null;
   graad: number | null;
   geslacht: string | null;
+  heeftProfiel: boolean;
+  username: string;
 };
 
 type ScoreDraft = {
@@ -525,69 +527,43 @@ export default function SportfolioBeheerPage() {
   }
 
   async function resolveProfiles(rows: RawRow[]): Promise<Leerling[]> {
-    if (!rows.length) return [];
-
-    const directIds = Array.from(
-      new Set(
-        rows
-          .map((row) =>
-            String(
-              getValue(row, [
-                "profiel_id",
-                "leerling_id",
-                "user_id",
-                "id",
-              ]) || ""
-            )
-          )
-          .filter(Boolean)
-      )
-    );
-
-    const emails = Array.from(
-      new Set(rows.map(getEmail).filter(Boolean))
-    );
-
-    let query = supabase
-      .from("profielen")
-      .select("id, volledige_naam, email, klas_naam, leerjaar, graad, geslacht");
-
-    if (directIds.length) {
-      query = query.in("id", directIds);
-    } else if (emails.length) {
-      query = query.in("email", emails);
-    } else {
-      return [];
+    // De officiële klaslijst blijft de bron, ook wanneer een leerling nog niet inlogde.
+    const uniekeRijen = new Map<string, RawRow>();
+    for (const row of rows) {
+      const email = getEmail(row);
+      if (email) uniekeRijen.set(email, row);
     }
+    const emails = [...uniekeRijen.keys()];
+    if (!emails.length) return [];
 
-    let { data, error } = await query;
-
-    // Sommige views bevatten een eigen rij-id die niet het profiel-id is.
-    // In dat geval proberen we veilig opnieuw via e-mail.
-    if ((!data || data.length === 0) && emails.length) {
-      const retry = await supabase
+    // Kleine batches vermijden URL-limieten en de standaardlimiet van 1000 rijen.
+    const profielen: RawRow[] = [];
+    for (let i = 0; i < emails.length; i += 100) {
+      const { data, error } = await supabase
         .from("profielen")
         .select("id, volledige_naam, email, klas_naam, leerjaar, graad, geslacht")
-        .in("email", emails);
-      data = retry.data;
-      error = retry.error;
+        .in("email", emails.slice(i, i + 100));
+      if (error) throw new Error(readableSupabaseError(error, "Kon leerlingprofielen niet laden."));
+      profielen.push(...(data ?? []));
     }
-
-    if (error) {
-      throw new Error(readableSupabaseError(error, "Kon leerlingprofielen niet laden."));
-    }
-
-    return (data ?? [])
-      .map((p: any) => ({
-        id: String(p.id),
-        naam: String(p.volledige_naam ?? p.email ?? "Onbekende leerling"),
-        email: p.email ? String(p.email) : null,
-        klas_naam: p.klas_naam ? String(p.klas_naam) : null,
-        leerjaar: p.leerjaar == null ? null : Number(p.leerjaar),
-        graad: p.graad == null ? null : Number(p.graad),
-        geslacht: normalizeGender(p.geslacht),
-      }))
-      .sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
+    const profielPerEmail = new Map(profielen.map((p) => [getEmail(p), p]));
+    return [...uniekeRijen.entries()].map(([email, row]) => {
+      const p = profielPerEmail.get(email);
+      const klas = getKlasNaam(row);
+      const leerjaar = Number.parseInt(klas, 10);
+      const effectiefLeerjaar = p?.leerjaar == null ? (Number.isFinite(leerjaar) ? leerjaar : null) : Number(p.leerjaar);
+      return {
+        id: p?.id ? String(p.id) : `zonder-profiel:${email}`,
+        naam: getNaam(row) || String(p?.volledige_naam ?? email),
+        email,
+        username: String(getValue(row, ["username", "smartschool_username"])).trim(),
+        klas_naam: klas || (p?.klas_naam ? String(p.klas_naam) : null),
+        leerjaar: effectiefLeerjaar,
+        graad: effectiefLeerjaar == null ? null : Math.ceil(effectiefLeerjaar / 2),
+        geslacht: normalizeGender(p?.geslacht),
+        heeftProfiel: Boolean(p?.id),
+      };
+    }).sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
   }
 
   async function loadTargetLeerlingen() {
@@ -628,7 +604,7 @@ export default function SportfolioBeheerPage() {
 
       if (leerlingen.length === 0) {
         setExistingScores([]);
-        setError("Geen leerlingprofielen gevonden voor deze selectie.");
+        setError("Geen leerlingen gevonden voor deze selectie.");
       } else {
         await loadExistingScores(leerlingen, selectedDisciplineId);
       }
@@ -649,7 +625,8 @@ export default function SportfolioBeheerPage() {
     try {
       setLoadingExistingScores(true);
 
-      const leerlingIds = leerlingen.map((l) => l.id);
+      const leerlingIds = leerlingen.filter((l) => l.heeftProfiel).map((l) => l.id);
+      if (!leerlingIds.length) { setExistingScores([]); return; }
       const { data, error } = await supabase
         .from("sportfolio_scores")
         .select(
@@ -768,7 +745,7 @@ export default function SportfolioBeheerPage() {
     const groupLabel =
       doelType === "klas"
         ? selectedKlasNaam
-        : `de gekozen klasgroep (${targetLeerlingen.length} leerlingen)`;
+        : `de gekozen klasgroep (${targetLeerlingen.length} leerlingen · {targetLeerlingen.filter((l) => !l.heeftProfiel).length} zonder profiel)`;
 
     const confirmed = window.confirm(
       `${submitted.length} ingediende score${submitted.length === 1 ? "" : "s"} voor ${selectedDiscipline.naam} van ${groupLabel} in ${selectedSchooljaar} bevestigen?`
@@ -829,7 +806,8 @@ export default function SportfolioBeheerPage() {
     setSavingId("delete-group");
 
     try {
-      const leerlingIds = targetLeerlingen.map((l) => l.id);
+      const leerlingIds = targetLeerlingen.filter((l) => l.heeftProfiel).map((l) => l.id);
+      if (!leerlingIds.length) { setSuccess("Geen gekoppelde scores om te verwijderen."); return; }
 
       const { error } = await supabase
         .from("sportfolio_scores")
@@ -1070,7 +1048,21 @@ export default function SportfolioBeheerPage() {
 
     clearMessages();
 
-    const rows = targetLeerlingen
+    const pending = targetLeerlingen.filter((l) => !l.heeftProfiel &&
+      (scoreDrafts[l.id]?.nummer.trim() || scoreDrafts[l.id]?.tekst.trim()));
+    if (pending.some((l) => !l.email || !l.username)) {
+      setError("Een leerling zonder profiel heeft geen officiële e-mail of gebruikersnaam. Controleer Smartschool.");
+      return;
+    }
+    if (targetLeerlingen.some((l) => {
+      const d = scoreDrafts[l.id] ?? EMPTY_DRAFT;
+      return d.nummer.trim() && toNullableNumber(d.nummer) == null;
+    })) {
+      setError("Een ingevulde numerieke score is ongeldig.");
+      return;
+    }
+
+    const rows = targetLeerlingen.filter((l) => l.heeftProfiel)
       .map((leerling) => {
         const draft = scoreDrafts[leerling.id] ?? EMPTY_DRAFT;
         const scoreNummer = toNullableNumber(draft.nummer);
@@ -1098,7 +1090,7 @@ export default function SportfolioBeheerPage() {
       })
       .filter(Boolean);
 
-    if (rows.length === 0) {
+    if (rows.length === 0 && pending.length === 0) {
       setError("Vul minstens één score in.");
       return;
     }
@@ -1106,17 +1098,30 @@ export default function SportfolioBeheerPage() {
     try {
       setSavingScores(true);
 
-      const { error } = await supabase
-        .from("sportfolio_scores")
-        .insert(rows as any[]);
-
-      if (error) {
-        throw new Error(readableSupabaseError(error, "Scores opslaan mislukt."));
+      let pendingSaved = 0;
+      for (const leerling of pending) {
+        const draft = scoreDrafts[leerling.id] ?? EMPTY_DRAFT;
+        const { error: pendingError } = await supabase.rpc("sportfolio_save_and_link_pending_score", {
+          p_email: leerling.email,
+          p_username: leerling.username,
+          p_name: leerling.naam,
+          p_discipline_id: selectedDiscipline.id,
+          p_schooljaar: selectedSchooljaar,
+          p_klas_naam: leerling.klas_naam ?? (doelType === "klas" ? selectedKlasNaam : null),
+          p_score_nummer: toNullableNumber(draft.nummer),
+          p_score_tekst: draft.tekst.trim() || null,
+          p_eenheid: selectedDiscipline.eenheid,
+        });
+        if (pendingError) {
+          throw new Error(`${pendingSaved} voorlopige score(s) opgeslagen; fout bij ${leerling.naam}: ${pendingError.message}. Controleer voor je opnieuw opslaat.`);
+        }
+        pendingSaved++;
       }
-
-      setSuccess(
-        `${rows.length} ${rows.length === 1 ? "score is" : "scores zijn"} bevestigd en opgeslagen.`
-      );
+      if (rows.length) {
+        const { error } = await supabase.from("sportfolio_scores").insert(rows as any[]);
+        if (error) throw new Error(readableSupabaseError(error, "Profielscores opslaan mislukt; voorlopige scores zijn al opgeslagen. Controleer voor opnieuw opslaan."));
+      }
+      setSuccess(`${rows.length} profielscore(s) en ${pendingSaved} voorlopige score(s) opgeslagen.`);
 
       const cleared: Record<string, ScoreDraft> = {};
       for (const leerling of targetLeerlingen) {
@@ -1646,6 +1651,9 @@ export default function SportfolioBeheerPage() {
                         <tr key={leerling.id} className="text-sm text-white/80">
                           <td className="px-4 py-3 font-bold text-white">
                             {leerling.naam}
+                            {!leerling.heeftProfiel && (
+                              <span className="ml-2 inline-flex rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold text-amber-200" title="Vraag de leerling om met het schoolaccount in te loggen">Geen profiel</span>
+                            )}
                             <div className="mt-0.5 text-[11px] font-medium text-white/40">
                               L{leerling.leerjaar ?? "?"} • graad {leerling.graad ?? "?"}
                             </div>
@@ -1660,7 +1668,7 @@ export default function SportfolioBeheerPage() {
                             <div className="flex items-center gap-2">
                               <input
                                 inputMode="decimal"
-                                value={draft.nummer}
+                                                                value={draft.nummer}
                                 onChange={(e) =>
                                   updateDraft(leerling.id, "nummer", e.target.value)
                                 }
@@ -1674,7 +1682,7 @@ export default function SportfolioBeheerPage() {
                           </td>
                           <td className="px-4 py-3">
                             <input
-                              value={draft.tekst}
+                                                            value={draft.tekst}
                               onChange={(e) =>
                                 updateDraft(leerling.id, "tekst", e.target.value)
                               }
@@ -1710,7 +1718,7 @@ export default function SportfolioBeheerPage() {
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 p-4">
               <div className="text-xs text-white/50">
-                Lege rijen worden niet opgeslagen.
+                Lege rijen worden niet opgeslagen. Scores voor leerlingen zonder profiel worden voorlopig bewaard en na een gecontroleerde profielkoppeling overgezet.
               </div>
               <button
                 onClick={() => void saveClassScores()}

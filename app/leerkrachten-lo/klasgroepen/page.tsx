@@ -27,6 +27,7 @@ type Leerling = {
   username: string;
   geslacht: string;
   schooljaar: string;
+  heeftProfiel: boolean;
 };
 
 type Klasgroep = {
@@ -112,7 +113,7 @@ function familyFirstName(leerling: Pick<Leerling, "naam" | "familyName">) {
   return withoutFamilyName ? `${familyName} ${withoutFamilyName}` : familyName;
 }
 
-function normaliseerLeerling(row: RawRow): Leerling {
+function normaliseerLeerling(row: RawRow, profielEmails: Set<string>): Leerling {
   const email = normalizeText(getValue(row, ["email"])).toLowerCase();
   const username = normalizeText(getValue(row, ["username"]));
   const possibleUserId = normalizeText(
@@ -133,6 +134,7 @@ function normaliseerLeerling(row: RawRow): Leerling {
     username,
     geslacht: normalizeGeslacht(getValue(row, ["geslacht", "gender", "sex"])),
     schooljaar: normalizeText(getValue(row, ["schooljaar", "school_year"])),
+    heeftProfiel: Boolean(normalizeText(getValue(row, ["profiel_id"])) || (email && profielEmails.has(email))),
   };
 }
 
@@ -213,6 +215,8 @@ export default function LeerkrachtenLOKlasgroepenPage() {
 
   const [profiel, setProfiel] = useState<Profiel | null>(null);
   const [leerlingenRows, setLeerlingenRows] = useState<RawRow[]>([]);
+  const [profielEmails, setProfielEmails] = useState<Set<string>>(new Set());
+  const [enkelZonderProfiel, setEnkelZonderProfiel] = useState(false);
   const [klasgroepen, setKlasgroepen] = useState<Klasgroep[]>([]);
   const [klasgroepLeerlingen, setKlasgroepLeerlingen] = useState<KlasgroepLeerling[]>([]);
 
@@ -296,13 +300,31 @@ export default function LeerkrachtenLOKlasgroepenPage() {
 
         const actueelSchooljaar = getActueelSchooljaar();
 
-        const leerlingenRes = await supabase.from("eurofit_class_students_view").select("*");
-
-        if (leerlingenRes.error) {
-          throw new Error(readableSupabaseError(leerlingenRes.error, "Kon leerlingen/klassen niet laden."));
+        // Laad alle klasrijen en profielen gepagineerd (geen afkapping na 1000 rijen).
+        const rows: RawRow[] = [];
+        for (let from = 0; ; from += 1000) {
+          const result = await supabase.from("eurofit_class_students_view").select("*")
+            .order("email", { ascending: true }).range(from, from + 999);
+          if (result.error) throw new Error(readableSupabaseError(result.error, "Kon leerlingen/klassen niet laden."));
+          const batch = (result.data ?? []) as RawRow[];
+          rows.push(...batch);
+          if (batch.length < 1000) break;
         }
 
-        const rows = leerlingenRes.data ?? [];
+        const emails = new Set<string>();
+        for (let from = 0; ; from += 1000) {
+          const result = await supabase.from("profielen").select("email")
+            .not("email", "is", null).order("email", { ascending: true })
+            .range(from, from + 999);
+          if (result.error) throw new Error(readableSupabaseError(result.error, "Kon profielstatus niet laden."));
+          const batch = result.data ?? [];
+          for (const profile of batch) {
+            const mail = normalizeLower(profile.email);
+            if (mail) emails.add(mail);
+          }
+          if (batch.length < 1000) break;
+        }
+        setProfielEmails(emails);
         setLeerlingenRows(rows);
 
         // Kies bij het openen het schooljaar dat daadwerkelijk in de
@@ -336,7 +358,7 @@ export default function LeerkrachtenLOKlasgroepenPage() {
     const map = new Map<string, Leerling>();
 
     leerlingenRows
-      .map(normaliseerLeerling)
+      .map((row) => normaliseerLeerling(row, profielEmails))
       .filter(
         (l) =>
           l.id &&
@@ -353,7 +375,7 @@ export default function LeerkrachtenLOKlasgroepenPage() {
       if (klasCompare !== 0) return klasCompare;
       return sortName(a).localeCompare(sortName(b), "nl-BE") || a.naam.localeCompare(b.naam, "nl-BE");
     });
-  }, [leerlingenRows, schooljaar]);
+  }, [leerlingenRows, schooljaar, profielEmails]);
 
   const schooljaren = useMemo(() => {
     const set = new Set<string>();
@@ -395,9 +417,9 @@ export default function LeerkrachtenLOKlasgroepenPage() {
 
   const gefilterdeLeerlingen = useMemo(() => {
     return leerlingen.filter((leerling) =>
-      leerlingPastBinnenFilters({ leerling, leerjaarFilter, klasFilter, loGroepFilter, geslachtFilter, zoekterm })
+      (!enkelZonderProfiel || !leerling.heeftProfiel) && leerlingPastBinnenFilters({ leerling, leerjaarFilter, klasFilter, loGroepFilter, geslachtFilter, zoekterm })
     );
-  }, [leerlingen, leerjaarFilter, klasFilter, loGroepFilter, geslachtFilter, zoekterm]);
+  }, [leerlingen, leerjaarFilter, klasFilter, loGroepFilter, geslachtFilter, zoekterm, enkelZonderProfiel]);
 
   const geselecteerdeLeerlingen = useMemo(() => {
     return leerlingen.filter((l) => selectedKeys.has(leerlingKey(l)));
@@ -909,7 +931,7 @@ export default function LeerkrachtenLOKlasgroepenPage() {
               <div style={styles.sectionHeader}>
                 <div>
                   <h2 style={styles.h2}>{previewNaam}</h2>
-                  <p style={styles.muted}>Volledige klasgroep · {actieveKlasbeeldLeerlingen.length} leerlingen</p>
+                  <p style={styles.muted}>Volledige klasgroep · {actieveKlasbeeldLeerlingen.length} leerlingen · {actieveKlasbeeldLeerlingen.filter((l) => !l.heeftProfiel).length} zonder profiel</p>
                 </div>
 
                 <div style={styles.actionRow}>
@@ -950,7 +972,8 @@ export default function LeerkrachtenLOKlasgroepenPage() {
                                   →
                                 </button>
                               </div>
-                              <div title={familyFirstName(leerling)} style={styles.verticalName}>
+                              {!leerling.heeftProfiel && <span title="Geen profiel: vraag leerling om in te loggen" style={{ color: "#fbbf24", fontSize: 12, fontWeight: 900 }}>!</span>}
+                               <div title={familyFirstName(leerling)} style={styles.verticalName}>
                                 {familyFirstName(leerling)}
                               </div>
                             </div>
@@ -972,7 +995,7 @@ export default function LeerkrachtenLOKlasgroepenPage() {
                 <div>
                   <h2 style={styles.h2}>{activeGroupId ? "Klasgroep aanpassen" : "Nieuwe klasgroep maken"}</h2>
                   <p style={styles.muted}>
-                    {geselecteerdeLeerlingen.length} geselecteerd van {gefilterdeLeerlingen.length} zichtbaar
+                    {geselecteerdeLeerlingen.length} geselecteerd van {gefilterdeLeerlingen.length} zichtbaar · {gefilterdeLeerlingen.filter((l) => !l.heeftProfiel).length} zonder profiel
                   </p>
                 </div>
 
@@ -1069,6 +1092,7 @@ export default function LeerkrachtenLOKlasgroepenPage() {
                     >
                       <span>
                         <b>{leerling.naam}</b>
+                         {!leerling.heeftProfiel && <small style={{ color: "#fbbf24", fontWeight: 900 }}>Geen profiel · vraag leerling om in te loggen</small>}
                         <small>
                           {leerling.klas} · {leerling.loGroep}
                           {leerling.geslacht ? ` · ${leerling.geslacht}` : ""}
