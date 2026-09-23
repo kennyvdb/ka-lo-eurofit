@@ -235,7 +235,6 @@ export default function SportfolioPage() {
         const { data: disciplinesData, error: disciplinesError } = await supabase
           .from("sportfolio_disciplines")
           .select("id, slug, naam, categorie, eenheid, hoger_is_beter, actief")
-          .eq("actief", true)
           .order("naam", { ascending: true });
 
         if (disciplinesError) throw disciplinesError;

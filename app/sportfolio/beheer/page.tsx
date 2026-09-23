@@ -1,8 +1,6 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
-import KlasgroepSelector from "@/components/klasgroepen/KlasgroepSelector";
-import type { KlasgroepLid } from "@/types/klasgroepen";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
@@ -82,6 +80,7 @@ type ExistingScore = {
 };
 
 type GradeMap = Record<string, number[]>;
+type EigenKlasgroep = { id: string; naam: string; schooljaar: string; leerkracht_id: string };
 
 const EMPTY_DRAFT: ScoreDraft = { nummer: "", tekst: "" };
 
@@ -105,7 +104,7 @@ function getKlasNaam(row: RawRow) {
 }
 
 function getEmail(row: RawRow) {
-  const value = getValue(row, ["email", "mail", "user_email"]);
+  const value = getValue(row, ["email", "leerling_email", "mail", "user_email"]);
   return value ? String(value).trim().toLowerCase() : "";
 }
 
@@ -312,12 +311,18 @@ export default function SportfolioBeheerPage() {
   const [gradeMap, setGradeMap] = useState<GradeMap>({});
   const [leerlingenRows, setLeerlingenRows] = useState<RawRow[]>([]);
   const [openstellingen, setOpenstellingen] = useState<Openstelling[]>([]);
+  const [alleOpenstellingen, setAlleOpenstellingen] = useState<Openstelling[]>([]);
+  const [loadingOverzicht, setLoadingOverzicht] = useState(false);
+  const [overzichtError, setOverzichtError] = useState<string | null>(null);
+  const [overzichtFilter, setOverzichtFilter] = useState("");
 
   const [selectedSchooljaar, setSelectedSchooljaar] = useState("");
   const [doelType, setDoelType] = useState<DoelType>("klas");
   const [selectedKlasNaam, setSelectedKlasNaam] = useState("");
   const [selectedKlasgroepId, setSelectedKlasgroepId] = useState<string | null>(null);
-  const [selectedKlasgroepLeden, setSelectedKlasgroepLeden] = useState<KlasgroepLid[]>([]);
+  const [selectedKlasgroepLeden, setSelectedKlasgroepLeden] = useState<RawRow[]>([]);
+  const [eigenKlasgroepen, setEigenKlasgroepen] = useState<EigenKlasgroep[]>([]);
+  const [loadingKlasgroepen, setLoadingKlasgroepen] = useState(false);
 
   const [selectedDisciplineId, setSelectedDisciplineId] = useState("");
   const [targetLeerlingen, setTargetLeerlingen] = useState<Leerling[]>([]);
@@ -362,10 +367,8 @@ export default function SportfolioBeheerPage() {
     return Array.from(set).sort((a, b) => a.localeCompare(b, "nl"));
   }, [leerlingenRows, selectedSchooljaar]);
 
-  const activeDisciplines = useMemo(
-    () => disciplines.filter((d) => d.actief !== false),
-    [disciplines]
-  );
+  // LO-leerkrachten mogen ook bestaande, inactieve disciplines terugvinden.
+  const activeDisciplines = useMemo(() => disciplines, [disciplines]);
 
   const selectedDiscipline = useMemo(
     () => disciplines.find((d) => d.id === selectedDisciplineId) ?? null,
@@ -395,16 +398,63 @@ export default function SportfolioBeheerPage() {
     setSuccess(null);
   }
 
+  async function loadEigenKlasgroepen(leerkrachtId: string, jaar: string) {
+    setLoadingKlasgroepen(true);
+    try {
+      const { data, error } = await supabase.from("lo_klasgroepen")
+        .select("id, naam, schooljaar, leerkracht_id")
+        .eq("leerkracht_id", leerkrachtId).eq("schooljaar", jaar)
+        .order("naam", { ascending: true });
+      if (error) throw new Error(readableSupabaseError(error, "Kon je klasgroepen niet laden."));
+      const groepen = (data ?? []) as EigenKlasgroep[];
+      setEigenKlasgroepen(groepen);
+      if (!groepen.some((groep) => groep.id === selectedKlasgroepId)) {
+        setSelectedKlasgroepId(null);
+        setSelectedKlasgroepLeden([]);
+      }
+    } finally {
+      setLoadingKlasgroepen(false);
+    }
+  }
+
+  async function kiesKlasgroep(id: string | null) {
+    if (!id) {
+      await handleKlasgroepChange(null, []);
+      return;
+    }
+    // Gebruik dezelfde leden-view als de LO-klasgroepenpagina, ook voor leerlingen zonder profiel.
+    const rows: RawRow[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await supabase.from("lo_klasgroep_leden_view")
+        .select("*").eq("klasgroep_id", id)
+        .order("positie", { ascending: true }).range(from, from + 999);
+      if (error) throw new Error(readableSupabaseError(error, "Kon klasgroepleerlingen niet laden."));
+      const batch = (data ?? []) as RawRow[];
+      rows.push(...batch);
+      if (batch.length < 1000) break;
+    }
+    await handleKlasgroepChange(id, rows);
+  }
+
   async function loadDisciplinesAndRubrics() {
     const [
       { data: disciplineData, error: disciplineError },
       { data: rubricData, error: rubricError },
       { data: gradeData, error: gradeError },
     ] = await Promise.all([
-      supabase
-        .from("sportfolio_disciplines")
-        .select("id, slug, naam, categorie, eenheid, hoger_is_beter, actief")
-        .order("naam", { ascending: true }),
+      (async () => {
+        const rows: Discipline[] = [];
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await supabase.from("sportfolio_disciplines")
+            .select("id, slug, naam, categorie, eenheid, hoger_is_beter, actief")
+            .order("naam", { ascending: true }).range(from, from + 999);
+          if (error) return { data: null, error };
+          const batch = (data ?? []) as Discipline[];
+          rows.push(...batch);
+          if (batch.length < 1000) break;
+        }
+        return { data: rows, error: null };
+      })(),
       supabase
         .from("sportfolio_rubrics")
         .select("id, discipline_id, geslacht, leerjaar, min_score, max_score, niveau, label, volgorde")
@@ -437,7 +487,7 @@ export default function SportfolioBeheerPage() {
     }
     setGradeMap(map);
 
-    setSelectedDisciplineId((current) => current || ds.find((d) => d.actief !== false)?.id || "");
+    setSelectedDisciplineId((current) => ds.some((d) => d.id === current) ? current : ds[0]?.id || "");
     setRubricDisciplineId((current) => current || ds[0]?.id || "");
   }
 
@@ -467,6 +517,51 @@ export default function SportfolioBeheerPage() {
     }
 
     setOpenstellingen((data ?? []) as Openstelling[]);
+  }
+
+  async function loadAlleOpenstellingen(jaar: string) {
+    if (!jaar) { setAlleOpenstellingen([]); return; }
+    setLoadingOverzicht(true);
+    setOverzichtError(null);
+    try {
+      const rows: Openstelling[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from("sportfolio_openstellingen")
+          .select("id, discipline_id, klas_naam, klasgroep_id, schooljaar, open_voor_leerlingen")
+          .eq("schooljaar", jaar).eq("open_voor_leerlingen", true)
+          .order("id", { ascending: true }).range(from, from + 999);
+        if (error) throw new Error(readableSupabaseError(error, "Kon overzicht van openstellingen niet laden."));
+        const batch = (data ?? []) as Openstelling[];
+        rows.push(...batch);
+        if (batch.length < 1000) break;
+      }
+      setAlleOpenstellingen(rows);
+    } catch (err) {
+      setOverzichtError(err instanceof Error ? err.message : "Kon openstellingen niet laden.");
+    } finally { setLoadingOverzicht(false); }
+  }
+
+  async function sluitOpenstelling(row: Openstelling) {
+    const naam = disciplines.find(d => d.id === row.discipline_id)?.naam ?? "deze discipline";
+    const groep = row.klas_naam ?? eigenKlasgroepen.find(g => g.id === row.klasgroep_id)?.naam ?? "deze klasgroep";
+    if (!window.confirm(`${naam} voor ${groep} sluiten voor leerlingen?`)) return;
+    setSavingId(`overzicht-${row.id}`);
+    setOverzichtError(null);
+    try {
+      const { data, error } = await supabase.from("sportfolio_openstellingen")
+        .update({ open_voor_leerlingen: false, geopend_door: profiel?.id, geopend_op: new Date().toISOString() })
+        .eq("id", row.id).eq("open_voor_leerlingen", true).select("id");
+      if (error) throw new Error(readableSupabaseError(error, "Sluiten mislukt."));
+      if (!data?.length) throw new Error("De openstelling is niet gewijzigd. Controleer je rechten of vernieuw het overzicht.");
+      await loadAlleOpenstellingen(selectedSchooljaar);
+      if ((doelType === "klas" && row.klas_naam === selectedKlasNaam) ||
+          (doelType === "klasgroep" && row.klasgroep_id === selectedKlasgroepId)) {
+        await loadOpenstellingen({ type: doelType, klasNaam: selectedKlasNaam, klasgroepId: selectedKlasgroepId, schooljaar: selectedSchooljaar });
+      }
+      setSuccess(`${naam} gesloten voor ${groep}.`);
+    } catch (err) {
+      setOverzichtError(err instanceof Error ? err.message : "Sluiten mislukt.");
+    } finally { setSavingId(null); }
   }
 
   async function loadClassStudents(schooljaar: string) {
@@ -590,7 +685,7 @@ export default function SportfolioBeheerPage() {
 
         leerlingen = await resolveProfiles(rows);
       } else {
-        const leden = selectedKlasgroepLeden as unknown as RawRow[];
+        const leden = selectedKlasgroepLeden;
         leerlingen = await resolveProfiles(leden);
       }
 
@@ -879,6 +974,8 @@ export default function SportfolioBeheerPage() {
         await Promise.all([
           loadDisciplinesAndRubrics(),
           loadClassStudents(schooljaar),
+          loadEigenKlasgroepen(profielValue.id, schooljaar),
+          loadAlleOpenstellingen(schooljaar),
         ]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Kon Sportfolio beheer niet laden.");
@@ -933,6 +1030,8 @@ export default function SportfolioBeheerPage() {
 
     try {
       await loadClassStudents(selectedSchooljaar);
+      await loadAlleOpenstellingen(selectedSchooljaar);
+      if (profiel) await loadEigenKlasgroepen(profiel.id, selectedSchooljaar);
 
       if (doelType === "klasgroep" && selectedKlasgroepId) {
         await loadOpenstellingen({
@@ -946,7 +1045,7 @@ export default function SportfolioBeheerPage() {
     }
   }
 
-  async function handleKlasgroepChange(id: string | null, leden: KlasgroepLid[]) {
+  async function handleKlasgroepChange(id: string | null, leden: RawRow[]) {
     setSelectedKlasgroepId(id);
     setSelectedKlasgroepLeden(leden);
     clearMessages();
@@ -1020,6 +1119,7 @@ export default function SportfolioBeheerPage() {
         klasgroepId: selectedKlasgroepId,
         schooljaar: selectedSchooljaar,
       });
+      await loadAlleOpenstellingen(selectedSchooljaar);
 
       setSuccess(nextValue ? "Discipline is opengezet." : "Discipline is gesloten.");
     } catch (err) {
@@ -1244,26 +1344,6 @@ export default function SportfolioBeheerPage() {
     }
   }
 
-  async function toggleActive(discipline: Discipline) {
-    clearMessages();
-    setSavingId(`active-${discipline.id}`);
-
-    try {
-      const { error } = await supabase
-        .from("sportfolio_disciplines")
-        .update({ actief: discipline.actief === false })
-        .eq("id", discipline.id);
-
-      if (error) throw error;
-
-      await loadDisciplinesAndRubrics();
-    } catch (err: any) {
-      setError(readableSupabaseError(err, "Discipline aanpassen mislukt."));
-    } finally {
-      setSavingId(null);
-    }
-  }
-
   async function addRubric() {
     if (!rubricDisciplineId) {
       setError("Kies eerst een discipline.");
@@ -1444,7 +1524,7 @@ export default function SportfolioBeheerPage() {
           </span>
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="mt-5 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
           {[
             ["scores", "Scores invoeren"],
             ["openstellingen", "Openstellingen"],
@@ -1454,7 +1534,7 @@ export default function SportfolioBeheerPage() {
               key={key}
               onClick={() => setTab(key as Tab)}
               className={[
-                "rounded-2xl border px-4 py-2.5 text-sm font-black transition",
+                "min-h-11 rounded-2xl border px-4 py-2.5 text-sm font-black transition",
                 tab === key
                   ? "border-white/25 bg-white text-black"
                   : "border-white/10 bg-white/5 text-white/75 hover:bg-white/10",
@@ -1516,7 +1596,7 @@ export default function SportfolioBeheerPage() {
                     });
                   }
                 }}
-                className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none"
+                className="h-12 w-full min-w-0 rounded-2xl border border-white/10 bg-white/5 px-4 text-base font-semibold text-white outline-none"
               >
                 <option value="klas" className="bg-neutral-900">
                   Officiële klas
@@ -1535,7 +1615,7 @@ export default function SportfolioBeheerPage() {
                 <select
                   value={selectedKlasNaam}
                   onChange={(e) => void handleKlasChange(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none"
+                  className="h-12 w-full min-w-0 rounded-2xl border border-white/10 bg-white/5 px-4 text-base font-semibold text-white outline-none"
                 >
                   {klassen.length === 0 ? (
                     <option value="" className="bg-neutral-900">
@@ -1551,12 +1631,15 @@ export default function SportfolioBeheerPage() {
                 </select>
               </div>
             ) : (
-              <KlasgroepSelector
-                schooljaar={selectedSchooljaar}
-                value={selectedKlasgroepId}
-                onChange={handleKlasgroepChange}
-                includeAllOption={false}
-              />
+              <div>
+                <label className="mb-2 block text-xs font-black uppercase tracking-[0.08em] text-white/60">Mijn klasgroep</label>
+                <select value={selectedKlasgroepId ?? ""}
+                  onChange={(e) => void kiesKlasgroep(e.target.value || null)}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white">
+                  <option value="" className="bg-neutral-900">{loadingKlasgroepen ? "Klasgroepen laden..." : eigenKlasgroepen.length ? "Kies een klasgroep" : "Geen klasgroepen voor dit schooljaar"}</option>
+                  {eigenKlasgroepen.map((groep) => <option key={groep.id} value={groep.id} className="bg-neutral-900">{groep.naam}</option>)}
+                </select>
+              </div>
             )}
 
             <div className="flex items-end">
@@ -1582,7 +1665,7 @@ export default function SportfolioBeheerPage() {
                 <select
                   value={selectedDisciplineId}
                   onChange={(e) => setSelectedDisciplineId(e.target.value)}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none"
+                  className="h-12 w-full min-w-0 rounded-2xl border border-white/10 bg-white/5 px-4 text-base font-semibold text-white outline-none"
                 >
                   {activeDisciplines.map((discipline) => (
                     <option
@@ -1622,8 +1705,8 @@ export default function SportfolioBeheerPage() {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-[860px] w-full text-left">
-                  <thead className="bg-black/20 text-xs uppercase tracking-[0.08em] text-white/50">
+                <table className="w-full text-left md:min-w-[860px]">
+                  <thead className="hidden bg-black/20 text-xs uppercase tracking-[0.08em] text-white/50 md:table-header-group">
                     <tr>
                       <th className="px-4 py-3">Leerling</th>
                       <th className="px-4 py-3">Klas</th>
@@ -1633,7 +1716,7 @@ export default function SportfolioBeheerPage() {
                       <th className="px-4 py-3">Rubric</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-white/10">
+                  <tbody className="block space-y-3 p-3 md:table-row-group md:space-y-0 md:p-0">
                     {targetLeerlingen.map((leerling) => {
                       const draft = scoreDrafts[leerling.id] ?? EMPTY_DRAFT;
                       const numericScore = toNullableNumber(draft.nummer);
@@ -1648,8 +1731,8 @@ export default function SportfolioBeheerPage() {
                         : null;
 
                       return (
-                        <tr key={leerling.id} className="text-sm text-white/80">
-                          <td className="px-4 py-3 font-bold text-white">
+                        <tr key={leerling.id} className="block rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-white/80 md:table-row md:rounded-none md:border-0 md:bg-transparent md:p-0">
+                          <td className="block px-1 py-2 md:table-cell md:px-4 md:py-3 font-bold text-white">
                             {leerling.naam}
                             {!leerling.heeftProfiel && (
                               <span className="ml-2 inline-flex rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold text-amber-200" title="Vraag de leerling om met het schoolaccount in te loggen">Geen profiel</span>
@@ -1658,39 +1741,43 @@ export default function SportfolioBeheerPage() {
                               L{leerling.leerjaar ?? "?"} • graad {leerling.graad ?? "?"}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-white/60">
+                          <td className="hidden px-1 py-2 text-white/60 md:table-cell md:px-4 md:py-3">
                             {leerling.klas_naam ?? "—"}
                           </td>
-                          <td className="px-4 py-3 text-white/60">
+                          <td className="hidden px-1 py-2 text-white/60 md:table-cell md:px-4 md:py-3">
                             {leerling.geslacht ?? "onbekend"}
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="block px-1 py-2 md:table-cell md:px-4 md:py-3">
+                            <label className="mb-1 block text-xs font-bold text-white/60 md:hidden" htmlFor={`score-${leerling.id}`}>Score</label>
                             <div className="flex items-center gap-2">
                               <input
+                                id={`score-${leerling.id}`}
                                 inputMode="decimal"
                                                                 value={draft.nummer}
                                 onChange={(e) =>
                                   updateDraft(leerling.id, "nummer", e.target.value)
                                 }
                                 placeholder="0"
-                                className="h-10 w-28 rounded-xl border border-white/10 bg-white/5 px-3 font-bold text-white outline-none focus:border-white/25"
+                                className="h-12 w-full min-w-0 rounded-xl md:h-10 md:w-28 border border-white/10 bg-white/5 px-3 font-bold text-white outline-none focus:border-white/25"
                               />
                               <span className="text-xs text-white/45">
                                 {selectedDiscipline?.eenheid ?? ""}
                               </span>
                             </div>
                           </td>
-                          <td className="px-4 py-3">
-                            <input
+                          <td className="block px-1 py-2 md:table-cell md:px-4 md:py-3">
+                            <label className="mb-1 block text-xs font-bold text-white/60 md:hidden" htmlFor={`tekst-${leerling.id}`}>Tekst / opmerking</label>
+                            <input id={`tekst-${leerling.id}`}
                                                             value={draft.tekst}
                               onChange={(e) =>
                                 updateDraft(leerling.id, "tekst", e.target.value)
                               }
                               placeholder="optioneel"
-                              className="h-10 w-full min-w-44 rounded-xl border border-white/10 bg-white/5 px-3 text-white outline-none focus:border-white/25"
+                              className="h-12 w-full min-w-0 rounded-xl md:h-10 md:min-w-44 border border-white/10 bg-white/5 px-3 text-white outline-none focus:border-white/25"
                             />
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="block px-1 py-2 md:table-cell md:px-4 md:py-3">
+                            <span className="mr-2 text-xs text-white/60 md:hidden">Rubric:</span>
                             {numericScore == null ? (
                               <span className="text-xs text-white/35">—</span>
                             ) : rubric ? (
@@ -1727,7 +1814,7 @@ export default function SportfolioBeheerPage() {
                   !selectedDiscipline ||
                   targetLeerlingen.length === 0
                 }
-                className="h-11 rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-5 text-sm font-black text-emerald-100 transition hover:bg-emerald-400/15 disabled:opacity-50"
+                className="min-h-12 w-full rounded-2xl border border-emerald-400/20 bg-emerald-400/10 px-5 sm:w-auto text-sm font-black text-emerald-100 transition hover:bg-emerald-400/15 disabled:opacity-50"
               >
                 {savingScores ? "Opslaan..." : "Scores bevestigen & opslaan"}
               </button>
@@ -1844,6 +1931,47 @@ export default function SportfolioBeheerPage() {
       ) : null}
 
       {tab === "openstellingen" ? (
+        <>
+        <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-4 sm:p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-black text-white">Alle openstaande disciplines</h2>
+              <p className="mt-1 text-sm text-white/60">Overzicht voor {selectedSchooljaar} · {alleOpenstellingen.length} openstellingen</p>
+            </div>
+            <button type="button" onClick={() => void loadAlleOpenstellingen(selectedSchooljaar)}
+              disabled={loadingOverzicht} className="min-h-11 rounded-2xl border border-white/20 px-4 text-sm font-bold text-white disabled:opacity-50">
+              {loadingOverzicht ? "Vernieuwen..." : "Vernieuwen"}
+            </button>
+          </div>
+          <input value={overzichtFilter} onChange={e => setOverzichtFilter(e.target.value)}
+            placeholder="Zoek discipline of klas(groep)" aria-label="Zoek openstellingen"
+            className="mt-4 h-12 w-full rounded-2xl border border-white/15 bg-black/20 px-4 text-base text-white outline-none focus:border-white/40" />
+          {overzichtError && <p role="alert" className="mt-3 rounded-xl bg-red-400/10 p-3 text-sm text-red-100">{overzichtError}</p>}
+          {loadingOverzicht ? <p className="mt-4 text-sm text-white/60">Openstellingen laden...</p> : (
+            <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {alleOpenstellingen.filter(row => {
+                const discipline = disciplines.find(d => d.id === row.discipline_id)?.naam ?? "Onbekende discipline";
+                const doelgroep = row.klas_naam ?? eigenKlasgroepen.find(g => g.id === row.klasgroep_id)?.naam ?? "Klasgroep";
+                return `${discipline} ${doelgroep}`.toLowerCase().includes(overzichtFilter.trim().toLowerCase());
+              }).map(row => {
+                const discipline = disciplines.find(d => d.id === row.discipline_id);
+                const groep = eigenKlasgroepen.find(g => g.id === row.klasgroep_id);
+                return <div key={row.id} className="rounded-2xl border border-emerald-400/20 bg-black/20 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1"><div className="font-bold text-white">{discipline?.naam ?? "Onbekende discipline"}</div>
+                      <div className="mt-1 text-sm text-white/65">{row.klas_naam ? `Klas ${row.klas_naam}` : groep ? `Klasgroep ${groep.naam}` : `Klasgroep (${row.klasgroep_id ?? "onbekend"})`}</div>
+                    </div><span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-200">Open</span>
+                  </div>
+                  <button type="button" onClick={() => void sluitOpenstelling(row)} disabled={savingId !== null}
+                    className="mt-3 min-h-11 w-full rounded-xl border border-red-400/25 bg-red-400/10 px-4 text-sm font-bold text-red-100 disabled:opacity-50">
+                    {savingId === `overzicht-${row.id}` ? "Sluiten..." : "Sluiten voor leerlingen"}
+                  </button>
+                </div>;
+              })}
+              {alleOpenstellingen.length === 0 && <p className="text-sm text-white/60">Geen openstellingen gevonden voor dit schooljaar.</p>}
+            </div>
+          )}
+        </section>
         <section className="mt-5">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
@@ -1925,6 +2053,7 @@ export default function SportfolioBeheerPage() {
             })}
           </div>
         </section>
+        </>
       ) : null}
 
       {tab === "beheer" ? (
@@ -2040,18 +2169,7 @@ export default function SportfolioBeheerPage() {
                         </div>
                       </div>
 
-                      <button
-                        onClick={() => void toggleActive(discipline)}
-                        disabled={savingId === `active-${discipline.id}`}
-                        className={[
-                          "rounded-full border px-3 py-1.5 text-xs font-black",
-                          discipline.actief !== false
-                            ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-100"
-                            : "border-white/10 bg-white/5 text-white/45",
-                        ].join(" ")}
-                      >
-                        {discipline.actief !== false ? "Actief" : "Inactief"}
-                      </button>
+                      <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1.5 text-xs font-black text-emerald-100">Beschikbaar</span>
                     </div>
 
                     <div className="mt-4 flex flex-wrap gap-2">

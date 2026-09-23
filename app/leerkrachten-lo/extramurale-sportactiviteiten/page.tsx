@@ -1,8 +1,10 @@
+
 "use client";
 
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import { BaseTile } from "@/components/tiles/BaseTile";
+import { TileGrid } from "@/components/tiles/TileGrid";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -85,14 +87,15 @@ export default function ExtramuraleSportactiviteitenPage() {
   const [allowed, setAllowed] = useState(false);
   const [profiel, setProfiel] = useState<Profiel | null>(null);
 
-  useEffect(() => {
-    injectResponsiveCSS();
-  }, []);
+  /* =======================================================
+     PROFIEL EN TOEGANG LADEN
+  ======================================================= */
 
   useEffect(() => {
     const run = async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
+        const { data: sessionData } =
+          await supabase.auth.getSession();
 
         const uid = sessionData.session?.user?.id;
 
@@ -108,7 +111,11 @@ export default function ExtramuraleSportactiviteitenPage() {
           .maybeSingle();
 
         if (error) {
-          console.error("Profiel laden mislukt:", error);
+          console.error(
+            "Profiel laden mislukt:",
+            error
+          );
+
           setLoading(false);
           return;
         }
@@ -117,6 +124,11 @@ export default function ExtramuraleSportactiviteitenPage() {
 
         setProfiel(profielData as Profiel | null);
         setAllowed(isAllowedRole(rol));
+      } catch (error) {
+        console.error(
+          "Fout bij laden extramurale sportactiviteiten:",
+          error
+        );
       } finally {
         setLoading(false);
       }
@@ -136,7 +148,14 @@ export default function ExtramuraleSportactiviteitenPage() {
         subtitle="Extramurale sportactiviteiten"
       >
         <section style={styles.panel}>
-          <p style={{ margin: 0, color: ui.text }}>Laden...</p>
+          <p
+            style={{
+              margin: 0,
+              color: ui.text,
+            }}
+          >
+            Laden...
+          </p>
         </section>
       </AppShell>
     );
@@ -170,7 +189,8 @@ export default function ExtramuraleSportactiviteitenPage() {
               lineHeight: 1.6,
             }}
           >
-            Deze pagina is alleen toegankelijk voor LO-leerkrachten en admins.
+            Deze pagina is alleen toegankelijk
+            voor LO-leerkrachten en admins.
           </p>
 
           <Link
@@ -197,6 +217,10 @@ export default function ExtramuraleSportactiviteitenPage() {
       subtitle="Extramurale sportactiviteiten"
       userName={profiel?.volledige_naam ?? null}
     >
+      {/* ===================================================
+          HERO
+      =================================================== */}
+
       <BaseHero
         label="LEERKRACHTEN LO"
         title={
@@ -223,22 +247,27 @@ export default function ExtramuraleSportactiviteitenPage() {
         }
       />
 
-      <section style={{ marginTop: 16 }}>
+      {/* ===================================================
+          ACTIVITEITEN
+      =================================================== */}
+
+      <section className="mt-[18px]">
         <div style={styles.sectionHeader}>
           <div>
-            <div style={styles.sectionTitle}>Activiteiten</div>
+            <div style={styles.sectionTitle}>
+              Activiteiten
+            </div>
 
             <p style={styles.sectionDescription}>
-              Kies een onderdeel om de praktische informatie en opvolging te
-              bekijken.
+              Kies een onderdeel om de praktische
+              informatie en opvolging te bekijken.
             </p>
           </div>
         </div>
 
-        <div
-          className="extramurale-module-grid"
-          style={styles.moduleGrid}
-        >
+        {/* Zelfde tegelindeling als het beginscherm */}
+
+        <TileGrid>
           {modules.map((module) => (
             <BaseTile
               key={module.title}
@@ -248,7 +277,7 @@ export default function ExtramuraleSportactiviteitenPage() {
               desc={module.desc}
             />
           ))}
-        </div>
+        </TileGrid>
       </section>
     </AppShell>
   );
@@ -288,42 +317,4 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.55,
   },
-
-  moduleGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: 14,
-  },
 };
-
-/* =========================================================
-   RESPONSIVE CSS
-========================================================= */
-
-function injectResponsiveCSS() {
-  if (typeof window === "undefined") return;
-
-  const id = "extramurale-sportactiviteiten-responsive-css";
-
-  if (document.getElementById(id)) return;
-
-  const style = document.createElement("style");
-
-  style.id = id;
-
-  style.innerHTML = `
-    @media (max-width: 900px) {
-      .extramurale-module-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-      }
-    }
-
-    @media (max-width: 640px) {
-      .extramurale-module-grid {
-        grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
-      }
-    }
-  `;
-
-  document.head.appendChild(style);
-}

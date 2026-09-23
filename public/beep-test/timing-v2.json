@@ -1,0 +1,1929 @@
+{
+  "protocol_id": "leger_20m_8p5_fixed_shuttles_v2_countdown",
+  "description": "20 m, 8.5 km/h start, +0.5 km/h per level, fixed shuttles per level; stage duration approximately one minute; stage start triple cue replaces the boundary single beep. No spoken levels. 3-2-1 countdown; first start cue at 4.0 seconds. Provisional protocol pending validation.",
+  "sample_rate": 44100,
+  "audio_start_s": 4.0,
+  "total_duration_s": 1321.444284,
+  "stages": [
+    {
+      "level": 1,
+      "speed_kmh": 8.5,
+      "shuttles": 7,
+      "shuttle_interval_s": 8.470588235,
+      "start_s": 4.0,
+      "end_s": 63.294118,
+      "total_shuttles": 7
+    },
+    {
+      "level": 2,
+      "speed_kmh": 9.0,
+      "shuttles": 8,
+      "shuttle_interval_s": 8.0,
+      "start_s": 63.294118,
+      "end_s": 127.294118,
+      "total_shuttles": 15
+    },
+    {
+      "level": 3,
+      "speed_kmh": 9.5,
+      "shuttles": 8,
+      "shuttle_interval_s": 7.578947368,
+      "start_s": 127.294118,
+      "end_s": 187.925697,
+      "total_shuttles": 23
+    },
+    {
+      "level": 4,
+      "speed_kmh": 10.0,
+      "shuttles": 9,
+      "shuttle_interval_s": 7.2,
+      "start_s": 187.925697,
+      "end_s": 252.725697,
+      "total_shuttles": 32
+    },
+    {
+      "level": 5,
+      "speed_kmh": 10.5,
+      "shuttles": 9,
+      "shuttle_interval_s": 6.857142857,
+      "start_s": 252.725697,
+      "end_s": 314.439982,
+      "total_shuttles": 41
+    },
+    {
+      "level": 6,
+      "speed_kmh": 11.0,
+      "shuttles": 10,
+      "shuttle_interval_s": 6.545454545,
+      "start_s": 314.439982,
+      "end_s": 379.894528,
+      "total_shuttles": 51
+    },
+    {
+      "level": 7,
+      "speed_kmh": 11.5,
+      "shuttles": 10,
+      "shuttle_interval_s": 6.260869565,
+      "start_s": 379.894528,
+      "end_s": 442.503223,
+      "total_shuttles": 61
+    },
+    {
+      "level": 8,
+      "speed_kmh": 12.0,
+      "shuttles": 11,
+      "shuttle_interval_s": 6.0,
+      "start_s": 442.503223,
+      "end_s": 508.503223,
+      "total_shuttles": 72
+    },
+    {
+      "level": 9,
+      "speed_kmh": 12.5,
+      "shuttles": 11,
+      "shuttle_interval_s": 5.76,
+      "start_s": 508.503223,
+      "end_s": 571.863223,
+      "total_shuttles": 83
+    },
+    {
+      "level": 10,
+      "speed_kmh": 13.0,
+      "shuttles": 11,
+      "shuttle_interval_s": 5.538461538,
+      "start_s": 571.863223,
+      "end_s": 632.7863,
+      "total_shuttles": 94
+    },
+    {
+      "level": 11,
+      "speed_kmh": 13.5,
+      "shuttles": 12,
+      "shuttle_interval_s": 5.333333333,
+      "start_s": 632.7863,
+      "end_s": 696.7863,
+      "total_shuttles": 106
+    },
+    {
+      "level": 12,
+      "speed_kmh": 14.0,
+      "shuttles": 12,
+      "shuttle_interval_s": 5.142857143,
+      "start_s": 696.7863,
+      "end_s": 758.500586,
+      "total_shuttles": 118
+    },
+    {
+      "level": 13,
+      "speed_kmh": 14.5,
+      "shuttles": 13,
+      "shuttle_interval_s": 4.965517241,
+      "start_s": 758.500586,
+      "end_s": 823.05231,
+      "total_shuttles": 131
+    },
+    {
+      "level": 14,
+      "speed_kmh": 15.0,
+      "shuttles": 13,
+      "shuttle_interval_s": 4.8,
+      "start_s": 823.05231,
+      "end_s": 885.45231,
+      "total_shuttles": 144
+    },
+    {
+      "level": 15,
+      "speed_kmh": 15.5,
+      "shuttles": 13,
+      "shuttle_interval_s": 4.64516129,
+      "start_s": 885.45231,
+      "end_s": 945.839407,
+      "total_shuttles": 157
+    },
+    {
+      "level": 16,
+      "speed_kmh": 16.0,
+      "shuttles": 14,
+      "shuttle_interval_s": 4.5,
+      "start_s": 945.839407,
+      "end_s": 1008.839407,
+      "total_shuttles": 171
+    },
+    {
+      "level": 17,
+      "speed_kmh": 16.5,
+      "shuttles": 14,
+      "shuttle_interval_s": 4.363636364,
+      "start_s": 1008.839407,
+      "end_s": 1069.930316,
+      "total_shuttles": 185
+    },
+    {
+      "level": 18,
+      "speed_kmh": 17.0,
+      "shuttles": 15,
+      "shuttle_interval_s": 4.235294118,
+      "start_s": 1069.930316,
+      "end_s": 1133.459728,
+      "total_shuttles": 200
+    },
+    {
+      "level": 19,
+      "speed_kmh": 17.5,
+      "shuttles": 15,
+      "shuttle_interval_s": 4.114285714,
+      "start_s": 1133.459728,
+      "end_s": 1195.174014,
+      "total_shuttles": 215
+    },
+    {
+      "level": 20,
+      "speed_kmh": 18.0,
+      "shuttles": 16,
+      "shuttle_interval_s": 4.0,
+      "start_s": 1195.174014,
+      "end_s": 1259.174014,
+      "total_shuttles": 231
+    },
+    {
+      "level": 21,
+      "speed_kmh": 18.5,
+      "shuttles": 16,
+      "shuttle_interval_s": 3.891891892,
+      "start_s": 1259.174014,
+      "end_s": 1321.444284,
+      "total_shuttles": 247
+    }
+  ],
+  "events": [
+    {
+      "time_s": 4.0,
+      "type": "stage_start",
+      "level": 1,
+      "shuttle": 0
+    },
+    {
+      "time_s": 12.470588,
+      "type": "shuttle",
+      "level": 1,
+      "shuttle": 1,
+      "total_shuttles": 1
+    },
+    {
+      "time_s": 20.941176,
+      "type": "shuttle",
+      "level": 1,
+      "shuttle": 2,
+      "total_shuttles": 2
+    },
+    {
+      "time_s": 29.411765,
+      "type": "shuttle",
+      "level": 1,
+      "shuttle": 3,
+      "total_shuttles": 3
+    },
+    {
+      "time_s": 37.882353,
+      "type": "shuttle",
+      "level": 1,
+      "shuttle": 4,
+      "total_shuttles": 4
+    },
+    {
+      "time_s": 46.352941,
+      "type": "shuttle",
+      "level": 1,
+      "shuttle": 5,
+      "total_shuttles": 5
+    },
+    {
+      "time_s": 54.823529,
+      "type": "shuttle",
+      "level": 1,
+      "shuttle": 6,
+      "total_shuttles": 6
+    },
+    {
+      "time_s": 63.294118,
+      "type": "stage_start",
+      "level": 2,
+      "shuttle": 0
+    },
+    {
+      "time_s": 71.294118,
+      "type": "shuttle",
+      "level": 2,
+      "shuttle": 1,
+      "total_shuttles": 8
+    },
+    {
+      "time_s": 79.294118,
+      "type": "shuttle",
+      "level": 2,
+      "shuttle": 2,
+      "total_shuttles": 9
+    },
+    {
+      "time_s": 87.294118,
+      "type": "shuttle",
+      "level": 2,
+      "shuttle": 3,
+      "total_shuttles": 10
+    },
+    {
+      "time_s": 95.294118,
+      "type": "shuttle",
+      "level": 2,
+      "shuttle": 4,
+      "total_shuttles": 11
+    },
+    {
+      "time_s": 103.294118,
+      "type": "shuttle",
+      "level": 2,
+      "shuttle": 5,
+      "total_shuttles": 12
+    },
+    {
+      "time_s": 111.294118,
+      "type": "shuttle",
+      "level": 2,
+      "shuttle": 6,
+      "total_shuttles": 13
+    },
+    {
+      "time_s": 119.294118,
+      "type": "shuttle",
+      "level": 2,
+      "shuttle": 7,
+      "total_shuttles": 14
+    },
+    {
+      "time_s": 127.294118,
+      "type": "stage_start",
+      "level": 3,
+      "shuttle": 0
+    },
+    {
+      "time_s": 134.873065,
+      "type": "shuttle",
+      "level": 3,
+      "shuttle": 1,
+      "total_shuttles": 16
+    },
+    {
+      "time_s": 142.452012,
+      "type": "shuttle",
+      "level": 3,
+      "shuttle": 2,
+      "total_shuttles": 17
+    },
+    {
+      "time_s": 150.03096,
+      "type": "shuttle",
+      "level": 3,
+      "shuttle": 3,
+      "total_shuttles": 18
+    },
+    {
+      "time_s": 157.609907,
+      "type": "shuttle",
+      "level": 3,
+      "shuttle": 4,
+      "total_shuttles": 19
+    },
+    {
+      "time_s": 165.188854,
+      "type": "shuttle",
+      "level": 3,
+      "shuttle": 5,
+      "total_shuttles": 20
+    },
+    {
+      "time_s": 172.767802,
+      "type": "shuttle",
+      "level": 3,
+      "shuttle": 6,
+      "total_shuttles": 21
+    },
+    {
+      "time_s": 180.346749,
+      "type": "shuttle",
+      "level": 3,
+      "shuttle": 7,
+      "total_shuttles": 22
+    },
+    {
+      "time_s": 187.925697,
+      "type": "stage_start",
+      "level": 4,
+      "shuttle": 0
+    },
+    {
+      "time_s": 195.125697,
+      "type": "shuttle",
+      "level": 4,
+      "shuttle": 1,
+      "total_shuttles": 24
+    },
+    {
+      "time_s": 202.325697,
+      "type": "shuttle",
+      "level": 4,
+      "shuttle": 2,
+      "total_shuttles": 25
+    },
+    {
+      "time_s": 209.525697,
+      "type": "shuttle",
+      "level": 4,
+      "shuttle": 3,
+      "total_shuttles": 26
+    },
+    {
+      "time_s": 216.725697,
+      "type": "shuttle",
+      "level": 4,
+      "shuttle": 4,
+      "total_shuttles": 27
+    },
+    {
+      "time_s": 223.925697,
+      "type": "shuttle",
+      "level": 4,
+      "shuttle": 5,
+      "total_shuttles": 28
+    },
+    {
+      "time_s": 231.125697,
+      "type": "shuttle",
+      "level": 4,
+      "shuttle": 6,
+      "total_shuttles": 29
+    },
+    {
+      "time_s": 238.325697,
+      "type": "shuttle",
+      "level": 4,
+      "shuttle": 7,
+      "total_shuttles": 30
+    },
+    {
+      "time_s": 245.525697,
+      "type": "shuttle",
+      "level": 4,
+      "shuttle": 8,
+      "total_shuttles": 31
+    },
+    {
+      "time_s": 252.725697,
+      "type": "stage_start",
+      "level": 5,
+      "shuttle": 0
+    },
+    {
+      "time_s": 259.582839,
+      "type": "shuttle",
+      "level": 5,
+      "shuttle": 1,
+      "total_shuttles": 33
+    },
+    {
+      "time_s": 266.439982,
+      "type": "shuttle",
+      "level": 5,
+      "shuttle": 2,
+      "total_shuttles": 34
+    },
+    {
+      "time_s": 273.297125,
+      "type": "shuttle",
+      "level": 5,
+      "shuttle": 3,
+      "total_shuttles": 35
+    },
+    {
+      "time_s": 280.154268,
+      "type": "shuttle",
+      "level": 5,
+      "shuttle": 4,
+      "total_shuttles": 36
+    },
+    {
+      "time_s": 287.011411,
+      "type": "shuttle",
+      "level": 5,
+      "shuttle": 5,
+      "total_shuttles": 37
+    },
+    {
+      "time_s": 293.868554,
+      "type": "shuttle",
+      "level": 5,
+      "shuttle": 6,
+      "total_shuttles": 38
+    },
+    {
+      "time_s": 300.725697,
+      "type": "shuttle",
+      "level": 5,
+      "shuttle": 7,
+      "total_shuttles": 39
+    },
+    {
+      "time_s": 307.582839,
+      "type": "shuttle",
+      "level": 5,
+      "shuttle": 8,
+      "total_shuttles": 40
+    },
+    {
+      "time_s": 314.439982,
+      "type": "stage_start",
+      "level": 6,
+      "shuttle": 0
+    },
+    {
+      "time_s": 320.985437,
+      "type": "shuttle",
+      "level": 6,
+      "shuttle": 1,
+      "total_shuttles": 42
+    },
+    {
+      "time_s": 327.530891,
+      "type": "shuttle",
+      "level": 6,
+      "shuttle": 2,
+      "total_shuttles": 43
+    },
+    {
+      "time_s": 334.076346,
+      "type": "shuttle",
+      "level": 6,
+      "shuttle": 3,
+      "total_shuttles": 44
+    },
+    {
+      "time_s": 340.6218,
+      "type": "shuttle",
+      "level": 6,
+      "shuttle": 4,
+      "total_shuttles": 45
+    },
+    {
+      "time_s": 347.167255,
+      "type": "shuttle",
+      "level": 6,
+      "shuttle": 5,
+      "total_shuttles": 46
+    },
+    {
+      "time_s": 353.71271,
+      "type": "shuttle",
+      "level": 6,
+      "shuttle": 6,
+      "total_shuttles": 47
+    },
+    {
+      "time_s": 360.258164,
+      "type": "shuttle",
+      "level": 6,
+      "shuttle": 7,
+      "total_shuttles": 48
+    },
+    {
+      "time_s": 366.803619,
+      "type": "shuttle",
+      "level": 6,
+      "shuttle": 8,
+      "total_shuttles": 49
+    },
+    {
+      "time_s": 373.349073,
+      "type": "shuttle",
+      "level": 6,
+      "shuttle": 9,
+      "total_shuttles": 50
+    },
+    {
+      "time_s": 379.894528,
+      "type": "stage_start",
+      "level": 7,
+      "shuttle": 0
+    },
+    {
+      "time_s": 386.155397,
+      "type": "shuttle",
+      "level": 7,
+      "shuttle": 1,
+      "total_shuttles": 52
+    },
+    {
+      "time_s": 392.416267,
+      "type": "shuttle",
+      "level": 7,
+      "shuttle": 2,
+      "total_shuttles": 53
+    },
+    {
+      "time_s": 398.677136,
+      "type": "shuttle",
+      "level": 7,
+      "shuttle": 3,
+      "total_shuttles": 54
+    },
+    {
+      "time_s": 404.938006,
+      "type": "shuttle",
+      "level": 7,
+      "shuttle": 4,
+      "total_shuttles": 55
+    },
+    {
+      "time_s": 411.198876,
+      "type": "shuttle",
+      "level": 7,
+      "shuttle": 5,
+      "total_shuttles": 56
+    },
+    {
+      "time_s": 417.459745,
+      "type": "shuttle",
+      "level": 7,
+      "shuttle": 6,
+      "total_shuttles": 57
+    },
+    {
+      "time_s": 423.720615,
+      "type": "shuttle",
+      "level": 7,
+      "shuttle": 7,
+      "total_shuttles": 58
+    },
+    {
+      "time_s": 429.981484,
+      "type": "shuttle",
+      "level": 7,
+      "shuttle": 8,
+      "total_shuttles": 59
+    },
+    {
+      "time_s": 436.242354,
+      "type": "shuttle",
+      "level": 7,
+      "shuttle": 9,
+      "total_shuttles": 60
+    },
+    {
+      "time_s": 442.503223,
+      "type": "stage_start",
+      "level": 8,
+      "shuttle": 0
+    },
+    {
+      "time_s": 448.503223,
+      "type": "shuttle",
+      "level": 8,
+      "shuttle": 1,
+      "total_shuttles": 62
+    },
+    {
+      "time_s": 454.503223,
+      "type": "shuttle",
+      "level": 8,
+      "shuttle": 2,
+      "total_shuttles": 63
+    },
+    {
+      "time_s": 460.503223,
+      "type": "shuttle",
+      "level": 8,
+      "shuttle": 3,
+      "total_shuttles": 64
+    },
+    {
+      "time_s": 466.503223,
+      "type": "shuttle",
+      "level": 8,
+      "shuttle": 4,
+      "total_shuttles": 65
+    },
+    {
+      "time_s": 472.503223,
+      "type": "shuttle",
+      "level": 8,
+      "shuttle": 5,
+      "total_shuttles": 66
+    },
+    {
+      "time_s": 478.503223,
+      "type": "shuttle",
+      "level": 8,
+      "shuttle": 6,
+      "total_shuttles": 67
+    },
+    {
+      "time_s": 484.503223,
+      "type": "shuttle",
+      "level": 8,
+      "shuttle": 7,
+      "total_shuttles": 68
+    },
+    {
+      "time_s": 490.503223,
+      "type": "shuttle",
+      "level": 8,
+      "shuttle": 8,
+      "total_shuttles": 69
+    },
+    {
+      "time_s": 496.503223,
+      "type": "shuttle",
+      "level": 8,
+      "shuttle": 9,
+      "total_shuttles": 70
+    },
+    {
+      "time_s": 502.503223,
+      "type": "shuttle",
+      "level": 8,
+      "shuttle": 10,
+      "total_shuttles": 71
+    },
+    {
+      "time_s": 508.503223,
+      "type": "stage_start",
+      "level": 9,
+      "shuttle": 0
+    },
+    {
+      "time_s": 514.263223,
+      "type": "shuttle",
+      "level": 9,
+      "shuttle": 1,
+      "total_shuttles": 73
+    },
+    {
+      "time_s": 520.023223,
+      "type": "shuttle",
+      "level": 9,
+      "shuttle": 2,
+      "total_shuttles": 74
+    },
+    {
+      "time_s": 525.783223,
+      "type": "shuttle",
+      "level": 9,
+      "shuttle": 3,
+      "total_shuttles": 75
+    },
+    {
+      "time_s": 531.543223,
+      "type": "shuttle",
+      "level": 9,
+      "shuttle": 4,
+      "total_shuttles": 76
+    },
+    {
+      "time_s": 537.303223,
+      "type": "shuttle",
+      "level": 9,
+      "shuttle": 5,
+      "total_shuttles": 77
+    },
+    {
+      "time_s": 543.063223,
+      "type": "shuttle",
+      "level": 9,
+      "shuttle": 6,
+      "total_shuttles": 78
+    },
+    {
+      "time_s": 548.823223,
+      "type": "shuttle",
+      "level": 9,
+      "shuttle": 7,
+      "total_shuttles": 79
+    },
+    {
+      "time_s": 554.583223,
+      "type": "shuttle",
+      "level": 9,
+      "shuttle": 8,
+      "total_shuttles": 80
+    },
+    {
+      "time_s": 560.343223,
+      "type": "shuttle",
+      "level": 9,
+      "shuttle": 9,
+      "total_shuttles": 81
+    },
+    {
+      "time_s": 566.103223,
+      "type": "shuttle",
+      "level": 9,
+      "shuttle": 10,
+      "total_shuttles": 82
+    },
+    {
+      "time_s": 571.863223,
+      "type": "stage_start",
+      "level": 10,
+      "shuttle": 0
+    },
+    {
+      "time_s": 577.401685,
+      "type": "shuttle",
+      "level": 10,
+      "shuttle": 1,
+      "total_shuttles": 84
+    },
+    {
+      "time_s": 582.940146,
+      "type": "shuttle",
+      "level": 10,
+      "shuttle": 2,
+      "total_shuttles": 85
+    },
+    {
+      "time_s": 588.478608,
+      "type": "shuttle",
+      "level": 10,
+      "shuttle": 3,
+      "total_shuttles": 86
+    },
+    {
+      "time_s": 594.01707,
+      "type": "shuttle",
+      "level": 10,
+      "shuttle": 4,
+      "total_shuttles": 87
+    },
+    {
+      "time_s": 599.555531,
+      "type": "shuttle",
+      "level": 10,
+      "shuttle": 5,
+      "total_shuttles": 88
+    },
+    {
+      "time_s": 605.093993,
+      "type": "shuttle",
+      "level": 10,
+      "shuttle": 6,
+      "total_shuttles": 89
+    },
+    {
+      "time_s": 610.632454,
+      "type": "shuttle",
+      "level": 10,
+      "shuttle": 7,
+      "total_shuttles": 90
+    },
+    {
+      "time_s": 616.170916,
+      "type": "shuttle",
+      "level": 10,
+      "shuttle": 8,
+      "total_shuttles": 91
+    },
+    {
+      "time_s": 621.709377,
+      "type": "shuttle",
+      "level": 10,
+      "shuttle": 9,
+      "total_shuttles": 92
+    },
+    {
+      "time_s": 627.247839,
+      "type": "shuttle",
+      "level": 10,
+      "shuttle": 10,
+      "total_shuttles": 93
+    },
+    {
+      "time_s": 632.7863,
+      "type": "stage_start",
+      "level": 11,
+      "shuttle": 0
+    },
+    {
+      "time_s": 638.119634,
+      "type": "shuttle",
+      "level": 11,
+      "shuttle": 1,
+      "total_shuttles": 95
+    },
+    {
+      "time_s": 643.452967,
+      "type": "shuttle",
+      "level": 11,
+      "shuttle": 2,
+      "total_shuttles": 96
+    },
+    {
+      "time_s": 648.7863,
+      "type": "shuttle",
+      "level": 11,
+      "shuttle": 3,
+      "total_shuttles": 97
+    },
+    {
+      "time_s": 654.119634,
+      "type": "shuttle",
+      "level": 11,
+      "shuttle": 4,
+      "total_shuttles": 98
+    },
+    {
+      "time_s": 659.452967,
+      "type": "shuttle",
+      "level": 11,
+      "shuttle": 5,
+      "total_shuttles": 99
+    },
+    {
+      "time_s": 664.7863,
+      "type": "shuttle",
+      "level": 11,
+      "shuttle": 6,
+      "total_shuttles": 100
+    },
+    {
+      "time_s": 670.119634,
+      "type": "shuttle",
+      "level": 11,
+      "shuttle": 7,
+      "total_shuttles": 101
+    },
+    {
+      "time_s": 675.452967,
+      "type": "shuttle",
+      "level": 11,
+      "shuttle": 8,
+      "total_shuttles": 102
+    },
+    {
+      "time_s": 680.7863,
+      "type": "shuttle",
+      "level": 11,
+      "shuttle": 9,
+      "total_shuttles": 103
+    },
+    {
+      "time_s": 686.119634,
+      "type": "shuttle",
+      "level": 11,
+      "shuttle": 10,
+      "total_shuttles": 104
+    },
+    {
+      "time_s": 691.452967,
+      "type": "shuttle",
+      "level": 11,
+      "shuttle": 11,
+      "total_shuttles": 105
+    },
+    {
+      "time_s": 696.7863,
+      "type": "stage_start",
+      "level": 12,
+      "shuttle": 0
+    },
+    {
+      "time_s": 701.929157,
+      "type": "shuttle",
+      "level": 12,
+      "shuttle": 1,
+      "total_shuttles": 107
+    },
+    {
+      "time_s": 707.072015,
+      "type": "shuttle",
+      "level": 12,
+      "shuttle": 2,
+      "total_shuttles": 108
+    },
+    {
+      "time_s": 712.214872,
+      "type": "shuttle",
+      "level": 12,
+      "shuttle": 3,
+      "total_shuttles": 109
+    },
+    {
+      "time_s": 717.357729,
+      "type": "shuttle",
+      "level": 12,
+      "shuttle": 4,
+      "total_shuttles": 110
+    },
+    {
+      "time_s": 722.500586,
+      "type": "shuttle",
+      "level": 12,
+      "shuttle": 5,
+      "total_shuttles": 111
+    },
+    {
+      "time_s": 727.643443,
+      "type": "shuttle",
+      "level": 12,
+      "shuttle": 6,
+      "total_shuttles": 112
+    },
+    {
+      "time_s": 732.7863,
+      "type": "shuttle",
+      "level": 12,
+      "shuttle": 7,
+      "total_shuttles": 113
+    },
+    {
+      "time_s": 737.929157,
+      "type": "shuttle",
+      "level": 12,
+      "shuttle": 8,
+      "total_shuttles": 114
+    },
+    {
+      "time_s": 743.072015,
+      "type": "shuttle",
+      "level": 12,
+      "shuttle": 9,
+      "total_shuttles": 115
+    },
+    {
+      "time_s": 748.214872,
+      "type": "shuttle",
+      "level": 12,
+      "shuttle": 10,
+      "total_shuttles": 116
+    },
+    {
+      "time_s": 753.357729,
+      "type": "shuttle",
+      "level": 12,
+      "shuttle": 11,
+      "total_shuttles": 117
+    },
+    {
+      "time_s": 758.500586,
+      "type": "stage_start",
+      "level": 13,
+      "shuttle": 0
+    },
+    {
+      "time_s": 763.466103,
+      "type": "shuttle",
+      "level": 13,
+      "shuttle": 1,
+      "total_shuttles": 119
+    },
+    {
+      "time_s": 768.431621,
+      "type": "shuttle",
+      "level": 13,
+      "shuttle": 2,
+      "total_shuttles": 120
+    },
+    {
+      "time_s": 773.397138,
+      "type": "shuttle",
+      "level": 13,
+      "shuttle": 3,
+      "total_shuttles": 121
+    },
+    {
+      "time_s": 778.362655,
+      "type": "shuttle",
+      "level": 13,
+      "shuttle": 4,
+      "total_shuttles": 122
+    },
+    {
+      "time_s": 783.328172,
+      "type": "shuttle",
+      "level": 13,
+      "shuttle": 5,
+      "total_shuttles": 123
+    },
+    {
+      "time_s": 788.29369,
+      "type": "shuttle",
+      "level": 13,
+      "shuttle": 6,
+      "total_shuttles": 124
+    },
+    {
+      "time_s": 793.259207,
+      "type": "shuttle",
+      "level": 13,
+      "shuttle": 7,
+      "total_shuttles": 125
+    },
+    {
+      "time_s": 798.224724,
+      "type": "shuttle",
+      "level": 13,
+      "shuttle": 8,
+      "total_shuttles": 126
+    },
+    {
+      "time_s": 803.190241,
+      "type": "shuttle",
+      "level": 13,
+      "shuttle": 9,
+      "total_shuttles": 127
+    },
+    {
+      "time_s": 808.155758,
+      "type": "shuttle",
+      "level": 13,
+      "shuttle": 10,
+      "total_shuttles": 128
+    },
+    {
+      "time_s": 813.121276,
+      "type": "shuttle",
+      "level": 13,
+      "shuttle": 11,
+      "total_shuttles": 129
+    },
+    {
+      "time_s": 818.086793,
+      "type": "shuttle",
+      "level": 13,
+      "shuttle": 12,
+      "total_shuttles": 130
+    },
+    {
+      "time_s": 823.05231,
+      "type": "stage_start",
+      "level": 14,
+      "shuttle": 0
+    },
+    {
+      "time_s": 827.85231,
+      "type": "shuttle",
+      "level": 14,
+      "shuttle": 1,
+      "total_shuttles": 132
+    },
+    {
+      "time_s": 832.65231,
+      "type": "shuttle",
+      "level": 14,
+      "shuttle": 2,
+      "total_shuttles": 133
+    },
+    {
+      "time_s": 837.45231,
+      "type": "shuttle",
+      "level": 14,
+      "shuttle": 3,
+      "total_shuttles": 134
+    },
+    {
+      "time_s": 842.25231,
+      "type": "shuttle",
+      "level": 14,
+      "shuttle": 4,
+      "total_shuttles": 135
+    },
+    {
+      "time_s": 847.05231,
+      "type": "shuttle",
+      "level": 14,
+      "shuttle": 5,
+      "total_shuttles": 136
+    },
+    {
+      "time_s": 851.85231,
+      "type": "shuttle",
+      "level": 14,
+      "shuttle": 6,
+      "total_shuttles": 137
+    },
+    {
+      "time_s": 856.65231,
+      "type": "shuttle",
+      "level": 14,
+      "shuttle": 7,
+      "total_shuttles": 138
+    },
+    {
+      "time_s": 861.45231,
+      "type": "shuttle",
+      "level": 14,
+      "shuttle": 8,
+      "total_shuttles": 139
+    },
+    {
+      "time_s": 866.25231,
+      "type": "shuttle",
+      "level": 14,
+      "shuttle": 9,
+      "total_shuttles": 140
+    },
+    {
+      "time_s": 871.05231,
+      "type": "shuttle",
+      "level": 14,
+      "shuttle": 10,
+      "total_shuttles": 141
+    },
+    {
+      "time_s": 875.85231,
+      "type": "shuttle",
+      "level": 14,
+      "shuttle": 11,
+      "total_shuttles": 142
+    },
+    {
+      "time_s": 880.65231,
+      "type": "shuttle",
+      "level": 14,
+      "shuttle": 12,
+      "total_shuttles": 143
+    },
+    {
+      "time_s": 885.45231,
+      "type": "stage_start",
+      "level": 15,
+      "shuttle": 0
+    },
+    {
+      "time_s": 890.097471,
+      "type": "shuttle",
+      "level": 15,
+      "shuttle": 1,
+      "total_shuttles": 145
+    },
+    {
+      "time_s": 894.742633,
+      "type": "shuttle",
+      "level": 15,
+      "shuttle": 2,
+      "total_shuttles": 146
+    },
+    {
+      "time_s": 899.387794,
+      "type": "shuttle",
+      "level": 15,
+      "shuttle": 3,
+      "total_shuttles": 147
+    },
+    {
+      "time_s": 904.032955,
+      "type": "shuttle",
+      "level": 15,
+      "shuttle": 4,
+      "total_shuttles": 148
+    },
+    {
+      "time_s": 908.678117,
+      "type": "shuttle",
+      "level": 15,
+      "shuttle": 5,
+      "total_shuttles": 149
+    },
+    {
+      "time_s": 913.323278,
+      "type": "shuttle",
+      "level": 15,
+      "shuttle": 6,
+      "total_shuttles": 150
+    },
+    {
+      "time_s": 917.968439,
+      "type": "shuttle",
+      "level": 15,
+      "shuttle": 7,
+      "total_shuttles": 151
+    },
+    {
+      "time_s": 922.613601,
+      "type": "shuttle",
+      "level": 15,
+      "shuttle": 8,
+      "total_shuttles": 152
+    },
+    {
+      "time_s": 927.258762,
+      "type": "shuttle",
+      "level": 15,
+      "shuttle": 9,
+      "total_shuttles": 153
+    },
+    {
+      "time_s": 931.903923,
+      "type": "shuttle",
+      "level": 15,
+      "shuttle": 10,
+      "total_shuttles": 154
+    },
+    {
+      "time_s": 936.549084,
+      "type": "shuttle",
+      "level": 15,
+      "shuttle": 11,
+      "total_shuttles": 155
+    },
+    {
+      "time_s": 941.194246,
+      "type": "shuttle",
+      "level": 15,
+      "shuttle": 12,
+      "total_shuttles": 156
+    },
+    {
+      "time_s": 945.839407,
+      "type": "stage_start",
+      "level": 16,
+      "shuttle": 0
+    },
+    {
+      "time_s": 950.339407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 1,
+      "total_shuttles": 158
+    },
+    {
+      "time_s": 954.839407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 2,
+      "total_shuttles": 159
+    },
+    {
+      "time_s": 959.339407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 3,
+      "total_shuttles": 160
+    },
+    {
+      "time_s": 963.839407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 4,
+      "total_shuttles": 161
+    },
+    {
+      "time_s": 968.339407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 5,
+      "total_shuttles": 162
+    },
+    {
+      "time_s": 972.839407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 6,
+      "total_shuttles": 163
+    },
+    {
+      "time_s": 977.339407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 7,
+      "total_shuttles": 164
+    },
+    {
+      "time_s": 981.839407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 8,
+      "total_shuttles": 165
+    },
+    {
+      "time_s": 986.339407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 9,
+      "total_shuttles": 166
+    },
+    {
+      "time_s": 990.839407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 10,
+      "total_shuttles": 167
+    },
+    {
+      "time_s": 995.339407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 11,
+      "total_shuttles": 168
+    },
+    {
+      "time_s": 999.839407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 12,
+      "total_shuttles": 169
+    },
+    {
+      "time_s": 1004.339407,
+      "type": "shuttle",
+      "level": 16,
+      "shuttle": 13,
+      "total_shuttles": 170
+    },
+    {
+      "time_s": 1008.839407,
+      "type": "stage_start",
+      "level": 17,
+      "shuttle": 0
+    },
+    {
+      "time_s": 1013.203043,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 1,
+      "total_shuttles": 172
+    },
+    {
+      "time_s": 1017.56668,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 2,
+      "total_shuttles": 173
+    },
+    {
+      "time_s": 1021.930316,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 3,
+      "total_shuttles": 174
+    },
+    {
+      "time_s": 1026.293952,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 4,
+      "total_shuttles": 175
+    },
+    {
+      "time_s": 1030.657589,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 5,
+      "total_shuttles": 176
+    },
+    {
+      "time_s": 1035.021225,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 6,
+      "total_shuttles": 177
+    },
+    {
+      "time_s": 1039.384862,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 7,
+      "total_shuttles": 178
+    },
+    {
+      "time_s": 1043.748498,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 8,
+      "total_shuttles": 179
+    },
+    {
+      "time_s": 1048.112134,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 9,
+      "total_shuttles": 180
+    },
+    {
+      "time_s": 1052.475771,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 10,
+      "total_shuttles": 181
+    },
+    {
+      "time_s": 1056.839407,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 11,
+      "total_shuttles": 182
+    },
+    {
+      "time_s": 1061.203043,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 12,
+      "total_shuttles": 183
+    },
+    {
+      "time_s": 1065.56668,
+      "type": "shuttle",
+      "level": 17,
+      "shuttle": 13,
+      "total_shuttles": 184
+    },
+    {
+      "time_s": 1069.930316,
+      "type": "stage_start",
+      "level": 18,
+      "shuttle": 0
+    },
+    {
+      "time_s": 1074.16561,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 1,
+      "total_shuttles": 186
+    },
+    {
+      "time_s": 1078.400904,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 2,
+      "total_shuttles": 187
+    },
+    {
+      "time_s": 1082.636198,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 3,
+      "total_shuttles": 188
+    },
+    {
+      "time_s": 1086.871493,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 4,
+      "total_shuttles": 189
+    },
+    {
+      "time_s": 1091.106787,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 5,
+      "total_shuttles": 190
+    },
+    {
+      "time_s": 1095.342081,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 6,
+      "total_shuttles": 191
+    },
+    {
+      "time_s": 1099.577375,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 7,
+      "total_shuttles": 192
+    },
+    {
+      "time_s": 1103.812669,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 8,
+      "total_shuttles": 193
+    },
+    {
+      "time_s": 1108.047963,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 9,
+      "total_shuttles": 194
+    },
+    {
+      "time_s": 1112.283257,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 10,
+      "total_shuttles": 195
+    },
+    {
+      "time_s": 1116.518551,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 11,
+      "total_shuttles": 196
+    },
+    {
+      "time_s": 1120.753845,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 12,
+      "total_shuttles": 197
+    },
+    {
+      "time_s": 1124.98914,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 13,
+      "total_shuttles": 198
+    },
+    {
+      "time_s": 1129.224434,
+      "type": "shuttle",
+      "level": 18,
+      "shuttle": 14,
+      "total_shuttles": 199
+    },
+    {
+      "time_s": 1133.459728,
+      "type": "stage_start",
+      "level": 19,
+      "shuttle": 0
+    },
+    {
+      "time_s": 1137.574014,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 1,
+      "total_shuttles": 201
+    },
+    {
+      "time_s": 1141.688299,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 2,
+      "total_shuttles": 202
+    },
+    {
+      "time_s": 1145.802585,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 3,
+      "total_shuttles": 203
+    },
+    {
+      "time_s": 1149.916871,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 4,
+      "total_shuttles": 204
+    },
+    {
+      "time_s": 1154.031156,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 5,
+      "total_shuttles": 205
+    },
+    {
+      "time_s": 1158.145442,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 6,
+      "total_shuttles": 206
+    },
+    {
+      "time_s": 1162.259728,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 7,
+      "total_shuttles": 207
+    },
+    {
+      "time_s": 1166.374014,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 8,
+      "total_shuttles": 208
+    },
+    {
+      "time_s": 1170.488299,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 9,
+      "total_shuttles": 209
+    },
+    {
+      "time_s": 1174.602585,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 10,
+      "total_shuttles": 210
+    },
+    {
+      "time_s": 1178.716871,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 11,
+      "total_shuttles": 211
+    },
+    {
+      "time_s": 1182.831156,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 12,
+      "total_shuttles": 212
+    },
+    {
+      "time_s": 1186.945442,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 13,
+      "total_shuttles": 213
+    },
+    {
+      "time_s": 1191.059728,
+      "type": "shuttle",
+      "level": 19,
+      "shuttle": 14,
+      "total_shuttles": 214
+    },
+    {
+      "time_s": 1195.174014,
+      "type": "stage_start",
+      "level": 20,
+      "shuttle": 0
+    },
+    {
+      "time_s": 1199.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 1,
+      "total_shuttles": 216
+    },
+    {
+      "time_s": 1203.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 2,
+      "total_shuttles": 217
+    },
+    {
+      "time_s": 1207.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 3,
+      "total_shuttles": 218
+    },
+    {
+      "time_s": 1211.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 4,
+      "total_shuttles": 219
+    },
+    {
+      "time_s": 1215.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 5,
+      "total_shuttles": 220
+    },
+    {
+      "time_s": 1219.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 6,
+      "total_shuttles": 221
+    },
+    {
+      "time_s": 1223.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 7,
+      "total_shuttles": 222
+    },
+    {
+      "time_s": 1227.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 8,
+      "total_shuttles": 223
+    },
+    {
+      "time_s": 1231.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 9,
+      "total_shuttles": 224
+    },
+    {
+      "time_s": 1235.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 10,
+      "total_shuttles": 225
+    },
+    {
+      "time_s": 1239.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 11,
+      "total_shuttles": 226
+    },
+    {
+      "time_s": 1243.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 12,
+      "total_shuttles": 227
+    },
+    {
+      "time_s": 1247.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 13,
+      "total_shuttles": 228
+    },
+    {
+      "time_s": 1251.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 14,
+      "total_shuttles": 229
+    },
+    {
+      "time_s": 1255.174014,
+      "type": "shuttle",
+      "level": 20,
+      "shuttle": 15,
+      "total_shuttles": 230
+    },
+    {
+      "time_s": 1259.174014,
+      "type": "stage_start",
+      "level": 21,
+      "shuttle": 0
+    },
+    {
+      "time_s": 1263.065905,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 1,
+      "total_shuttles": 232
+    },
+    {
+      "time_s": 1266.957797,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 2,
+      "total_shuttles": 233
+    },
+    {
+      "time_s": 1270.849689,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 3,
+      "total_shuttles": 234
+    },
+    {
+      "time_s": 1274.741581,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 4,
+      "total_shuttles": 235
+    },
+    {
+      "time_s": 1278.633473,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 5,
+      "total_shuttles": 236
+    },
+    {
+      "time_s": 1282.525365,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 6,
+      "total_shuttles": 237
+    },
+    {
+      "time_s": 1286.417257,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 7,
+      "total_shuttles": 238
+    },
+    {
+      "time_s": 1290.309149,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 8,
+      "total_shuttles": 239
+    },
+    {
+      "time_s": 1294.201041,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 9,
+      "total_shuttles": 240
+    },
+    {
+      "time_s": 1298.092932,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 10,
+      "total_shuttles": 241
+    },
+    {
+      "time_s": 1301.984824,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 11,
+      "total_shuttles": 242
+    },
+    {
+      "time_s": 1305.876716,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 12,
+      "total_shuttles": 243
+    },
+    {
+      "time_s": 1309.768608,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 13,
+      "total_shuttles": 244
+    },
+    {
+      "time_s": 1313.6605,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 14,
+      "total_shuttles": 245
+    },
+    {
+      "time_s": 1317.552392,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 15,
+      "total_shuttles": 246
+    },
+    {
+      "time_s": 1321.444284,
+      "type": "shuttle",
+      "level": 21,
+      "shuttle": 16,
+      "total_shuttles": 247
+    }
+  ],
+  "countdown": [
+    {
+      "time_s": 1,
+      "spoken": "3"
+    },
+    {
+      "time_s": 2,
+      "spoken": "2"
+    },
+    {
+      "time_s": 3,
+      "spoken": "1"
+    }
+  ]
+}

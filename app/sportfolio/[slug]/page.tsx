@@ -69,6 +69,29 @@ type LeaderboardRow = {
   eenheid: string | null;
 };
 
+
+function BeepDetail({ score, previous }: { score: ScoreRow; previous?: ScoreRow }) {
+  const d = score.extra_data ?? {};
+  if (d.bron !== "lo_beeptest") return null;
+  const number = (v: unknown) => typeof v === "number" && Number.isFinite(v) ? v : null;
+  const distance = number(d.afstand_meter);
+  const duration = number(d.testduur_seconden);
+  const prevDistance = previous?.extra_data?.bron === "lo_beeptest" ? number(previous.extra_data.afstand_meter) : null;
+  const time = duration === null ? "—" : `${Math.floor(duration/60)}:${String(Math.round(duration%60)).padStart(2,"0")}`;
+  return <div className="mt-4 rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-4 text-white">
+    <h3 className="text-lg font-black">Jouw Beep-test in detail</h3>
+    <p className="mt-1 text-3xl font-black">Niveau {String(d.niveau)} · shuttle {String(d.shuttle)}</p>
+    <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+      <div className="rounded-xl bg-black/20 p-3"><div className="text-white/60">Afstand</div><b>{distance === null ? "—" : `${distance} m`}</b></div>
+      <div className="rounded-xl bg-black/20 p-3"><div className="text-white/60">Testduur</div><b>{time}</b></div>
+      <div className="rounded-xl bg-black/20 p-3"><div className="text-white/60">Volledige shuttles</div><b>{String(d.totaal_shuttles ?? "—")}</b></div>
+      <div className="rounded-xl bg-black/20 p-3"><div className="text-white/60">Testdatum</div><b>{d.testdatum ? new Date(String(d.testdatum)).toLocaleDateString("nl-BE") : "—"}</b></div>
+    </div>
+    {prevDistance !== null && distance !== null && <p className="mt-3 text-sm">Evolutie tegenover vorige bevestigde Beep-test: {distance-prevDistance >= 0 ? "+" : ""}{distance-prevDistance} meter.</p>}
+    <p className="mt-3 text-xs text-white/65">De beoordeling en VO₂max worden niet getoond zolang de Eurofit-normeenheid en schattingsformule niet gevalideerd zijn.</p>
+  </div>;
+}
+
 const ui = {
   text: "rgba(234,240,255,0.92)",
   muted: "rgba(234,240,255,0.72)",
@@ -229,7 +252,6 @@ export default function DisciplineDetailPage() {
   const [rubrics, setRubrics] = useState<RubricRow[]>([]);
   const [disciplineOpen, setDisciplineOpen] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
-  const [openLeaderboardName, setOpenLeaderboardName] = useState<string | null>(null);
 
   const [scoreInput, setScoreInput] = useState("");
   const [tekstInput, setTekstInput] = useState("");
@@ -624,6 +646,8 @@ export default function DisciplineDetailPage() {
                   : "Nog geen score"}
               </div>
 
+              {discipline.slug === "beep_test" && latestCurrentYearScore?.status === "bevestigd" &&
+                <BeepDetail score={latestCurrentYearScore} previous={scoresAlleJaren.find(s => s.id !== latestCurrentYearScore.id && s.status === "bevestigd" && s.extra_data?.bron === "lo_beeptest")} />}
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                   <div className="text-[11px] font-black uppercase tracking-[0.08em] text-white/55">
@@ -802,7 +826,7 @@ export default function DisciplineDetailPage() {
               </div>
             </div>
 
-            <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <div className="mt-4 grid min-w-0 grid-cols-1 gap-4">
               {[
                 { titel: "Meisjes", rows: meisjesLeaderboard },
                 { titel: "Jongens", rows: jongensLeaderboard },
@@ -822,61 +846,41 @@ export default function DisciplineDetailPage() {
                     </div>
                   </div>
 
-                  <div className="grid gap-2 p-3">
+                  <div className="grid max-h-[430px] min-h-0 content-start gap-2 overflow-y-auto overscroll-contain p-3 [scrollbar-gutter:stable] [scrollbar-width:thin] [-webkit-overflow-scrolling:touch] sm:max-h-[520px]" role="region" aria-label={`Scrolbaar klassement ${groep.titel}` } tabIndex={0}>
                     {groep.rows.length === 0 ? (
                       <div className="rounded-xl border border-white/10 bg-white/5 p-4 text-sm text-white/55">
                         Nog geen bevestigde scores.
                       </div>
                     ) : (
-                      groep.rows.slice(0, 20).map((row, index) => (
+                      groep.rows.map((row, index) => (
                         <div
                           key={`${groep.titel}-${row.leerling_id}`}
-                          className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 p-3"
+                          className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3 rounded-2xl border border-white/15 bg-white/[0.08] p-3 sm:grid-cols-[auto_minmax(0,1fr)_minmax(110px,auto)] sm:items-center sm:p-4"
                         >
-                          <div className="flex min-w-0 items-center gap-3">
-                            <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/5 text-sm font-black text-white">
-                              {index + 1}
+                          <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/20 bg-white/10 text-base font-black text-white">
+                            {index + 1}
+                          </div>
+
+                          <div className="min-w-0 self-center">
+                            <div className="break-words text-[15px] font-extrabold leading-snug text-white sm:text-base [overflow-wrap:anywhere]">
+                              {row.volledige_naam ?? "Onbekende leerling"}
                             </div>
-
-                            <div className="min-w-0">
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setOpenLeaderboardName((current) =>
-                                    current === `${groep.titel}-${row.leerling_id}`
-                                      ? null
-                                      : `${groep.titel}-${row.leerling_id}`
-                                  )
-                                }
-                                className="block max-w-full text-left"
-                                title={row.volledige_naam ?? "Onbekende leerling"}
-                                aria-expanded={
-                                  openLeaderboardName === `${groep.titel}-${row.leerling_id}`
-                                }
-                              >
-                                <span className="block truncate text-xs font-black text-white sm:text-[13px]">
-                                  {row.volledige_naam ?? "Onbekende leerling"}
-                                </span>
-                              </button>
-
-                              {openLeaderboardName === `${groep.titel}-${row.leerling_id}` ? (
-                                <div className="mt-1 max-w-[220px] rounded-lg border border-white/10 bg-black/40 px-2 py-1.5 text-[11px] font-bold leading-snug text-white/90 shadow-lg">
-                                  {row.volledige_naam ?? "Onbekende leerling"}
-                                </div>
-                              ) : null}
-
-                              <div className="mt-0.5 truncate text-[11px] text-white/50">
-                                {row.klas_naam ?? "Geen klas"}
-                              </div>
+                            <div className="mt-1 break-words text-xs font-semibold text-white/75">
+                              {row.klas_naam ?? "Geen klas"}
                             </div>
                           </div>
 
-                          <div className="shrink-0 text-right text-sm font-black text-white">
-                            {formatScoreValue({
-                              score_nummer: row.score_nummer,
-                              score_tekst: row.score_tekst,
-                              eenheid: discipline.eenheid,
-                            })}
+                          <div className="col-span-2 min-w-0 rounded-xl border border-emerald-300/30 bg-emerald-950/70 px-3 py-2.5 sm:col-span-1 sm:justify-self-end sm:text-right">
+                            <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-100/90">
+                              Behaalde score
+                            </div>
+                            <div className="mt-0.5 break-words text-lg font-black leading-tight text-white sm:text-xl [overflow-wrap:anywhere]">
+                              {formatScoreValue({
+                                score_nummer: row.score_nummer,
+                                score_tekst: row.score_tekst,
+                                eenheid: discipline.eenheid,
+                              })}
+                            </div>
                           </div>
                         </div>
                       ))

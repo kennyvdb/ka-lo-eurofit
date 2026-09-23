@@ -38,6 +38,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/auth/callback");
 
   const isProtectedPage =
+    pathname.startsWith("/leerkrachten-lo") ||
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/profiel") ||
     pathname.startsWith("/admin") ||

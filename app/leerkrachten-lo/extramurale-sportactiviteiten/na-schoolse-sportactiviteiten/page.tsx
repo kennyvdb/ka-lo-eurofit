@@ -1,8 +1,10 @@
+
 "use client";
 
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import { BaseTile } from "@/components/tiles/BaseTile";
+import { TileGrid } from "@/components/tiles/TileGrid";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -73,19 +75,19 @@ export default function NaSchoolseSportactiviteitenPage() {
   const [allowed, setAllowed] = useState(false);
   const [profiel, setProfiel] = useState<Profiel | null>(null);
 
-  useEffect(() => {
-    injectResponsiveCSS();
-  }, []);
+  /* =======================================================
+     PROFIEL EN TOEGANG LADEN
+  ======================================================= */
 
   useEffect(() => {
     const run = async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
+        const { data: sessionData } =
+          await supabase.auth.getSession();
 
         const uid = sessionData.session?.user?.id;
 
         if (!uid) {
-          setLoading(false);
           return;
         }
 
@@ -96,7 +98,10 @@ export default function NaSchoolseSportactiviteitenPage() {
           .maybeSingle();
 
         if (error) {
-          console.error("Profiel laden mislukt:", error);
+          console.error(
+            "Profiel laden mislukt:",
+            error
+          );
           return;
         }
 
@@ -104,12 +109,17 @@ export default function NaSchoolseSportactiviteitenPage() {
 
         setProfiel(profielData as Profiel | null);
         setAllowed(isAllowedRole(rol));
+      } catch (error) {
+        console.error(
+          "Fout bij laden na-schoolse sportactiviteiten:",
+          error
+        );
       } finally {
         setLoading(false);
       }
     };
 
-    run();
+    void run();
   }, []);
 
   /* =======================================================
@@ -118,9 +128,19 @@ export default function NaSchoolseSportactiviteitenPage() {
 
   if (loading) {
     return (
-      <AppShell title="LO App" subtitle="Na-schoolse sportactiviteiten">
+      <AppShell
+        title="LO App"
+        subtitle="Na-schoolse sportactiviteiten"
+      >
         <section style={styles.panel}>
-          <p style={{ margin: 0, color: ui.text }}>Laden...</p>
+          <p
+            style={{
+              margin: 0,
+              color: ui.text,
+            }}
+          >
+            Laden...
+          </p>
         </section>
       </AppShell>
     );
@@ -154,7 +174,8 @@ export default function NaSchoolseSportactiviteitenPage() {
               lineHeight: 1.6,
             }}
           >
-            Deze pagina is alleen toegankelijk voor LO-leerkrachten en admins.
+            Deze pagina is alleen toegankelijk
+            voor LO-leerkrachten en admins.
           </p>
 
           <Link
@@ -181,6 +202,10 @@ export default function NaSchoolseSportactiviteitenPage() {
       subtitle="Na-schoolse sportactiviteiten"
       userName={profiel?.volledige_naam ?? null}
     >
+      {/* ===================================================
+          HERO
+      =================================================== */}
+
       <BaseHero
         label="LEERKRACHTEN LO"
         title={
@@ -207,22 +232,27 @@ export default function NaSchoolseSportactiviteitenPage() {
         }
       />
 
-      <section style={{ marginTop: 16 }}>
+      {/* ===================================================
+          ACTIVITEITEN
+      =================================================== */}
+
+      <section className="mt-[18px]">
         <div style={styles.sectionHeader}>
           <div>
-            <div style={styles.sectionTitle}>Activiteiten</div>
+            <div style={styles.sectionTitle}>
+              Activiteiten
+            </div>
 
             <p style={styles.sectionDescription}>
-              Kies een activiteit om de inschrijvingen en deelnemers op te
-              volgen.
+              Kies een activiteit om de inschrijvingen
+              en deelnemers op te volgen.
             </p>
           </div>
         </div>
 
-        <div
-          className="naschools-module-grid"
-          style={styles.moduleGrid}
-        >
+        {/* Zelfde tegelindeling als het beginscherm */}
+
+        <TileGrid>
           {activiteiten.map((activiteit) => (
             <BaseTile
               key={activiteit.title}
@@ -232,7 +262,7 @@ export default function NaSchoolseSportactiviteitenPage() {
               desc={activiteit.desc}
             />
           ))}
-        </div>
+        </TileGrid>
       </section>
     </AppShell>
   );
@@ -272,42 +302,4 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.55,
   },
-
-  moduleGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: 14,
-  },
 };
-
-/* =========================================================
-   RESPONSIVE CSS
-========================================================= */
-
-function injectResponsiveCSS() {
-  if (typeof window === "undefined") return;
-
-  const id = "naschoolse-sportactiviteiten-responsive-css";
-
-  if (document.getElementById(id)) return;
-
-  const style = document.createElement("style");
-
-  style.id = id;
-
-  style.innerHTML = `
-    @media (max-width: 900px) {
-      .naschools-module-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-      }
-    }
-
-    @media (max-width: 640px) {
-      .naschools-module-grid {
-        grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
-      }
-    }
-  `;
-
-  document.head.appendChild(style);
-}

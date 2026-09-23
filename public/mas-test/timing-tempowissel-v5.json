@@ -1,0 +1,810 @@
+{
+  "protocol": "leger_boucher_50m_workbook_cumulative",
+  "duration_s": 1753,
+  "countdown_s": 4,
+  "source": "Invulformulier MAS-test(1).xlsx, kolom D: samengestelde tijd",
+  "events": [
+    {
+      "time_s": 25,
+      "type": "marker",
+      "speed": 7,
+      "distance_m": 50
+    },
+    {
+      "time_s": 51,
+      "type": "marker",
+      "speed": 7,
+      "distance_m": 100
+    },
+    {
+      "time_s": 77,
+      "type": "marker",
+      "speed": 7,
+      "distance_m": 150
+    },
+    {
+      "time_s": 103,
+      "type": "marker",
+      "speed": 7,
+      "distance_m": 200
+    },
+    {
+      "time_s": 128,
+      "type": "marker",
+      "speed": 7,
+      "distance_m": 250
+    },
+    {
+      "time_s": 151,
+      "type": "marker",
+      "speed": 8,
+      "distance_m": 300
+    },
+    {
+      "time_s": 173,
+      "type": "marker",
+      "speed": 8,
+      "distance_m": 350
+    },
+    {
+      "time_s": 195,
+      "type": "marker",
+      "speed": 8,
+      "distance_m": 400
+    },
+    {
+      "time_s": 218,
+      "type": "marker",
+      "speed": 8,
+      "distance_m": 450
+    },
+    {
+      "time_s": 241,
+      "type": "marker",
+      "speed": 8,
+      "distance_m": 500
+    },
+    {
+      "time_s": 263,
+      "type": "marker",
+      "speed": 8,
+      "distance_m": 550
+    },
+    {
+      "time_s": 283,
+      "type": "marker",
+      "speed": 9,
+      "distance_m": 600
+    },
+    {
+      "time_s": 303,
+      "type": "marker",
+      "speed": 9,
+      "distance_m": 650
+    },
+    {
+      "time_s": 323,
+      "type": "marker",
+      "speed": 9,
+      "distance_m": 700
+    },
+    {
+      "time_s": 343,
+      "type": "marker",
+      "speed": 9,
+      "distance_m": 750
+    },
+    {
+      "time_s": 363,
+      "type": "marker",
+      "speed": 9,
+      "distance_m": 800
+    },
+    {
+      "time_s": 383,
+      "type": "marker",
+      "speed": 9,
+      "distance_m": 850
+    },
+    {
+      "time_s": 401,
+      "type": "marker",
+      "speed": 10,
+      "distance_m": 900
+    },
+    {
+      "time_s": 419,
+      "type": "marker",
+      "speed": 10,
+      "distance_m": 950
+    },
+    {
+      "time_s": 437,
+      "type": "marker",
+      "speed": 10,
+      "distance_m": 1000
+    },
+    {
+      "time_s": 455,
+      "type": "marker",
+      "speed": 10,
+      "distance_m": 1050
+    },
+    {
+      "time_s": 473,
+      "type": "marker",
+      "speed": 10,
+      "distance_m": 1100
+    },
+    {
+      "time_s": 491,
+      "type": "marker",
+      "speed": 10,
+      "distance_m": 1150
+    },
+    {
+      "time_s": 509,
+      "type": "marker",
+      "speed": 10,
+      "distance_m": 1200
+    },
+    {
+      "time_s": 525,
+      "type": "marker",
+      "speed": 11,
+      "distance_m": 1250
+    },
+    {
+      "time_s": 542,
+      "type": "marker",
+      "speed": 11,
+      "distance_m": 1300
+    },
+    {
+      "time_s": 558,
+      "type": "marker",
+      "speed": 11,
+      "distance_m": 1350
+    },
+    {
+      "time_s": 574,
+      "type": "marker",
+      "speed": 11,
+      "distance_m": 1400
+    },
+    {
+      "time_s": 591,
+      "type": "marker",
+      "speed": 11,
+      "distance_m": 1450
+    },
+    {
+      "time_s": 607,
+      "type": "marker",
+      "speed": 11,
+      "distance_m": 1500
+    },
+    {
+      "time_s": 624,
+      "type": "marker",
+      "speed": 11,
+      "distance_m": 1550
+    },
+    {
+      "time_s": 640,
+      "type": "marker",
+      "speed": 11,
+      "distance_m": 1600
+    },
+    {
+      "time_s": 655,
+      "type": "marker",
+      "speed": 12,
+      "distance_m": 1650
+    },
+    {
+      "time_s": 670,
+      "type": "marker",
+      "speed": 12,
+      "distance_m": 1700
+    },
+    {
+      "time_s": 685,
+      "type": "marker",
+      "speed": 12,
+      "distance_m": 1750
+    },
+    {
+      "time_s": 700,
+      "type": "marker",
+      "speed": 12,
+      "distance_m": 1800
+    },
+    {
+      "time_s": 715,
+      "type": "marker",
+      "speed": 12,
+      "distance_m": 1850
+    },
+    {
+      "time_s": 730,
+      "type": "marker",
+      "speed": 12,
+      "distance_m": 1900
+    },
+    {
+      "time_s": 745,
+      "type": "marker",
+      "speed": 12,
+      "distance_m": 1950
+    },
+    {
+      "time_s": 760,
+      "type": "marker",
+      "speed": 12,
+      "distance_m": 2000
+    },
+    {
+      "time_s": 774,
+      "type": "marker",
+      "speed": 13,
+      "distance_m": 2050
+    },
+    {
+      "time_s": 788,
+      "type": "marker",
+      "speed": 13,
+      "distance_m": 2100
+    },
+    {
+      "time_s": 801,
+      "type": "marker",
+      "speed": 13,
+      "distance_m": 2150
+    },
+    {
+      "time_s": 815,
+      "type": "marker",
+      "speed": 13,
+      "distance_m": 2200
+    },
+    {
+      "time_s": 829,
+      "type": "marker",
+      "speed": 13,
+      "distance_m": 2250
+    },
+    {
+      "time_s": 843,
+      "type": "marker",
+      "speed": 13,
+      "distance_m": 2300
+    },
+    {
+      "time_s": 857,
+      "type": "marker",
+      "speed": 13,
+      "distance_m": 2350
+    },
+    {
+      "time_s": 871,
+      "type": "marker",
+      "speed": 13,
+      "distance_m": 2400
+    },
+    {
+      "time_s": 885,
+      "type": "marker",
+      "speed": 13,
+      "distance_m": 2450
+    },
+    {
+      "time_s": 897,
+      "type": "marker",
+      "speed": 14,
+      "distance_m": 2500
+    },
+    {
+      "time_s": 910,
+      "type": "marker",
+      "speed": 14,
+      "distance_m": 2550
+    },
+    {
+      "time_s": 923,
+      "type": "marker",
+      "speed": 14,
+      "distance_m": 2600
+    },
+    {
+      "time_s": 936,
+      "type": "marker",
+      "speed": 14,
+      "distance_m": 2650
+    },
+    {
+      "time_s": 949,
+      "type": "marker",
+      "speed": 14,
+      "distance_m": 2700
+    },
+    {
+      "time_s": 962,
+      "type": "marker",
+      "speed": 14,
+      "distance_m": 2750
+    },
+    {
+      "time_s": 975,
+      "type": "marker",
+      "speed": 14,
+      "distance_m": 2800
+    },
+    {
+      "time_s": 987,
+      "type": "marker",
+      "speed": 14,
+      "distance_m": 2850
+    },
+    {
+      "time_s": 1000,
+      "type": "marker",
+      "speed": 14,
+      "distance_m": 2900
+    },
+    {
+      "time_s": 1013,
+      "type": "marker",
+      "speed": 14,
+      "distance_m": 2950
+    },
+    {
+      "time_s": 1025,
+      "type": "marker",
+      "speed": 15,
+      "distance_m": 3000
+    },
+    {
+      "time_s": 1036,
+      "type": "marker",
+      "speed": 15,
+      "distance_m": 3050
+    },
+    {
+      "time_s": 1049,
+      "type": "marker",
+      "speed": 15,
+      "distance_m": 3100
+    },
+    {
+      "time_s": 1061,
+      "type": "marker",
+      "speed": 15,
+      "distance_m": 3150
+    },
+    {
+      "time_s": 1073,
+      "type": "marker",
+      "speed": 15,
+      "distance_m": 3200
+    },
+    {
+      "time_s": 1085,
+      "type": "marker",
+      "speed": 15,
+      "distance_m": 3250
+    },
+    {
+      "time_s": 1097,
+      "type": "marker",
+      "speed": 15,
+      "distance_m": 3300
+    },
+    {
+      "time_s": 1109,
+      "type": "marker",
+      "speed": 15,
+      "distance_m": 3350
+    },
+    {
+      "time_s": 1121,
+      "type": "marker",
+      "speed": 15,
+      "distance_m": 3400
+    },
+    {
+      "time_s": 1133,
+      "type": "marker",
+      "speed": 15,
+      "distance_m": 3450
+    },
+    {
+      "time_s": 1144,
+      "type": "marker",
+      "speed": 16,
+      "distance_m": 3500
+    },
+    {
+      "time_s": 1156,
+      "type": "marker",
+      "speed": 16,
+      "distance_m": 3550
+    },
+    {
+      "time_s": 1167,
+      "type": "marker",
+      "speed": 16,
+      "distance_m": 3600
+    },
+    {
+      "time_s": 1178,
+      "type": "marker",
+      "speed": 16,
+      "distance_m": 3650
+    },
+    {
+      "time_s": 1189,
+      "type": "marker",
+      "speed": 16,
+      "distance_m": 3700
+    },
+    {
+      "time_s": 1201,
+      "type": "marker",
+      "speed": 16,
+      "distance_m": 3750
+    },
+    {
+      "time_s": 1212,
+      "type": "marker",
+      "speed": 16,
+      "distance_m": 3800
+    },
+    {
+      "time_s": 1223,
+      "type": "marker",
+      "speed": 16,
+      "distance_m": 3850
+    },
+    {
+      "time_s": 1234,
+      "type": "marker",
+      "speed": 16,
+      "distance_m": 3900
+    },
+    {
+      "time_s": 1246,
+      "type": "marker",
+      "speed": 16,
+      "distance_m": 3950
+    },
+    {
+      "time_s": 1257,
+      "type": "marker",
+      "speed": 16,
+      "distance_m": 4000
+    },
+    {
+      "time_s": 1267,
+      "type": "marker",
+      "speed": 17,
+      "distance_m": 4050
+    },
+    {
+      "time_s": 1278,
+      "type": "marker",
+      "speed": 17,
+      "distance_m": 4100
+    },
+    {
+      "time_s": 1289,
+      "type": "marker",
+      "speed": 17,
+      "distance_m": 4150
+    },
+    {
+      "time_s": 1299,
+      "type": "marker",
+      "speed": 17,
+      "distance_m": 4200
+    },
+    {
+      "time_s": 1310,
+      "type": "marker",
+      "speed": 17,
+      "distance_m": 4250
+    },
+    {
+      "time_s": 1320,
+      "type": "marker",
+      "speed": 17,
+      "distance_m": 4300
+    },
+    {
+      "time_s": 1331,
+      "type": "marker",
+      "speed": 17,
+      "distance_m": 4350
+    },
+    {
+      "time_s": 1342,
+      "type": "marker",
+      "speed": 17,
+      "distance_m": 4400
+    },
+    {
+      "time_s": 1352,
+      "type": "marker",
+      "speed": 17,
+      "distance_m": 4450
+    },
+    {
+      "time_s": 1363,
+      "type": "marker",
+      "speed": 17,
+      "distance_m": 4500
+    },
+    {
+      "time_s": 1373,
+      "type": "marker",
+      "speed": 17,
+      "distance_m": 4550
+    },
+    {
+      "time_s": 1384,
+      "type": "marker",
+      "speed": 17,
+      "distance_m": 4600
+    },
+    {
+      "time_s": 1394,
+      "type": "marker",
+      "speed": 18,
+      "distance_m": 4650
+    },
+    {
+      "time_s": 1404,
+      "type": "marker",
+      "speed": 18,
+      "distance_m": 4700
+    },
+    {
+      "time_s": 1414,
+      "type": "marker",
+      "speed": 18,
+      "distance_m": 4750
+    },
+    {
+      "time_s": 1424,
+      "type": "marker",
+      "speed": 18,
+      "distance_m": 4800
+    },
+    {
+      "time_s": 1434,
+      "type": "marker",
+      "speed": 18,
+      "distance_m": 4850
+    },
+    {
+      "time_s": 1444,
+      "type": "marker",
+      "speed": 18,
+      "distance_m": 4900
+    },
+    {
+      "time_s": 1454,
+      "type": "marker",
+      "speed": 18,
+      "distance_m": 4950
+    },
+    {
+      "time_s": 1464,
+      "type": "marker",
+      "speed": 18,
+      "distance_m": 5000
+    },
+    {
+      "time_s": 1474,
+      "type": "marker",
+      "speed": 18,
+      "distance_m": 5050
+    },
+    {
+      "time_s": 1484,
+      "type": "marker",
+      "speed": 18,
+      "distance_m": 5100
+    },
+    {
+      "time_s": 1494,
+      "type": "marker",
+      "speed": 18,
+      "distance_m": 5150
+    },
+    {
+      "time_s": 1508,
+      "type": "marker",
+      "speed": 18,
+      "distance_m": 5200
+    },
+    {
+      "time_s": 1513,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5250
+    },
+    {
+      "time_s": 1523,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5300
+    },
+    {
+      "time_s": 1532,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5350
+    },
+    {
+      "time_s": 1542,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5400
+    },
+    {
+      "time_s": 1551,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5450
+    },
+    {
+      "time_s": 1561,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5500
+    },
+    {
+      "time_s": 1570,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5550
+    },
+    {
+      "time_s": 1580,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5600
+    },
+    {
+      "time_s": 1589,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5650
+    },
+    {
+      "time_s": 1599,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5700
+    },
+    {
+      "time_s": 1608,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5750
+    },
+    {
+      "time_s": 1618,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5800
+    },
+    {
+      "time_s": 1627,
+      "type": "marker",
+      "speed": 19,
+      "distance_m": 5850
+    },
+    {
+      "time_s": 1636,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 5900
+    },
+    {
+      "time_s": 1645,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 5950
+    },
+    {
+      "time_s": 1654,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 6000
+    },
+    {
+      "time_s": 1663,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 6050
+    },
+    {
+      "time_s": 1672,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 6100
+    },
+    {
+      "time_s": 1681,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 6150
+    },
+    {
+      "time_s": 1690,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 6200
+    },
+    {
+      "time_s": 1699,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 6250
+    },
+    {
+      "time_s": 1708,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 6300
+    },
+    {
+      "time_s": 1717,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 6350
+    },
+    {
+      "time_s": 1726,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 6400
+    },
+    {
+      "time_s": 1733,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 6450
+    },
+    {
+      "time_s": 1744,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 6500
+    },
+    {
+      "time_s": 1753,
+      "type": "marker",
+      "speed": 20,
+      "distance_m": 6550
+    }
+  ],
+  "tempo_change_signals_mp3_s": [
+    132,
+    267,
+    387,
+    513,
+    644,
+    764,
+    889,
+    1017,
+    1137,
+    1261,
+    1388,
+    1512,
+    1631
+  ],
+  "tempo_change_signal_description": "Twee afzonderlijke hogere pieptonen OP de 50m-passeertijd van de laatste rij van het vorige snelheidsniveau; normale piep op dat moment vervangen."
+}

@@ -1,8 +1,10 @@
+
 "use client";
 
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import { BaseTile } from "@/components/tiles/BaseTile";
+import { TileGrid } from "@/components/tiles/TileGrid";
 import Link from "next/link";
 import React, { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -40,6 +42,18 @@ const modules = [
     desc: "Ingevuld, niet ingevuld, automatische evaluatie en resultaten.",
   },
   {
+    href: "/leerkrachten-lo/beep-test",
+    icon: "🏃‍♂️",
+    title: "Beep Test",
+    desc: "20 meter shuttle run afnemen, leerlingen stoppen en resultaten opvolgen.",
+  },
+  {
+    href: "/leerkrachten-lo/mas-test",
+    icon: "⏱️",
+    title: "MAS-test (VMA)",
+    desc: "Léger-Boucher MAS-test afnemen, scores invoeren en resultaten opvolgen.",
+   },
+   {
     href: "/sportfolio",
     icon: "📁",
     title: "Sportfolio",
@@ -68,6 +82,12 @@ const modules = [
     icon: "👥",
     title: "Klasgroepen",
     desc: "Mijn klasgroepen maken met klassen.",
+  },  
+  {
+    href: "/leerkrachten-lo/notities",
+    icon: "📝",
+    title: "LO-notities & verslagen",
+    desc: "Gedeelde notities, verslagen, actiepunten en archief voor het LO-team.",
   },
   {
     href: "#",
@@ -113,14 +133,15 @@ export default function LeerkrachtenLOPage() {
   const [allowed, setAllowed] = useState(false);
   const [profiel, setProfiel] = useState<Profiel | null>(null);
 
-  useEffect(() => {
-    injectResponsiveCSS();
-  }, []);
+  /* =======================================================
+     PROFIEL EN TOEGANG LADEN
+  ======================================================= */
 
   useEffect(() => {
     const run = async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
+        const { data: sessionData } =
+          await supabase.auth.getSession();
 
         const uid = sessionData.session?.user?.id;
 
@@ -136,7 +157,11 @@ export default function LeerkrachtenLOPage() {
           .maybeSingle();
 
         if (error) {
-          console.error("Profiel laden mislukt:", error);
+          console.error(
+            "Profiel laden mislukt:",
+            error
+          );
+
           setLoading(false);
           return;
         }
@@ -146,7 +171,10 @@ export default function LeerkrachtenLOPage() {
         setProfiel(profielData as Profiel | null);
         setAllowed(isAllowedRole(rol));
       } catch (error) {
-        console.error("Fout bij laden leerkrachtenpagina:", error);
+        console.error(
+          "Fout bij laden leerkrachtenpagina:",
+          error
+        );
       } finally {
         setLoading(false);
       }
@@ -161,7 +189,10 @@ export default function LeerkrachtenLOPage() {
 
   if (loading) {
     return (
-      <AppShell title="LO App" subtitle="Leerkrachten LO">
+      <AppShell
+        title="LO App"
+        subtitle="Leerkrachten LO"
+      >
         <section style={styles.panel}>
           <p
             style={{
@@ -204,7 +235,8 @@ export default function LeerkrachtenLOPage() {
               lineHeight: 1.6,
             }}
           >
-            Deze pagina is alleen toegankelijk voor LO-leerkrachten en admins.
+            Deze pagina is alleen toegankelijk
+            voor LO-leerkrachten en admins.
           </p>
 
           <Link
@@ -231,7 +263,9 @@ export default function LeerkrachtenLOPage() {
       subtitle="Leerkrachten LO"
       userName={profiel?.volledige_naam ?? null}
     >
-      {/* HERO */}
+      {/* ===================================================
+          HERO
+      =================================================== */}
 
       <BaseHero
         label="GO! Atheneum Avelgem"
@@ -259,20 +293,27 @@ export default function LeerkrachtenLOPage() {
         }
       />
 
-      {/* MODULES */}
+      {/* ===================================================
+          MODULES
+      =================================================== */}
 
-      <section style={{ marginTop: 16 }}>
+      <section className="mt-[18px]">
         <div style={styles.sectionHeader}>
           <div>
-            <div style={styles.sectionTitle}>Modules</div>
+            <div style={styles.sectionTitle}>
+              Modules
+            </div>
 
             <p style={styles.sectionDescription}>
-              Kies een onderdeel om de leerlingen en activiteiten op te volgen.
+              Kies een onderdeel om de leerlingen
+              en activiteiten op te volgen.
             </p>
           </div>
         </div>
 
-        <div className="lo-module-grid" style={styles.moduleGrid}>
+        {/* Zelfde tegelindeling als het beginscherm */}
+
+        <TileGrid>
           {modules.map((module) => (
             <BaseTile
               key={module.title}
@@ -282,7 +323,7 @@ export default function LeerkrachtenLOPage() {
               desc={module.desc}
             />
           ))}
-        </div>
+        </TileGrid>
       </section>
     </AppShell>
   );
@@ -322,48 +363,4 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
     lineHeight: 1.55,
   },
-
-  moduleGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-    gap: 14,
-  },
 };
-
-/* =========================================================
-   RESPONSIVE CSS
-========================================================= */
-
-function injectResponsiveCSS() {
-  if (typeof window === "undefined") return;
-
-  const id = "leerkrachten-lo-dashboard-responsive-css";
-
-  if (document.getElementById(id)) return;
-
-  const style = document.createElement("style");
-
-  style.id = id;
-
-  style.innerHTML = `
-    @media (max-width: 1100px) {
-      .lo-module-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-      }
-    }
-
-    @media (max-width: 900px) {
-      .lo-module-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-      }
-    }
-
-    @media (max-width: 640px) {
-      .lo-module-grid {
-        grid-template-columns: repeat(1, minmax(0, 1fr)) !important;
-      }
-    }
-  `;
-
-  document.head.appendChild(style);
-}
