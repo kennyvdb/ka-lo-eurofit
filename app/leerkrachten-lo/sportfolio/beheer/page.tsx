@@ -7,6 +7,8 @@ import React, { useEffect, useMemo, useState } from "react";
 
 const supabase = createClient();
 
+// Beheerroute: /leerkrachten-lo/sportfolio/beheer
+
 type RawRow = Record<string, any>;
 type Tab = "scores" | "openstellingen" | "beheer";
 type DoelType = "klas" | "klasgroep";
@@ -840,7 +842,7 @@ export default function SportfolioBeheerPage() {
     const groupLabel =
       doelType === "klas"
         ? selectedKlasNaam
-        : `de gekozen klasgroep (${targetLeerlingen.length} leerlingen · {targetLeerlingen.filter((l) => !l.heeftProfiel).length} zonder profiel)`;
+        : `de gekozen klasgroep (${targetLeerlingen.length} leerlingen · ${targetLeerlingen.filter((l) => !l.heeftProfiel).length} zonder profiel)`;
 
     const confirmed = window.confirm(
       `${submitted.length} ingediende score${submitted.length === 1 ? "" : "s"} voor ${selectedDiscipline.naam} van ${groupLabel} in ${selectedSchooljaar} bevestigen?`
@@ -1483,8 +1485,8 @@ export default function SportfolioBeheerPage() {
           <p className="mt-2 text-sm text-white/65">
             Deze pagina is alleen toegankelijk voor LO-leerkrachten en admins.
           </p>
-          <Link href="/sportfolio" className="mt-4 inline-flex font-black text-white">
-            Terug naar Sportfolio →
+          <Link href="/leerkrachten-lo" className="mt-4 inline-flex font-black text-white">
+            Terug naar LO-dashboard →
           </Link>
         </section>
       </AppShell>
@@ -1499,7 +1501,7 @@ export default function SportfolioBeheerPage() {
     >
       <section className="rounded-[26px] border border-white/10 bg-white/5 p-5">
         <Link
-          href="/sportfolio"
+          href="/leerkrachten-lo"
           className="inline-flex h-10 items-center rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-black text-white/80 transition hover:bg-white/10"
         >
           ← Terug naar Sportfolio

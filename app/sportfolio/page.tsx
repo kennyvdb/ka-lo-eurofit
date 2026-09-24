@@ -366,24 +366,6 @@ export default function SportfolioPage() {
           ))}
         </div>
       </section>
-
-      {roleLabel === "Leerkracht" ? (
-        <section className="mt-5">
-          <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
-            <div className="text-sm font-black text-white">Leerkrachtbeheer</div>
-            <div className="mt-1 text-sm text-white/65">
-              Beheerpagina volgt in de volgende stap.
-            </div>
-
-            <Link
-              href="/sportfolio/beheer"
-              className="mt-4 inline-flex h-11 items-center rounded-2xl border border-white/15 bg-black/40 px-4 text-sm font-black text-white transition hover:bg-black/55"
-            >
-              Naar beheer →
-            </Link>
-          </div>
-        </section>
-      ) : null}
     </AppShell>
   );
 }

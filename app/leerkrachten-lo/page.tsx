@@ -53,12 +53,12 @@ const modules = [
     title: "MAS-test (VMA)",
     desc: "Léger-Boucher MAS-test afnemen, scores invoeren en resultaten opvolgen.",
    },
-   {
-    href: "/sportfolio",
+  {
+    href: "/leerkrachten-lo/sportfolio",
     icon: "📁",
     title: "Sportfolio",
-    desc: "Bewijsstukken, reflecties en feedback.",
-  },
+    desc: "Disciplines en rubrics beheren, scores invoeren, openstellingen instellen en resultaten van leerlingen opvolgen.",
+   },
   {
     href: "/leerkrachten-lo/challenges",
     icon: "🏆",
