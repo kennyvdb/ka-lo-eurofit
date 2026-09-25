@@ -21,6 +21,7 @@ type Result = {
   id: string; session_id: string; email: string; naam: string; klas: string; group_id: string | null;
   level: number; shuttle: number; stopped_at_s: number; saved_at: string;
   sync_status: "pending" | "synced"; confirmed?: boolean; sportfolio_synced?: boolean; archived?: boolean;
+  parked?: boolean; parked_reason?: string;
 };
 const panel: React.CSSProperties = { padding: 16, border: "1px solid rgba(137,194,170,.24)", borderRadius: 20, background: "linear-gradient(180deg,rgba(37,89,113,.34),rgba(19,35,51,.96))", color: "#eaf0ff", marginBottom: 14 };
 const button: React.CSSProperties = { minHeight: 48, borderRadius: 14, padding: "10px 14px", background: "linear-gradient(90deg,#255971,#4B8E8D)", color: "#fff", fontWeight: 850, border: "1px solid rgba(137,194,170,.35)", cursor: "pointer" };
@@ -105,7 +106,7 @@ export default function BeepTestPage() {
   const [normDiagnostics, setNormDiagnostics] = useState<Record<string,string>>({});
   const [historyClass, setHistoryClass] = useState("");
   const [historyGroup, setHistoryGroup] = useState("");
-  const [historyRows, setHistoryRows] = useState<{id:string;naam:string;klas:string;datum:string;niveau:number;shuttle:number;afstand:number;duur:number;geslacht:string;geboortedatum:string}[]>([]);
+  const [historyRows, setHistoryRows] = useState<{id:string;leerling_id:string;naam:string;klas:string;datum:string;niveau:number;shuttle:number;afstand:number;duur:number;geslacht:string;geboortedatum:string}[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [norms, setNorms] = useState<Norm[]>([]);
   const [historyError, setHistoryError] = useState("");
@@ -177,7 +178,7 @@ export default function BeepTestPage() {
   const last = timing?.events.filter(e => e.time_s <= position && (e.type === "stage_start" || e.type === "shuttle")).at(-1);
   const level = last?.level ?? 1;
   const shuttle = last?.shuttle ?? 0;
-  const current = results.filter(r => r.session_id === sessionId && !r.confirmed && !r.sportfolio_synced && !r.archived);
+  const current = results.filter(r => r.session_id === sessionId && !r.confirmed && !r.sportfolio_synced && !r.archived && !r.parked);
   // Houd de controlelijst stabiel. Sorteren op score liet rijen verspringen zodra één score handmatig werd gewijzigd.
   const reviewRows = [...current].sort((a,b) => a.naam.localeCompare(b.naam,"nl",{numeric:true}) || a.saved_at.localeCompare(b.saved_at));
   const active = students.filter(s => (attendance[studentKey(s)] ?? "deelneemt") === "deelneemt" && !current.some(r => r.email === s.leerling_email));
@@ -300,7 +301,7 @@ export default function BeepTestPage() {
         // terwijl ze al in Sportfolio staan (bv. na een vorige app-versie).
         // Controleer dat eerst op de server; wis nooit een echt onafgewerkte score.
         let restored = (await get<Result[]>("results")) ?? [];
-        const unresolved = restored.filter(r => !r.confirmed && !r.sportfolio_synced && !r.archived);
+        const unresolved = restored.filter(r => !r.confirmed && !r.sportfolio_synced && !r.archived && !r.parked);
         if (unresolved.length) {
           if (navigator.onLine) {
             // Vergelijk uitsluitend unieke resultaat-ID's; aangepaste niveaus/shuttles
@@ -348,7 +349,7 @@ export default function BeepTestPage() {
             }
           }
           // Alleen werkelijk onafgewerkte resultaten mogen het controlescherm heropenen.
-          const stillUnfinished = restored.filter(r => !r.confirmed && !r.sportfolio_synced && !r.archived);
+          const stillUnfinished = restored.filter(r => !r.confirmed && !r.sportfolio_synced && !r.archived && !r.parked);
           if (!cancelled && stillUnfinished.length) {
             const latest = [...stillUnfinished].sort((a,b) => b.saved_at.localeCompare(a.saved_at))[0];
             setSessionId(latest.session_id);
@@ -466,7 +467,8 @@ export default function BeepTestPage() {
     finally { setDownloading(false); }
   }
   async function start() {
-    if (!authorized || !ready || !timing || !participatingStudents.length || running || review || current.some(r => !r.confirmed)) return;
+    if (!authorized || !ready || !timing || !participatingStudents.length || running) return;
+    if (review) setReview(false);
     const cache = await caches.open(CACHE); const response = await cache.match(AUDIO[track]);
     if (!response) { setReady(false); return; }
     const url = URL.createObjectURL(await response.blob());
@@ -568,7 +570,7 @@ export default function BeepTestPage() {
         const p = byId.get(r.leerling_id);
         const extra = (r.extra_data && typeof r.extra_data === "object" ? r.extra_data : {}) as Record<string,unknown>;
         const parts = String(r.score_tekst ?? "").split(".");
-        return {id:r.id,naam:String(p?.volledige_naam ?? p?.email ?? "Leerling"),klas:String(p?.klas_naam ?? ""),
+        return {id:r.id,leerling_id:r.leerling_id,naam:String(p?.volledige_naam ?? p?.email ?? "Leerling"),klas:String(p?.klas_naam ?? ""),
           datum:String(extra.testdatum ?? r.bevestigd_op ?? ""),
           niveau:Number(extra.niveau ?? parts[0] ?? 0),shuttle:Number(extra.shuttle ?? parts[1] ?? 0),
           afstand:Number(extra.afstand_meter ?? 0),duur:Number(extra.testduur_seconden ?? (Number(r.score_nummer ?? 0)*60)),
@@ -632,6 +634,11 @@ export default function BeepTestPage() {
     finally { setArchivingId(null); }
   }
 
+  async function parkUnpublishableResult(row: Result, reason: string) {
+    const updated = await updateResults(rows => rows.map(r => r.id === row.id ? { ...r, parked: true, parked_reason: reason } : r));
+    applyResults(updated);
+  }
+
   async function confirmAndPublish() {
     if (!timing || !teacherId || !navigator.onLine || !reviewRows.length || publishing) {
       setPublishError("Voor bevestigen is een internetverbinding en minstens één STOP-score nodig."); return;
@@ -640,73 +647,76 @@ export default function BeepTestPage() {
     try {
       const { data: auth, error: authError } = await supabase.auth.getUser();
       if (authError || auth.user?.id !== teacherId) throw new Error("Meld je opnieuw aan als LO-leerkracht.");
-      const { data: discipline, error: disciplineError } = await supabase.from("sportfolio_disciplines")
-        .select("id").eq("slug", "beep_test").single();
+      const { data: discipline, error: disciplineError } = await supabase.from("sportfolio_disciplines").select("id").eq("slug", "beep_test").single();
       if (disciplineError || !discipline) throw new Error("Discipline beep_test niet gevonden.");
-      const emails = reviewRows.map(r => r.email.trim().toLowerCase());
-      const { data: profiles, error: profileError } = await supabase.from("profielen")
-        .select("id,email,schooljaar,klas_naam,leerjaar,graad,geslacht,volledige_naam")
-        .in("email", emails);
+      const emails = [...new Set(reviewRows.map(r => r.email.trim().toLowerCase()).filter(Boolean))];
+      const { data: profiles, error: profileError } = await supabase.from("profielen").select("id,email,schooljaar,klas_naam,leerjaar,graad,geslacht,volledige_naam").in("email", emails);
       if (profileError) throw new Error(`Leerlingen opzoeken: ${describeSyncError(profileError)}`);
       const byEmail = new Map((profiles ?? []).map(p => [String(p.email).trim().toLowerCase(),p]));
-      for (const r of reviewRows) {
-        const profile = byEmail.get(r.email.trim().toLowerCase());
-        if (!profile?.id || !profile.schooljaar) throw new Error(`Geen uniek bruikbaar profiel/schooljaar voor ${r.naam} (${r.email}).`);
-        const stage = timing.stages.find(s => s.level === r.level);
-        if (!stage || !Number.isInteger(r.shuttle) || r.shuttle < 0 || r.shuttle > stage.shuttles)
-          throw new Error(`Ongeldige score voor ${r.naam}.`);
-      }
-      // Eerst alle profielen en scores valideren, daarna publiceren. Een herhaling gebruikt dezelfde score-ID.
+      const problems: string[] = []; let publishedCount = 0;
       for (const r of reviewRows) {
         if (r.sportfolio_synced) continue;
-        const profile = byEmail.get(r.email.trim().toLowerCase())!;
-        const stage = timing.stages.find(s => s.level === r.level)!;
-        const previousShuttles = timing.stages.filter(s => s.level < r.level).reduce((sum,s) => sum+s.shuttles,0);
-        const totalShuttles = previousShuttles + r.shuttle;
-        const durationSeconds = r.shuttle === 0 ? stage.start_s - timing.audio_start_s
-          : stage.start_s + r.shuttle * (stage.end_s-stage.start_s)/stage.shuttles - timing.audio_start_s;
-        const payload = {
-          id:r.id, leerling_id:profile.id, discipline_id:discipline!.id, schooljaar:profile.schooljaar,
-          klas_naam:profile.klas_naam ?? r.klas, score_nummer:Number((durationSeconds/60).toFixed(4)),
-          score_tekst:`${r.level}.${r.shuttle}`, eenheid:"min", status:"bevestigd",
-          bevestigd_door:teacherId, bevestigd_op:new Date().toISOString(),
-          extra_data:{bron:"lo_beeptest",session_id:r.session_id,protocol_id:"leger_20m_8p5_fixed_shuttles_v2_countdown",
-            niveau:r.level,shuttle:r.shuttle,totaal_shuttles:totalShuttles,afstand_meter:totalShuttles*20,
-            testduur_seconden:Number(durationSeconds.toFixed(3)),testdatum:r.saved_at},
-          leerjaar_snapshot:profile.leerjaar ? Number(profile.leerjaar) || null : null,
-          graad_snapshot:profile.graad ? Number(profile.graad) || null : null,
-          geslacht_snapshot:profile.geslacht,naam_snapshot:profile.volledige_naam ?? r.naam,
-        };
-        const { data: existing, error: lookupError } = await supabase.from("sportfolio_scores")
-          .select("id,leerling_id,discipline_id").eq("id",r.id).maybeSingle();
-        if (lookupError) throw new Error(`${r.naam}: ${describeSyncError(lookupError)}`);
-        if (existing && (existing.leerling_id !== profile.id || existing.discipline_id !== discipline!.id))
-          throw new Error(`Score-ID-conflict voor ${r.naam}; niets overschrijven.`);
-        if (!existing) {
-          const { error } = await supabase.from("sportfolio_scores").insert(payload);
-          if (error && error.code !== "23505") throw new Error(`${r.naam}: ${describeSyncError(error)}`);
-          if (error) {
-            const { data: duplicate } = await supabase.from("sportfolio_scores").select("id,leerling_id,discipline_id").eq("id",r.id).maybeSingle();
-            if (!duplicate || duplicate.leerling_id !== profile.id || duplicate.discipline_id !== discipline!.id)
-              throw new Error(`${r.naam}: dubbele sleutel niet veilig bevestigd.`);
-          }
+        const profile = byEmail.get(r.email.trim().toLowerCase());
+        if (!profile?.id || !profile.schooljaar) {
+          await parkUnpublishableResult(r, `Geen uniek bruikbaar profiel/schooljaar voor ${r.naam}.`);
+          problems.push(`${r.naam}: niet gepubliceerd (profiel/schooljaar ontbreekt)`); continue;
         }
-        const next = await updateResults(rows => rows.map(x => x.id === r.id ? {...x,confirmed:true,sportfolio_synced:true} : x));
-        applyResults(next);
+        const stage = timing.stages.find(st => st.level === r.level);
+        if (!stage || !Number.isInteger(r.shuttle) || r.shuttle < 0 || r.shuttle > stage.shuttles) {
+          await parkUnpublishableResult(r, `Ongeldige score ${r.level}.${r.shuttle}.`);
+          problems.push(`${r.naam}: ongeldige score`); continue;
+        }
+        try {
+          const previousShuttles = timing.stages.filter(st => st.level < r.level).reduce((sum,st) => sum+st.shuttles,0);
+          const totalShuttles = previousShuttles + r.shuttle;
+          const durationSeconds = r.shuttle === 0 ? stage.start_s - timing.audio_start_s : stage.start_s + r.shuttle*(stage.end_s-stage.start_s)/stage.shuttles - timing.audio_start_s;
+          const payload = { id:r.id, leerling_id:profile.id, discipline_id:discipline.id, schooljaar:profile.schooljaar, klas_naam:profile.klas_naam ?? r.klas, score_nummer:Number((durationSeconds/60).toFixed(4)), score_tekst:`${r.level}.${r.shuttle}`, eenheid:"min", status:"bevestigd", bevestigd_door:teacherId, bevestigd_op:new Date().toISOString(), extra_data:{bron:"lo_beeptest",session_id:r.session_id,protocol_id:"leger_20m_8p5_fixed_shuttles_v2_countdown",niveau:r.level,shuttle:r.shuttle,totaal_shuttles:totalShuttles,afstand_meter:totalShuttles*20,testduur_seconden:Number(durationSeconds.toFixed(3)),testdatum:r.saved_at}, leerjaar_snapshot:profile.leerjaar ? Number(profile.leerjaar)||null:null, graad_snapshot:profile.graad ? Number(profile.graad)||null:null, geslacht_snapshot:profile.geslacht, naam_snapshot:profile.volledige_naam ?? r.naam };
+          const { data: existing, error: lookupError } = await supabase.from("sportfolio_scores").select("id,leerling_id,discipline_id").eq("id",r.id).maybeSingle();
+          if (lookupError) throw new Error(describeSyncError(lookupError));
+          if (existing && (existing.leerling_id !== profile.id || existing.discipline_id !== discipline.id)) throw new Error("Score-ID-conflict; niets overschreven.");
+          if (!existing) { const { error } = await supabase.from("sportfolio_scores").insert(payload); if (error && error.code !== "23505") throw new Error(describeSyncError(error)); }
+          const next = await updateResults(rows => rows.map(x => x.id===r.id ? {...x,confirmed:true,sportfolio_synced:true,parked:false,parked_reason:undefined}:x)); applyResults(next); publishedCount++;
+        } catch (error) { problems.push(`${r.naam}: ${describeSyncError(error)}`); }
       }
-      // Alleen na succesvolle Sportfolio-publicatie de actieve sessie en selectie wissen.
-      // Oude, al bevestigde resultaten blijven lokaal gemarkeerd als bevestigd;
-      // ze mogen het STOP ALL-controlescherm niet opnieuw vullen.
-      setReview(false);
-      setStudents([]); setAttendance({}); setGroupId(""); setClassName(""); setSearch("");
-      setSessionId(""); sessionRef.current = ""; setPosition(0);
-      await put(`beep-selection:${teacherId}`, []);
+      const latest=(await get<Result[]>("results"))??[]; applyResults(latest);
+      const remaining=latest.filter(r=>r.session_id===sessionId&&!r.confirmed&&!r.sportfolio_synced&&!r.archived&&!r.parked);
+      if(!remaining.length){ setReview(false); setStudents([]); setAttendance({}); setGroupId(""); setClassName(""); setSearch(""); setSessionId(""); sessionRef.current=""; setPosition(0); await put(`beep-selection:${teacherId}`,[]); }
       setHistoryLoaded(false);
-      setMessage("Bevestigde Beep-testresultaten staan in Sportfolio. Eventuele oude voorlopige testregistraties worden afzonderlijk gesynchroniseerd.");
+      if(problems.length) setPublishError(`${publishedCount} score(s) gepubliceerd. ${problems.join(" · ")}. Probleemregistraties zijn lokaal apart gezet en blokkeren geen nieuwe test.`);
+      else setMessage("Bevestigde Beep-testresultaten staan in Sportfolio.");
       void syncResults();
-    } catch (error) { setPublishError(describeSyncError(error)); }
-    finally { setPublishing(false); }
+    } catch(error){ setPublishError(describeSyncError(error)); } finally { setPublishing(false); }
   }
+
+  async function deleteHistoryScores(rowsToDelete: typeof historyRows, label: string) {
+    if (!teacherId || !authorized || !navigator.onLine || !rowsToDelete.length) return;
+    const ok = window.confirm(`${label}\n\nJe verwijdert ${rowsToDelete.length} bevestigde Beep-testscore(s). Dit kan niet ongedaan worden gemaakt. Doorgaan?`);
+    if (!ok) return;
+    const typed = rowsToDelete.length > 1 ? window.confirm("Laatste controle: wil je deze scores definitief wissen?") : true;
+    if (!typed) return;
+    setHistoryLoading(true); setHistoryError("");
+    try {
+      const {data:auth,error:authError}=await supabase.auth.getUser();
+      if(authError || auth.user?.id!==teacherId) throw new Error("Meld je opnieuw aan als LO-leerkracht.");
+      const {data:me,error:meError}=await supabase.from("profielen").select("rol").eq("id",teacherId).maybeSingle();
+      if(meError || !me || !["lo_leerkracht","admin"].includes(String(me.rol))) throw new Error("Geen toestemming om Beep-testscores te wissen.");
+      const ids=rowsToDelete.map(r=>r.id);
+      const {data:discipline,error:disciplineError}=await supabase.from("sportfolio_disciplines").select("id").eq("slug","beep_test").single();
+      if(disciplineError || !discipline) throw new Error("Discipline beep_test niet gevonden.");
+      for(let i=0;i<ids.length;i+=100){
+        const batch=ids.slice(i,i+100);
+        const {error}=await supabase.from("sportfolio_scores").delete().eq("discipline_id",discipline.id).in("id",batch);
+        if(error) throw new Error(describeSyncError(error));
+      }
+      // Ook lokaal markeren, zodat een verwijderde score nooit opnieuw gesynchroniseerd wordt.
+      const deleted=new Set(ids);
+      const local=await updateResults(rows=>rows.map(r=>deleted.has(r.id)?{...r,archived:true,confirmed:true,sportfolio_synced:true,sync_status:"synced" as const}:r));
+      applyResults(local);
+      setHistoryRows(old=>old.filter(r=>!deleted.has(r.id)));
+      setMessage(`${rowsToDelete.length} Beep-testscore(s) definitief verwijderd.`);
+    } catch(error){ setHistoryError(describeSyncError(error)); } finally { setHistoryLoading(false); }
+  }
+
   function backup() {
     const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), results: pending }, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob); const link = document.createElement("a");
@@ -781,9 +791,9 @@ export default function BeepTestPage() {
         </div>
       </div>
     </div>
-    <div style={panel}><h2>3. Gezamenlijke test</h2><p>Niveau {level} · shuttle {shuttle} · {elapsed.toFixed(1)} sec sinds startsignaal</p>
+    <div style={panel}><h2>3. Gezamenlijke test</h2><p>Niveau {level} · shuttle {shuttle} · {elapsed.toFixed(1)} sec sinds startsignaal</p><p style={{fontSize:13,opacity:.8}}>Oude of niet-publiceerbare resultaten blokkeren nooit een nieuwe test.</p>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button style={button} disabled={!authorized || !ready || !participatingStudents.length || running || review || current.some(r => !r.confirmed)} onClick={() => void start()}>▶ Start test</button>
+        <button style={button} disabled={!authorized || !ready || !participatingStudents.length || running} onClick={() => void start()}>▶ Start test</button>
         <button style={{ ...button, background: "#71394b" }} disabled={!running} onClick={() => void stopAll()}>■ STOP ALL</button>
       </div>
       <p>Actief: {active.length} / {participatingStudents.length} · Afwezig: {absentCount} · Geblesseerd: {injuredCount}</p>
@@ -845,6 +855,7 @@ export default function BeepTestPage() {
           <option value="latest">Laatste bevestigde score per leerling</option>
           {historyDates.map(d=><option key={d} value={d}>{new Date(`${d}T12:00:00`).toLocaleDateString("nl-BE")}</option>)}
         </select>
+        {historyDate !== "latest" && (()=>{ const dayRows=historyRows.filter(r=>r.datum.slice(0,10)===historyDate); return dayRows.length ? <button type="button" style={{...button,marginTop:10,background:"#71394b"}} disabled={historyLoading} onClick={()=>void deleteHistoryScores(dayRows,`Alle ${dayRows.length} Beep-testscores van ${new Date(`${historyDate}T12:00:00`).toLocaleDateString("nl-BE")} voor deze selectie wissen?`)}>🗑 Scores van dit testmoment wissen ({dayRows.length})</button> : null; })()}
         <p style={{fontSize:13,opacity:.8}}>{historyVisible.filter(p=>p.result).length} van {historyVisible.length} leerlingen met een bevestigde score. Tik op een leerling voor details en eerdere tests.</p>
         <div style={{borderRadius:16,overflow:"hidden",border:"1px solid rgba(137,194,170,.3)",marginTop:12}}>
           {historyVisible.map((p,i)=>{
@@ -870,8 +881,8 @@ export default function BeepTestPage() {
                   <div>Volledige shuttles<br/><strong>{r.afstand/20}</strong></div>
                 </div> : <p>Geen bevestigde score voor dit testmoment.</p>}
                 {previous.length>0 && <div style={{marginTop:12}}><strong>Eerdere bevestigde tests</strong>
-                  {previous.map(x=><div key={x.id} style={{display:"flex",justifyContent:"space-between",gap:8,padding:"7px 0",borderBottom:"1px solid rgba(137,194,170,.18)"}}>
-                    <span>{new Date(x.datum).toLocaleDateString("nl-BE")}</span><strong>{x.niveau}.{x.shuttle}</strong><span>{x.afstand} m</span>
+                  {previous.map(x=><div key={x.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"7px 0",borderBottom:"1px solid rgba(137,194,170,.18)"}}>
+                    <span>{new Date(x.datum).toLocaleDateString("nl-BE")}</span><strong>{x.niveau}.{x.shuttle}</strong><span>{x.afstand} m</span><button type="button" style={{...button,minHeight:34,padding:"5px 9px",background:"#71394b"}} disabled={historyLoading} onClick={()=>void deleteHistoryScores([x],`Score van ${x.naam} (${new Date(x.datum).toLocaleDateString("nl-BE")}) wissen?`)}>🗑 Wis</button>
                   </div>)}
                 </div>}
               </div>}
