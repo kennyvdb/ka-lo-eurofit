@@ -15,6 +15,7 @@ type Pupil = { id: string; email: string | null; volledige_naam: string | null; 
 type Group = { id: string; naam: string; schooljaar: string };
 type SchoolRow = Record<string, unknown>;
 type SchoolStudent = { leerling_email: string; volledige_naam: string; klas_naam: string; group_id?: string | null };
+type AttendanceStatus = "deelneemt" | "afwezig" | "geblesseerd";
 type Score = { id: string; leerling_id: string; discipline_id: string; schooljaar: string | null; klas_naam: string | null; score_nummer: number | null; score_tekst: string | null; status: string; bevestigd_op: string | null; extra_data: Record<string, unknown> | null };
 type Draft = { id: string; leerling_id: string; value: string; testdatum: string; distance_m?: number; duration_s?: number; completed_speed?: number; reached_speed?: number; markers?: number };
 type MasEvent = { time_s: number; type: "stage" | "marker"; speed: number; distance_m: number };
@@ -68,12 +69,14 @@ export default function MasTestPage() {
   const [running, setRunning] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [participants, setParticipants] = useState<string[]>([]);
+  const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [stopped, setStopped] = useState<string[]>([]);
   const [liveDate, setLiveDate] = useState(today());
   const player = useRef<HTMLAudioElement | null>(null);
   const playerUrl = useRef<string | null>(null);
   const ticker = useRef<ReturnType<typeof setInterval> | null>(null);
   const stopLock = useRef<Set<string>>(new Set());
+  const sessionClosingRef = useRef(false);
   const [profileId, setProfileId] = useState("");
   const [showLive, setShowLive] = useState(true);
   const profileWarning = (p: Pupil | undefined) => p?.id.startsWith("email:") ? <span title="Geen gekoppeld leerlingprofiel: MAS kan voorlopig bewaard worden, maar nog niet naar Sportfolio gepubliceerd." aria-label="Geen gekoppeld leerlingprofiel" style={{color:"#ffd166",fontWeight:900,marginLeft:6}} role="img">⚠</span> : null;
@@ -109,7 +112,7 @@ export default function MasTestPage() {
     finally { setPreparing(false); }
   }
   async function startLive() {
-    if (!draftsLoaded || !teacherId || !audioReady || !timing || !participants.length || running || drafts.length) { setError("Bereid de audio voor, kies deelnemers en werk eventuele voorlopige scores eerst af."); return; }
+    if (!draftsLoaded || !teacherId || !audioReady || !timing || !participants.some(id => (attendance[id] ?? "deelneemt") === "deelneemt") || running || drafts.length) { setError("Bereid de audio voor, kies deelnemers en werk eventuele voorlopige scores eerst af."); return; }
     try {
       const response = await (await caches.open("lo-mas-test-audio-tempowissel-v5")).match(AUDIO_URL);
       if (!response) throw new Error("Offline MP3 niet gevonden.");
@@ -117,30 +120,34 @@ export default function MasTestPage() {
       const a = new Audio(url); player.current = a;
       a.onended = () => stopAllLive();
       a.onerror = () => { stopAllLive(); setError("Audio onderbroken. Controleer de voorlopige scores."); };
-      await a.play(); setElapsed(0); setStopped([]); stopLock.current.clear(); setRunning(true);
+      await a.play(); setElapsed(0); setStopped([]); stopLock.current.clear(); sessionClosingRef.current = false; setRunning(true);
       ticker.current = setInterval(() => setElapsed(a.currentTime), 120);
     } catch (e) { setError(errText(e)); }
   }
-  function stopAllLive() {
+  async function stopAllLive() {
+    if (sessionClosingRef.current) return;
+    sessionClosingRef.current = true;
     player.current?.pause(); if (ticker.current) clearInterval(ticker.current);
     setElapsed(player.current?.currentTime ?? 0); setRunning(false);
+    try { await masWriteQueue; const latest=(await masGet<Draft[]>("drafts")) ?? []; setDrafts(latest); }
+    catch(e) { setError(`Niet alle STOP-scores konden lokaal gecontroleerd worden: ${errText(e)}`); }
     setMessage("Test gestopt. Controleer de voorlopige scores voordat je bevestigt.");
   }
   function stopPupil(id: string) {
-    if (!running || !draftsLoaded || !timing || stopLock.current.has(id)) return;
+    if (!running || sessionClosingRef.current || !draftsLoaded || !timing || stopLock.current.has(id) || (attendance[id] ?? "deelneemt") !== "deelneemt") return;
+    stopLock.current.add(id);
     const seconds = Math.max(0, (player.current?.currentTime ?? 0) - timing.countdown_s);
     const completed = [...timing.events].filter(e => e.type === "marker" && e.time_s <= seconds).at(-1);
     const currentSpeed = timing.events.find(e => e.type === "marker" && e.time_s > seconds)?.speed ?? timing.events.at(-1)?.speed ?? 7;
     const lastFull = completed?.speed ?? 7;
     const p = byId.get(id);
     if (!p || !player.current || player.current.paused) return;
-    stopLock.current.add(id);
     const d: Draft = { id: crypto.randomUUID(), leerling_id: id, value: String(lastFull || 7), testdatum: liveDate,
       distance_m: completed?.distance_m ?? 0, duration_s: seconds, completed_speed: lastFull,
       reached_speed: currentSpeed, markers: (completed?.distance_m ?? 0) / 50 };
     void persistDrafts(old => old.some(row => row.leerling_id === id && row.testdatum === liveDate) ? old : [...old, d])
       .then(() => { setStopped(old => [...new Set([...old,id])]); setMessage(`${p.volledige_naam}: lokaal opgeslagen. Controleer de MAS-waarde in Te bevestigen.`); })
-      .catch(e => { setError(`OPSLAG MISLUKT voor ${p.volledige_naam}: ${errText(e)}. Noteer de score onmiddellijk!`); });
+      .catch(e => { stopLock.current.delete(id); setError(`OPSLAG MISLUKT voor ${p.volledige_naam}: ${errText(e)}. Noteer de score onmiddellijk!`); });
   }
 
   const refreshScores = useCallback(async (discipline: string) => {
@@ -287,10 +294,8 @@ export default function MasTestPage() {
       for (const d of chosen) {
         const p = byId.get(d.leerling_id);
         const n = validMas(d.value);
-        if (!p || n === null) throw new Error("Ongeldige score of leerling niet gevonden.");
-        if (p.id.startsWith("email:") || !p.schooljaar) throw new Error(
-          `${p.volledige_naam ?? p.email}: er is nog geen gekoppeld leerlingprofiel met schooljaar. De voorlopige score blijft lokaal bewaard; maak of herstel eerst het profiel voordat je naar Sportfolio publiceert.`
-        );
+        if (!p || n === null) { setError(old => `${old ? old + " · " : ""}Ongeldige score of leerling niet gevonden; deze rij blijft lokaal.`); continue; }
+        if (p.id.startsWith("email:") || !p.schooljaar) { setError(old => `${old ? old + " · " : ""}${p.volledige_naam ?? p.email}: geen gekoppeld profiel/schooljaar; deze rij blijft lokaal.`); continue; }
         // Een vaste ID voorkomt dubbele publicatie bij opnieuw proberen na netwerkverlies.
         const payload = {
           id: d.id, leerling_id: p.id, discipline_id: disciplineId, schooljaar: p.schooljaar,
@@ -363,14 +368,14 @@ export default function MasTestPage() {
         {participantClass && <button type="button" style={btn} disabled={running || drafts.length>0} onClick={()=>setParticipants(old=>[...new Set([...old,...candidatePupils.map(p=>p.id)])])}>+ Volledige gekozen klas toevoegen</button>}
         <div style={{maxHeight:280,overflowY:"auto",display:"grid",gap:6,marginTop:10}}>{candidatePupils.map(p=><label key={p.id} style={{padding:10,background:"rgba(255,255,255,.06)",borderRadius:10,display:"flex",gap:10,alignItems:"center"}}><input type="checkbox" style={{width:20,height:20,accentColor:"#4B8E8D"}} disabled={running || drafts.length>0} checked={participants.includes(p.id)} onChange={e=>setParticipants(old=>e.target.checked?[...new Set([...old,p.id])]:old.filter(x=>x!==p.id))}/><span>{p.volledige_naam}{profileWarning(p)} · {p.klas_naam}</span></label>)}</div>
         <h3 style={{marginTop:18,paddingTop:12,borderTop:"1px solid rgba(137,194,170,.25)"}}>Geselecteerd voor deze test: {participants.length}</h3>
-        <div style={{display:"grid",gap:6}}>{participants.map(id=>{const p=byId.get(id);return <div key={id} style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,padding:8,border:"1px solid rgba(137,194,170,.2)",borderRadius:10}}><span>{p?.volledige_naam ?? "Leerling"}{profileWarning(p)} · {p?.klas_naam ?? ""}</span><button type="button" style={{...danger,minHeight:36,padding:"6px 10px"}} disabled={running || drafts.length>0} onClick={()=>setParticipants(old=>old.filter(x=>x!==id))}>✕</button></div>})}</div>
+        <div style={{display:"grid",gap:6}}>{participants.map(id=>{const p=byId.get(id);const status=attendance[id] ?? "deelneemt";return <div key={id} style={{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(130px,180px) auto",alignItems:"center",gap:10,padding:8,border:"1px solid rgba(137,194,170,.2)",borderRadius:10}}><span>{p?.volledige_naam ?? "Leerling"}{profileWarning(p)} · {p?.klas_naam ?? ""}</span><select aria-label={`Status ${p?.volledige_naam ?? "leerling"}`} style={{...control,minHeight:40,padding:"6px 9px"}} value={status} disabled={running || drafts.length>0} onChange={e=>setAttendance(old=>({...old,[id]:e.target.value as AttendanceStatus}))}><option value="deelneemt">✓ Neemt deel</option><option value="afwezig">○ Afwezig</option><option value="geblesseerd">✚ Geblesseerd</option></select><button type="button" style={{...danger,minHeight:36,padding:"6px 10px"}} disabled={running || drafts.length>0} onClick={()=>{setParticipants(old=>old.filter(x=>x!==id));setAttendance(old=>{const next={...old};delete next[id];return next;});}}>✕</button></div>})}</div>
     </div>
     <div style={panel}>
         <h2>3. Gezamenlijke test</h2>
         <h3>Niveau {currentStage} km/u · {timeLabel(Math.max(0,elapsed-(timing?.countdown_s ?? 4)))} · laatst volledig afgelegd: {lastMarker?.distance_m ?? 0} m</h3>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8}}><button type="button" style={btn} disabled={!audioReady || !participants.length || running || drafts.length>0} onClick={()=>void startLive()}>▶ Start MAS-test</button><button type="button" style={danger} disabled={!running} onClick={stopAllLive}>■ STOP ALL</button></div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}><button type="button" style={btn} disabled={!audioReady || !participants.some(id => (attendance[id] ?? "deelneemt") === "deelneemt") || running || drafts.length>0} onClick={()=>void startLive()}>▶ Start MAS-test</button><button type="button" style={danger} disabled={!running} onClick={()=>void stopAllLive()}>■ STOP ALL</button></div>
         <p style={{fontSize:13,opacity:.85}}>Tik tijdens de test op de <strong>naam van de leerling</strong> zodra die stopt. De MAS-score wordt op dat exacte moment berekend uit de afspeeltijd van de MP3 en voorlopig opgeslagen.</p>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,220px),1fr))",gap:10,marginTop:12}}>{participants.map(id=>{const p=byId.get(id);const done=stopped.includes(id);const result=drafts.find(d=>d.leerling_id===id && d.testdatum===liveDate);return <button type="button" key={id} aria-label={`${p?.volledige_naam ?? "Leerling"}: ${done ? "score bewaard" : "MAS registreren"}`} style={{...btn,minHeight:94,width:"100%",textAlign:"left",display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",gap:7,border:"1px solid rgba(137,194,170,.35)",background:done?"#89C2AA":"linear-gradient(90deg,#255971,#4B8E8D)",color:done?"#102b32":"#fff",opacity:!running&&!done?.75:1}} disabled={!running || done} onClick={()=>stopPupil(id)}><strong style={{fontSize:17}}>{p?.volledige_naam}{profileWarning(p)}</strong><span style={{fontSize:13}}>{done?`✓ MAS geregistreerd: ${result?.value ?? "—"} km/u · ${result?.distance_m ?? 0} m`:`${p?.klas_naam ?? ""} · Tik om MAS te registreren`}</span></button>})}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,220px),1fr))",gap:10,marginTop:12}}>{participants.map(id=>{const p=byId.get(id);const done=stopped.includes(id);const status=attendance[id] ?? "deelneemt";const excluded=status!=="deelneemt";const result=drafts.find(d=>d.leerling_id===id && d.testdatum===liveDate);return <button type="button" key={id} aria-label={`${p?.volledige_naam ?? "Leerling"}: ${done ? "score bewaard" : "MAS registreren"}`} style={{...btn,minHeight:94,width:"100%",textAlign:"left",display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",gap:7,border:"1px solid rgba(137,194,170,.35)",background:done?"#89C2AA":excluded?"#48576a":"linear-gradient(90deg,#255971,#4B8E8D)",color:done?"#102b32":"#fff",opacity:!running&&!done?.75:1}} disabled={!running || done || excluded} onClick={()=>stopPupil(id)}><strong style={{fontSize:17}}>{p?.volledige_naam}{profileWarning(p)}</strong><span style={{fontSize:13}}>{done?`✓ MAS geregistreerd: ${result?.value ?? "—"} km/u · ${result?.distance_m ?? 0} m`:status==="afwezig"?"Afwezig":status==="geblesseerd"?"Geblesseerd":`${p?.klas_naam ?? ""} · Tik om MAS te registreren`}</span></button>})}</div>
         <p style={{fontSize:13}}>Een STOP-score is voorlopig. Controleer en corrigeer de MAS in ‘Te bevestigen’. Het laatst volledig afgelegde niveau is niet automatisch gelijk aan de snelheid waarbij de leerling stopte.</p>
     </div>
     </>}

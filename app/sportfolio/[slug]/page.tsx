@@ -255,6 +255,7 @@ export default function DisciplineDetailPage() {
 
   const [scoreInput, setScoreInput] = useState("");
   const [tekstInput, setTekstInput] = useState("");
+  const [deelnameStatus, setDeelnameStatus] = useState<"score" | "afwezig" | "geblesseerd">("score");
 
   const roleLabel = useMemo(
     () => getRoleLabel(profiel?.role, profiel?.rol),
@@ -269,14 +270,29 @@ export default function DisciplineDetailPage() {
     [scoresHuidigSchooljaar]
   );
 
+  // In Sportfolio tonen we voor het huidige schooljaar altijd de BESTE numerieke score.
+  // Afwezig/geblesseerd (tekstscore zonder nummer) telt nooit mee als prestatie.
+  const bestCurrentYearScore = useMemo(() => {
+    const numeric = scoresHuidigSchooljaar.filter(
+      (row) => row.score_nummer !== null && row.score_nummer !== undefined
+    );
+    if (numeric.length === 0) return latestCurrentYearScore;
+
+    return [...numeric].sort((a, b) => {
+      const av = Number(a.score_nummer);
+      const bv = Number(b.score_nummer);
+      return discipline?.hoger_is_beter ? bv - av : av - bv;
+    })[0] ?? latestCurrentYearScore;
+  }, [scoresHuidigSchooljaar, latestCurrentYearScore, discipline?.hoger_is_beter]);
+
   const currentRubric = useMemo(() => {
     return getRubricForScore({
-      score: latestCurrentYearScore?.score_nummer ?? null,
+      score: bestCurrentYearScore?.score_nummer ?? null,
       rubrics,
       geslacht: profiel?.geslacht,
       leerjaar: profiel?.leerjaar,
     });
-  }, [latestCurrentYearScore, rubrics, profiel?.geslacht, profiel?.leerjaar]);
+  }, [bestCurrentYearScore, rubrics, profiel?.geslacht, profiel?.leerjaar]);
 
   const leerlingMagIngeven = useMemo(() => {
     if (isLeerkracht) return true;
@@ -378,9 +394,14 @@ export default function DisciplineDetailPage() {
             : ""
         );
         setTekstInput(first.score_tekst ?? "");
+        const tekst = (first.score_tekst ?? "").trim().toLowerCase();
+        setDeelnameStatus(
+          tekst === "afwezig" ? "afwezig" : tekst === "geblesseerd" ? "geblesseerd" : "score"
+        );
       } else {
         setScoreInput("");
         setTekstInput("");
+        setDeelnameStatus("score");
       }
 
       const { data: openData, error: openstellingError } = await supabase.rpc(
@@ -409,13 +430,30 @@ export default function DisciplineDetailPage() {
         if (leaderboardError) throw leaderboardError;
 
         const rawLeaderboard = (leaderboardData ?? []) as LeaderboardRow[];
-        const sortedLeaderboard = [...rawLeaderboard].sort((a, b) => {
+
+        // Veiligheidsnet: als de RPC meerdere scores per leerling teruggeeft,
+        // behouden we hier expliciet alleen de beste score van dit schooljaar.
+        const bestPerLeerling = new Map<string, LeaderboardRow>();
+        for (const row of rawLeaderboard) {
+          const current = bestPerLeerling.get(row.leerling_id);
+          if (!current) {
+            bestPerLeerling.set(row.leerling_id, row);
+            continue;
+          }
+
+          const rv = row.score_nummer;
+          const cv = current.score_nummer;
+          if (rv == null) continue;
+          if (cv == null || (disciplineValue.hoger_is_beter ? rv > cv : rv < cv)) {
+            bestPerLeerling.set(row.leerling_id, row);
+          }
+        }
+
+        const sortedLeaderboard = [...bestPerLeerling.values()].sort((a, b) => {
           const av = a.score_nummer;
           const bv = b.score_nummer;
-
           if (av === null || av === undefined) return 1;
           if (bv === null || bv === undefined) return -1;
-
           return disciplineValue.hoger_is_beter ? bv - av : av - bv;
         });
 
@@ -460,14 +498,23 @@ export default function DisciplineDetailPage() {
       setError(null);
 
       const numericValue =
-        scoreInput.trim().length > 0 && !Number.isNaN(Number(scoreInput))
+        deelnameStatus === "score" &&
+        scoreInput.trim().length > 0 &&
+        !Number.isNaN(Number(scoreInput))
           ? Number(scoreInput)
           : null;
 
-      const textValue = tekstInput.trim().length > 0 ? tekstInput.trim() : null;
+      const textValue =
+        deelnameStatus === "afwezig"
+          ? "Afwezig"
+          : deelnameStatus === "geblesseerd"
+          ? "Geblesseerd"
+          : tekstInput.trim().length > 0
+          ? tekstInput.trim()
+          : null;
 
       if (numericValue === null && !textValue) {
-        throw new Error("Geef een score in.");
+        throw new Error("Geef een score in of kies afwezig/geblesseerd.");
       }
 
       const payload = {
@@ -618,17 +665,17 @@ export default function DisciplineDetailPage() {
           <div className="rounded-[24px] border border-white/10 bg-white/5 p-4">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-sm font-black text-white">Laatste score huidig schooljaar</div>
-                <div className="text-xs text-white/60">Actieve score voor {profiel.schooljaar ?? "dit schooljaar"}</div>
+                <div className="text-sm font-black text-white">Beste score huidig schooljaar</div>
+                <div className="text-xs text-white/60">Beste geregistreerde prestatie voor {profiel.schooljaar ?? "dit schooljaar"}</div>
               </div>
 
               <span
                 className={[
                   "inline-flex rounded-full border px-2.5 py-1 text-[11px] font-bold",
-                  getStatusClasses(latestCurrentYearScore?.status),
+                  getStatusClasses(bestCurrentYearScore?.status),
                 ].join(" ")}
               >
-                {getStatusLabel(latestCurrentYearScore?.status)}
+                {getStatusLabel(bestCurrentYearScore?.status)}
               </span>
             </div>
 
@@ -637,24 +684,24 @@ export default function DisciplineDetailPage() {
                 Score
               </div>
               <div className="mt-2 text-3xl font-black text-white">
-                {latestCurrentYearScore
+                {bestCurrentYearScore
                   ? formatScoreValue({
-                      score_nummer: latestCurrentYearScore.score_nummer,
-                      score_tekst: latestCurrentYearScore.score_tekst,
+                      score_nummer: bestCurrentYearScore.score_nummer,
+                      score_tekst: bestCurrentYearScore.score_tekst,
                       eenheid: discipline.eenheid,
                     })
                   : "Nog geen score"}
               </div>
 
-              {discipline.slug === "beep_test" && latestCurrentYearScore?.status === "bevestigd" &&
-                <BeepDetail score={latestCurrentYearScore} previous={scoresAlleJaren.find(s => s.id !== latestCurrentYearScore.id && s.status === "bevestigd" && s.extra_data?.bron === "lo_beeptest")} />}
+              {discipline.slug === "beep_test" && bestCurrentYearScore?.status === "bevestigd" &&
+                <BeepDetail score={bestCurrentYearScore} previous={scoresAlleJaren.find(s => s.id !== bestCurrentYearScore.id && s.status === "bevestigd" && s.extra_data?.bron === "lo_beeptest")} />}
               <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
                   <div className="text-[11px] font-black uppercase tracking-[0.08em] text-white/55">
                     Datum
                   </div>
                   <div className="mt-1 text-sm font-bold text-white/90">
-                    {formatDateTime(latestCurrentYearScore?.aangemaakt_op)}
+                    {formatDateTime(bestCurrentYearScore?.aangemaakt_op)}
                   </div>
                 </div>
 
@@ -688,6 +735,36 @@ export default function DisciplineDetailPage() {
             </div>
 
             <form onSubmit={handleSubmitScore} className="mt-4 grid gap-3">
+              {isLeerling ? (
+                <div>
+                  <label className="mb-2 block text-xs font-black uppercase tracking-[0.08em] text-white/60">
+                    Deelname
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      ["score", "Score"],
+                      ["afwezig", "Afwezig"],
+                      ["geblesseerd", "Geblesseerd"],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        disabled={!leerlingMagIngeven}
+                        onClick={() => setDeelnameStatus(value as "score" | "afwezig" | "geblesseerd")}
+                        className={[
+                          "min-h-11 rounded-xl border px-3 text-sm font-black transition",
+                          deelnameStatus === value
+                            ? "border-white/30 bg-white text-black"
+                            : "border-white/10 bg-white/5 text-white/70",
+                        ].join(" ")}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               <div>
                 <label className="mb-2 block text-xs font-black uppercase tracking-[0.08em] text-white/60">
                   Numerieke score
@@ -698,7 +775,7 @@ export default function DisciplineDetailPage() {
                   value={scoreInput}
                   onChange={(e) => setScoreInput(e.target.value)}
                   placeholder={`Bijv. 12 ${discipline.eenheid ?? ""}`}
-                  disabled={!leerlingMagIngeven}
+                  disabled={!leerlingMagIngeven || deelnameStatus !== "score"}
                   className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>
@@ -712,7 +789,7 @@ export default function DisciplineDetailPage() {
                   value={tekstInput}
                   onChange={(e) => setTekstInput(e.target.value)}
                   placeholder="Optioneel"
-                  disabled={!leerlingMagIngeven}
+                  disabled={!leerlingMagIngeven || deelnameStatus !== "score"}
                   className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </div>

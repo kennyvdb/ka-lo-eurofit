@@ -12,6 +12,7 @@ const DB = "lo-beeptest-v1";
 const STORE = "data";
 type Group = { id: string; naam: string; schooljaar: string };
 type Student = { leerling_email: string; volledige_naam: string; klas_naam: string; group_id?: string | null };
+type AttendanceStatus = "deelneemt" | "afwezig" | "geblesseerd";
 type SchoolRow = Record<string, unknown>;
 type Event = { time_s: number; type: string; level: number; shuttle: number };
 type Timing = { audio_start_s: number; events: Event[]; total_duration_s: number; stages: {level:number;shuttles:number;start_s:number;end_s:number}[] };
@@ -77,6 +78,7 @@ export default function BeepTestPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [groupId, setGroupId] = useState("");
   const [students, setStudents] = useState<Student[]>([]);
+  const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [selectionReady, setSelectionReady] = useState(false);
   const [schoolStudents, setSchoolStudents] = useState<Student[]>([]);
   const [className, setClassName] = useState("");
@@ -116,6 +118,8 @@ export default function BeepTestPage() {
   const sessionRef = useRef("");
   const resultsRef = useRef<Result[]>([]);
   const syncBusy = useRef(false);
+  const stopLocks = useRef<Set<string>>(new Set());
+  const sessionClosingRef = useRef(false);
   const teacherRef = useRef<string | null>(null);
   const authorizedRef = useRef(false);
   const classNames = [...new Set(schoolStudents.map(s => s.klas_naam).filter(Boolean))].sort((a,b) => a.localeCompare(b, "nl", { numeric: true }));
@@ -174,8 +178,12 @@ export default function BeepTestPage() {
   const level = last?.level ?? 1;
   const shuttle = last?.shuttle ?? 0;
   const current = results.filter(r => r.session_id === sessionId && !r.confirmed && !r.sportfolio_synced && !r.archived);
-  const reviewRows = [...current].sort((a,b) => a.level-b.level || a.shuttle-b.shuttle || a.naam.localeCompare(b.naam,"nl"));
-  const active = students.filter(s => !current.some(r => r.email === s.leerling_email));
+  // Houd de controlelijst stabiel. Sorteren op score liet rijen verspringen zodra één score handmatig werd gewijzigd.
+  const reviewRows = [...current].sort((a,b) => a.naam.localeCompare(b.naam,"nl",{numeric:true}) || a.saved_at.localeCompare(b.saved_at));
+  const active = students.filter(s => (attendance[studentKey(s)] ?? "deelneemt") === "deelneemt" && !current.some(r => r.email === s.leerling_email));
+  const participatingStudents = students.filter(s => (attendance[studentKey(s)] ?? "deelneemt") === "deelneemt");
+  const absentCount = students.filter(s => attendance[studentKey(s)] === "afwezig").length;
+  const injuredCount = students.filter(s => attendance[studentKey(s)] === "geblesseerd").length;
   const pending = results.filter(r => r.confirmed && !r.archived && r.sync_status !== "synced");
   const sessionSynced = current.filter(r => r.sync_status === "synced").length;
   const sessionPending = current.filter(r => r.sync_status !== "synced").length;
@@ -194,7 +202,13 @@ export default function BeepTestPage() {
   }
   function removeStudent(email: string) {
     if (running || review) return;
-    setStudents(old => old.filter(s => studentKey(s) !== email.toLowerCase()));
+    const key = email.trim().toLowerCase();
+    setStudents(old => old.filter(s => studentKey(s) !== key));
+    setAttendance(old => { const next = { ...old }; delete next[key]; return next; });
+  }
+  function setStudentAttendance(student: Student, status: AttendanceStatus) {
+    if (running || review) return;
+    setAttendance(old => ({ ...old, [studentKey(student)]: status }));
   }
 
   const syncResults = useCallback(async () => {
@@ -452,7 +466,7 @@ export default function BeepTestPage() {
     finally { setDownloading(false); }
   }
   async function start() {
-    if (!authorized || !ready || !timing || !students.length || running || review || current.some(r => !r.confirmed)) return;
+    if (!authorized || !ready || !timing || !participatingStudents.length || running || review || current.some(r => !r.confirmed)) return;
     const cache = await caches.open(CACHE); const response = await cache.match(AUDIO[track]);
     if (!response) { setReady(false); return; }
     const url = URL.createObjectURL(await response.blob());
@@ -461,7 +475,8 @@ export default function BeepTestPage() {
     player.onerror = () => { setRunning(false); setMessage("Audio onderbroken: controleer de resultaten."); URL.revokeObjectURL(url); };
     try {
       await player.play();
-      const id = crypto.randomUUID(); sessionRef.current = id; setSessionId(id); setPosition(0); setRunning(true);
+      const id = crypto.randomUUID(); stopLocks.current.clear(); sessionClosingRef.current = false;
+      sessionRef.current = id; setSessionId(id); setPosition(0); setRunning(true);
       setMessage("Test loopt. Scores worden lokaal bewaard; Sportfolio wordt pas na bevestiging bijgewerkt.");
       timer.current = setInterval(() => {
         setPosition(player.currentTime);
@@ -471,29 +486,35 @@ export default function BeepTestPage() {
   }
   async function stopStudent(student: Student) {
     const sid = sessionRef.current;
-    if (!running || !sid || !audio.current) return;
+    const key = studentKey(student);
+    if ((attendance[key] ?? "deelneemt") !== "deelneemt") return;
+    if (!running || sessionClosingRef.current || !sid || !audio.current || stopLocks.current.has(key)) return;
+    if (resultsRef.current.some(r => r.session_id === sid && r.email.trim().toLowerCase() === key)) return;
+    stopLocks.current.add(key);
     const at = audio.current.currentTime;
     const e = timing?.events.filter(x => x.time_s <= at && (x.type === "stage_start" || x.type === "shuttle")).at(-1);
-    const completed = e?.type === "stage_start" && e.level > 1 ? { level:e.level-1, shuttle:timing?.stages.find(s => s.level === e.level-1)?.shuttles ?? 0 } : e;
-    if (!e || resultsRef.current.some(r => r.session_id === sid && r.email === student.leerling_email)) return;
-    const record: Result = { id: crypto.randomUUID(), session_id: sid, email: student.leerling_email,
-      naam: student.volledige_naam, klas: student.klas_naam, group_id: student.group_id ?? null,
-      level: completed!.level, shuttle: completed!.shuttle, stopped_at_s: at, saved_at: new Date().toISOString(), sync_status: "pending", confirmed: false, sportfolio_synced: false };
+    if (!e) { stopLocks.current.delete(key); return; }
+    const completed = e.type === "stage_start" && e.level > 1 ? { level:e.level-1, shuttle:timing?.stages.find(s => s.level === e.level-1)?.shuttles ?? 0 } : e;
+    const record: Result = { id: crypto.randomUUID(), session_id: sid, email: student.leerling_email, naam: student.volledige_naam, klas: student.klas_naam, group_id: student.group_id ?? null, level: completed.level, shuttle: completed.shuttle, stopped_at_s: at, saved_at: new Date().toISOString(), sync_status: "pending", confirmed: false, sportfolio_synced: false };
     try {
-      const updated = await updateResults(rows => rows.some(r => r.session_id === sid && r.email === student.leerling_email) ? rows : [...rows, record]);
+      const updated = await updateResults(rows => rows.some(r => r.session_id === sid && r.email.trim().toLowerCase() === key) ? rows : [...rows, record]);
       applyResults(updated);
       setMessage(`${student.volledige_naam}: lokaal bewaard. Bevestig na STOP ALL.`);
-    } catch { setMessage("LOKALE OPSLAG MISLUKT: noteer deze score onmiddellijk handmatig!"); }
+    } catch { stopLocks.current.delete(key); setMessage("LOKALE OPSLAG MISLUKT: noteer deze score onmiddellijk handmatig!"); }
   }
-  function stopAll() {
+
+  async function stopAll() {
+    if (!running || sessionClosingRef.current) return;
+    sessionClosingRef.current = true;
     setPosition(audio.current?.currentTime ?? position); audio.current?.pause(); setRunning(false);
     if (timer.current) clearInterval(timer.current);
-    setReview(true);
-    setTab("controle");
+    try { await resultQueue; const latest = (await get<Result[]>("results")) ?? []; applyResults(latest); }
+    catch { setMessage("Niet alle STOP-scores konden lokaal gecontroleerd worden. Controleer de resultaten zorgvuldig."); }
+    setReview(true); setTab("controle");
     setMessage("Test gestopt. Controleer de scores van leerlingen die op STOP gedrukt zijn.");
   }
   async function editScore(id: string, field: "level" | "shuttle", value: number) {
-    if (!timing || publishing) return;
+    if (!timing || publishing || running || !review) return;
     const next = await updateResults(rows => rows.map(r => {
       if (r.id !== id || r.confirmed) return r;
       const level = field === "level" ? value : r.level;
@@ -604,7 +625,7 @@ export default function BeepTestPage() {
       const updated = await updateResults(rows => rows.map(r => r.id === row.id ? { ...r, archived: true } : r));
       applyResults(updated);
       if (!updated.some(r => r.session_id === row.session_id && !r.confirmed && !r.sportfolio_synced && !r.archived)) {
-        setReview(false); setSessionId(""); sessionRef.current = ""; setStudents([]); setGroupId("");
+        setReview(false); setSessionId(""); sessionRef.current = ""; setStudents([]); setAttendance({}); setGroupId("");
       }
       setMessage(`${row.naam}: oude STOP-registratie verborgen; bevestigde Sportfolio-score ongewijzigd.`);
     } catch (error) { setPublishError(describeSyncError(error)); }
@@ -677,7 +698,7 @@ export default function BeepTestPage() {
       // Oude, al bevestigde resultaten blijven lokaal gemarkeerd als bevestigd;
       // ze mogen het STOP ALL-controlescherm niet opnieuw vullen.
       setReview(false);
-      setStudents([]); setGroupId(""); setClassName(""); setSearch("");
+      setStudents([]); setAttendance({}); setGroupId(""); setClassName(""); setSearch("");
       setSessionId(""); sessionRef.current = ""; setPosition(0);
       await put(`beep-selection:${teacherId}`, []);
       setHistoryLoaded(false);
@@ -745,29 +766,36 @@ export default function BeepTestPage() {
       </div>
       <div style={{ marginTop: 16, paddingTop: 12, borderTop: "1px solid rgba(137,194,170,.25)" }}>
         <h3>Geselecteerd voor deze test: {students.length}</h3>
-        <p style={{ fontSize: 13, opacity: .8 }}>Je kunt leerlingen vóór de start weer verwijderen. Tijdens de test blijft de lijst vaststaan.</p>
+        <p style={{ fontSize: 13, opacity: .8 }}>Duid vóór de start per leerling aan: neemt deel, afwezig of geblesseerd. Alleen deelnemers krijgen tijdens de test een STOP-knop. Tijdens de test blijft deze status vaststaan.</p>
         <div style={{ display: "grid", gap: 7 }}>
-          {students.map(s => <div key={studentKey(s)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: 8, border: "1px solid rgba(137,194,170,.2)", borderRadius: 10 }}>
-            <span>{s.volledige_naam} <small style={{ opacity: .7 }}>· {s.klas_naam}</small></span>
-            <button type="button" disabled={running} onClick={() => removeStudent(s.leerling_email)} style={{ ...button, minHeight: 36, padding: "6px 10px", background: "#71394b" }} aria-label={`Verwijder ${s.volledige_naam}`}>✕</button>
-          </div>)}
+          {students.map(s => {
+            const status = attendance[studentKey(s)] ?? "deelneemt";
+            return <div key={studentKey(s)} style={{ display: "grid", gridTemplateColumns: "minmax(150px,1fr) minmax(130px,180px) auto", alignItems: "center", gap: 8, padding: 8, border: "1px solid rgba(137,194,170,.2)", borderRadius: 10 }}>
+              <span>{s.volledige_naam} <small style={{ opacity: .7 }}>· {s.klas_naam}</small></span>
+              <select aria-label={`Status ${s.volledige_naam}`} value={status} disabled={running || review} onChange={e => setStudentAttendance(s, e.target.value as AttendanceStatus)} style={{ ...selectStyle, minHeight: 40, padding: "6px 9px" }}>
+                <option value="deelneemt">✓ Neemt deel</option><option value="afwezig">○ Afwezig</option><option value="geblesseerd">✚ Geblesseerd</option>
+              </select>
+              <button type="button" disabled={running || review} onClick={() => removeStudent(s.leerling_email)} style={{ ...button, minHeight: 36, padding: "6px 10px", background: "#71394b" }} aria-label={`Verwijder ${s.volledige_naam}`}>✕</button>
+            </div>;
+          })}
         </div>
       </div>
     </div>
     <div style={panel}><h2>3. Gezamenlijke test</h2><p>Niveau {level} · shuttle {shuttle} · {elapsed.toFixed(1)} sec sinds startsignaal</p>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        <button style={button} disabled={!authorized || !ready || !students.length || running || review || current.some(r => !r.confirmed)} onClick={() => void start()}>▶ Start test</button>
-        <button style={{ ...button, background: "#71394b" }} disabled={!running} onClick={stopAll}>■ STOP ALL</button>
+        <button style={button} disabled={!authorized || !ready || !participatingStudents.length || running || review || current.some(r => !r.confirmed)} onClick={() => void start()}>▶ Start test</button>
+        <button style={{ ...button, background: "#71394b" }} disabled={!running} onClick={() => void stopAll()}>■ STOP ALL</button>
       </div>
-      <p>Actief: {active.length} / {students.length}</p>
+      <p>Actief: {active.length} / {participatingStudents.length} · Afwezig: {absentCount} · Geblesseerd: {injuredCount}</p>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,220px),1fr))", gap: 10 }}>
         {students.map(s => {
           const done = current.find(r => r.email === s.leerling_email);
-          return <div key={s.leerling_email} style={{ border: "1px solid rgba(137,194,170,.28)", borderRadius: 14, padding: 12, minWidth: 0 }}>
+          const status = attendance[studentKey(s)] ?? "deelneemt";
+          const excluded = status !== "deelneemt";
+          return <div key={s.leerling_email} style={{ border: "1px solid rgba(137,194,170,.28)", borderRadius: 14, padding: 12, minWidth: 0, opacity: excluded ? .65 : 1 }}>
             <strong>{s.volledige_naam}</strong><p>{s.klas_naam}</p>
-            <button style={{ ...button, width: "100%", background: done ? "#89C2AA" : "linear-gradient(90deg,#255971,#4B8E8D)", color: done ? "#102b32" : "#fff" }}
-              disabled={!running || !!done} onClick={() => void stopStudent(s)}>
-              {done ? `Bewaard: ${done.level}.${done.shuttle}${done.sync_status === "synced" ? " ✓" : " · lokaal"}` : "STOP leerling"}
+            <button style={{ ...button, width: "100%", background: done ? "#89C2AA" : excluded ? "#48576a" : "linear-gradient(90deg,#255971,#4B8E8D)", color: done ? "#102b32" : "#fff" }} disabled={!running || !!done || excluded} onClick={() => void stopStudent(s)}>
+              {done ? `Bewaard: ${done.level}.${done.shuttle}${done.sync_status === "synced" ? " ✓" : " · lokaal"}` : status === "afwezig" ? "Afwezig" : status === "geblesseerd" ? "Geblesseerd" : "STOP leerling"}
             </button>
           </div>;
         })}

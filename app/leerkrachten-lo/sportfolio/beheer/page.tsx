@@ -10,7 +10,7 @@ const supabase = createClient();
 // Beheerroute: /leerkrachten-lo/sportfolio/beheer
 
 type RawRow = Record<string, any>;
-type Tab = "scores" | "openstellingen" | "beheer";
+type Tab = "scores" | "overzicht" | "openstellingen" | "beheer";
 type DoelType = "klas" | "klasgroep";
 
 type Profiel = {
@@ -65,6 +65,8 @@ type Leerling = {
 
 type ScoreDraft = {
   nummer: string;
+  poging2: string;
+  poging3: string;
   tekst: string;
 };
 
@@ -84,7 +86,7 @@ type ExistingScore = {
 type GradeMap = Record<string, number[]>;
 type EigenKlasgroep = { id: string; naam: string; schooljaar: string; leerkracht_id: string };
 
-const EMPTY_DRAFT: ScoreDraft = { nummer: "", tekst: "" };
+const EMPTY_DRAFT: ScoreDraft = { nummer: "", poging2: "", poging3: "", tekst: "" };
 
 function getValue(row: RawRow, keys: string[]) {
   for (const key of keys) {
@@ -154,6 +156,25 @@ function toNullableNumber(value: string) {
   if (!trimmed) return null;
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function heeftDriePogingen(discipline?: Discipline | null) {
+  const key = `${discipline?.slug ?? ""} ${discipline?.naam ?? ""}`.toLowerCase();
+  return (
+    key.includes("verspring") ||
+    key.includes("kogel") ||
+    key.includes("sprint")
+  );
+}
+
+function bestePoging(draft: ScoreDraft, discipline?: Discipline | null) {
+  const values = [draft.nummer, draft.poging2, draft.poging3]
+    .map(toNullableNumber)
+    .filter((v): v is number => v !== null);
+
+  if (values.length === 0) return null;
+  if (!heeftDriePogingen(discipline)) return values[0] ?? null;
+  return discipline?.hoger_is_beter ? Math.max(...values) : Math.min(...values);
 }
 
 function getRubricForScore(
@@ -660,7 +681,7 @@ export default function SportfolioBeheerPage() {
         geslacht: normalizeGender(p?.geslacht),
         heeftProfiel: Boolean(p?.id),
       };
-    }).sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
+    });
   }
 
   async function loadTargetLeerlingen() {
@@ -689,6 +710,18 @@ export default function SportfolioBeheerPage() {
       } else {
         const leden = selectedKlasgroepLeden;
         leerlingen = await resolveProfiles(leden);
+        // Zelfde volgorde als in "Mijn klasgroepen": positie uit lo_klasgroep_leden_view.
+        const positiePerEmail = new Map(
+          leden.map((row, index) => [
+            getEmail(row),
+            Number(getValue(row, ["positie"])) || index,
+          ])
+        );
+        leerlingen.sort(
+          (a, b) =>
+            (positiePerEmail.get(a.email ?? "") ?? 9999) -
+            (positiePerEmail.get(b.email ?? "") ?? 9999)
+        );
       }
 
       setTargetLeerlingen(leerlingen);
@@ -1151,14 +1184,16 @@ export default function SportfolioBeheerPage() {
     clearMessages();
 
     const pending = targetLeerlingen.filter((l) => !l.heeftProfiel &&
-      (scoreDrafts[l.id]?.nummer.trim() || scoreDrafts[l.id]?.tekst.trim()));
+      (scoreDrafts[l.id]?.nummer.trim() || scoreDrafts[l.id]?.poging2.trim() || scoreDrafts[l.id]?.poging3.trim() || scoreDrafts[l.id]?.tekst.trim()));
     if (pending.some((l) => !l.email || !l.username)) {
       setError("Een leerling zonder profiel heeft geen officiële e-mail of gebruikersnaam. Controleer Smartschool.");
       return;
     }
     if (targetLeerlingen.some((l) => {
       const d = scoreDrafts[l.id] ?? EMPTY_DRAFT;
-      return d.nummer.trim() && toNullableNumber(d.nummer) == null;
+      return [d.nummer, d.poging2, d.poging3].some(
+        (value) => value.trim() && toNullableNumber(value) == null
+      );
     })) {
       setError("Een ingevulde numerieke score is ongeldig.");
       return;
@@ -1167,7 +1202,7 @@ export default function SportfolioBeheerPage() {
     const rows = targetLeerlingen.filter((l) => l.heeftProfiel)
       .map((leerling) => {
         const draft = scoreDrafts[leerling.id] ?? EMPTY_DRAFT;
-        const scoreNummer = toNullableNumber(draft.nummer);
+        const scoreNummer = bestePoging(draft, selectedDiscipline);
         const scoreTekst = draft.tekst.trim() || null;
 
         if (scoreNummer == null && !scoreTekst) return null;
@@ -1210,7 +1245,7 @@ export default function SportfolioBeheerPage() {
           p_discipline_id: selectedDiscipline.id,
           p_schooljaar: selectedSchooljaar,
           p_klas_naam: leerling.klas_naam ?? (doelType === "klas" ? selectedKlasNaam : null),
-          p_score_nummer: toNullableNumber(draft.nummer),
+          p_score_nummer: bestePoging(draft, selectedDiscipline),
           p_score_tekst: draft.tekst.trim() || null,
           p_eenheid: selectedDiscipline.eenheid,
         });
@@ -1529,6 +1564,7 @@ export default function SportfolioBeheerPage() {
         <div className="mt-5 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
           {[
             ["scores", "Scores invoeren"],
+            ["overzicht", "Score & rubric overzicht"],
             ["openstellingen", "Openstellingen"],
             ["beheer", "Disciplines & rubrics"],
           ].map(([key, label]) => (
@@ -1560,7 +1596,7 @@ export default function SportfolioBeheerPage() {
         </div>
       ) : null}
 
-      {(tab === "scores" || tab === "openstellingen") && (
+      {(tab === "scores" || tab === "overzicht" || tab === "openstellingen") && (
         <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-4">
           <div className="text-sm font-black text-white">Doelgroep</div>
           <div className="mt-1 text-xs text-white/60">
@@ -1721,7 +1757,7 @@ export default function SportfolioBeheerPage() {
                   <tbody className="block space-y-3 p-3 md:table-row-group md:space-y-0 md:p-0">
                     {targetLeerlingen.map((leerling) => {
                       const draft = scoreDrafts[leerling.id] ?? EMPTY_DRAFT;
-                      const numericScore = toNullableNumber(draft.nummer);
+                      const numericScore = bestePoging(draft, selectedDiscipline);
                       const rubric = selectedDiscipline
                         ? getRubricForScore(
                             rubrics,
@@ -1751,20 +1787,37 @@ export default function SportfolioBeheerPage() {
                           </td>
                           <td className="block px-1 py-2 md:table-cell md:px-4 md:py-3">
                             <label className="mb-1 block text-xs font-bold text-white/60 md:hidden" htmlFor={`score-${leerling.id}`}>Score</label>
-                            <div className="flex items-center gap-2">
-                              <input
-                                id={`score-${leerling.id}`}
-                                inputMode="decimal"
-                                                                value={draft.nummer}
-                                onChange={(e) =>
-                                  updateDraft(leerling.id, "nummer", e.target.value)
-                                }
-                                placeholder="0"
-                                className="h-12 w-full min-w-0 rounded-xl md:h-10 md:w-28 border border-white/10 bg-white/5 px-3 font-bold text-white outline-none focus:border-white/25"
-                              />
+                            <div className="flex flex-wrap items-center gap-2">
+                              {[
+                                ["nummer", "P1"],
+                                ...(heeftDriePogingen(selectedDiscipline)
+                                  ? [["poging2", "P2"], ["poging3", "P3"]]
+                                  : []),
+                              ].map(([field, label]) => (
+                                <div key={field} className="flex items-center gap-1">
+                                  {heeftDriePogingen(selectedDiscipline) ? (
+                                    <span className="text-[10px] font-black text-white/40">{label}</span>
+                                  ) : null}
+                                  <input
+                                    id={`${field}-${leerling.id}`}
+                                    inputMode="decimal"
+                                    value={draft[field as keyof ScoreDraft]}
+                                    onChange={(e) =>
+                                      updateDraft(leerling.id, field as keyof ScoreDraft, e.target.value)
+                                    }
+                                    placeholder="0"
+                                    className="h-12 w-24 min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 font-bold text-white outline-none focus:border-white/25 md:h-10"
+                                  />
+                                </div>
+                              ))}
                               <span className="text-xs text-white/45">
                                 {selectedDiscipline?.eenheid ?? ""}
                               </span>
+                              {heeftDriePogingen(selectedDiscipline) && numericScore !== null ? (
+                                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[11px] font-black text-emerald-100">
+                                  beste: {numericScore}
+                                </span>
+                              ) : null}
                             </div>
                           </td>
                           <td className="block px-1 py-2 md:table-cell md:px-4 md:py-3">
@@ -1926,6 +1979,112 @@ export default function SportfolioBeheerPage() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </section>
+        </>
+      ) : null}
+
+      {tab === "overzicht" ? (
+        <>
+          <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-[1fr_auto]">
+              <div>
+                <label className="mb-2 block text-xs font-black uppercase tracking-[0.08em] text-white/60">
+                  Discipline
+                </label>
+                <select
+                  value={selectedDisciplineId}
+                  onChange={(e) => setSelectedDisciplineId(e.target.value)}
+                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-base font-semibold text-white"
+                >
+                  {activeDisciplines.map((discipline) => (
+                    <option key={discipline.id} value={discipline.id} className="bg-neutral-900">
+                      {discipline.naam}{discipline.eenheid ? ` (${discipline.eenheid})` : ""}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={() => void loadExistingScores(targetLeerlingen, selectedDisciplineId)}
+                  className="h-12 rounded-2xl border border-white/15 bg-black/40 px-5 text-sm font-black text-white"
+                >
+                  Vernieuwen
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="mt-5 overflow-hidden rounded-[24px] border border-white/10 bg-white/5">
+            <div className="border-b border-white/10 p-4">
+              <div className="text-base font-black text-white">Score & rubric overzicht</div>
+              <div className="mt-1 text-xs text-white/60">
+                Leerlingen staan horizontaal in dezelfde volgorde als je gekozen klasgroep. Per leerling wordt de beste score van dit schooljaar gebruikt.
+              </div>
+            </div>
+
+            {targetLeerlingen.length === 0 ? (
+              <div className="p-5 text-sm text-white/60">Kies eerst een klas of klasgroep.</div>
+            ) : (
+              <div className="overflow-x-auto p-4">
+                <div
+                  className="grid min-w-max gap-2"
+                  style={{ gridTemplateColumns: `repeat(${targetLeerlingen.length}, minmax(120px, 150px))` }}
+                >
+                  {targetLeerlingen.map((leerling) => {
+                    const scores = existingScores.filter((score) => score.leerling_id === leerling.id);
+                    const best = [...scores]
+                      .filter((score) => score.score_nummer != null)
+                      .sort((a, b) => {
+                        const av = Number(a.score_nummer);
+                        const bv = Number(b.score_nummer);
+                        return selectedDiscipline?.hoger_is_beter ? bv - av : av - bv;
+                      })[0] ?? scores[0] ?? null;
+                    const rubric = best && selectedDiscipline
+                      ? getRubricForScore(
+                          rubrics,
+                          selectedDiscipline.id,
+                          best.score_nummer == null ? null : Number(best.score_nummer),
+                          leerling.geslacht,
+                          leerling.leerjaar
+                        )
+                      : null;
+
+                    return (
+                      <div key={leerling.id} className="overflow-hidden rounded-2xl border border-white/10 bg-black/20 text-center">
+                        <div className="min-h-20 border-b border-white/10 bg-white/5 p-3">
+                          <div className="text-sm font-black text-white">{leerling.naam}</div>
+                          <div className="mt-1 text-[11px] text-white/45">{leerling.klas_naam ?? "—"}</div>
+                        </div>
+                        <div className="border-b border-white/10 p-3">
+                          <div className="text-[10px] font-black uppercase tracking-wider text-white/40">Score</div>
+                          <div className="mt-1 text-lg font-black text-white">
+                            {best
+                              ? best.score_nummer != null
+                                ? `${best.score_nummer} ${best.eenheid ?? selectedDiscipline?.eenheid ?? ""}`.trim()
+                                : best.score_tekst ?? "—"
+                              : "—"}
+                          </div>
+                        </div>
+                        <div className="p-3">
+                          <div className="text-[10px] font-black uppercase tracking-wider text-white/40">Rubric</div>
+                          {rubric ? (
+                            <span className={[
+                              "mt-1 inline-flex rounded-full border px-3 py-1 text-sm font-black",
+                              rubricBadgeClass(rubric.niveau),
+                            ].join(" ")}>
+                              {rubric.niveau ?? rubric.label ?? "—"}
+                            </span>
+                          ) : (
+                            <div className="mt-1 text-sm font-bold text-white/35">—</div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </section>
