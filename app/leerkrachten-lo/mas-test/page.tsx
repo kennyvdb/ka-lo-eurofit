@@ -17,7 +17,7 @@ type SchoolRow = Record<string, unknown>;
 type SchoolStudent = { leerling_email: string; volledige_naam: string; klas_naam: string; group_id?: string | null };
 type AttendanceStatus = "deelneemt" | "afwezig" | "geblesseerd";
 type Score = { id: string; leerling_id: string; discipline_id: string; schooljaar: string | null; klas_naam: string | null; score_nummer: number | null; score_tekst: string | null; status: string; bevestigd_op: string | null; extra_data: Record<string, unknown> | null };
-type Draft = { id: string; leerling_id: string; value: string; testdatum: string; distance_m?: number; duration_s?: number; completed_speed?: number; reached_speed?: number; markers?: number };
+type Draft = { id: string; leerling_id: string; value: string; testdatum: string; schooljaar?: string | null; klas_naam?: string | null; distance_m?: number; duration_s?: number; completed_speed?: number; reached_speed?: number; markers?: number };
 type MasEvent = { time_s: number; type: "stage" | "marker"; speed: number; distance_m: number };
 type MasTiming = { protocol: string; duration_s: number; countdown_s: number; events: MasEvent[] };
 const AUDIO_URL = "/mas-test/alleen-beeps-tempowissel-v5.mp3";
@@ -36,6 +36,7 @@ const today = () => new Date().toLocaleDateString("sv-SE");
 const fmt = (s: string | null) => s ? new Date(s).toLocaleDateString("nl-BE") : "—";
 const errText = (e: unknown) => e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
 const validMas = (v: string) => { const n = Number(v.replace(",", ".")); return Number.isFinite(n) && n > 0 && n <= 35 ? n : null; };
+const currentSchoolYear = (date = new Date()) => { const y=date.getFullYear(); const start=date.getMonth()>=8?y:y-1; return `${start}-${start+1}`; };
 
 export default function MasTestPage() {
   const [teacherId, setTeacherId] = useState("");
@@ -56,6 +57,7 @@ export default function MasTestPage() {
   const [selectedClass, setSelectedClass] = useState("");
   const [selectedPupil, setSelectedPupil] = useState("");
   const [historyClass, setHistoryClass] = useState("");
+  const schoolYear = currentSchoolYear();
   const [value, setValue] = useState("");
   const [testDate, setTestDate] = useState(today());
   const [selectedDrafts, setSelectedDrafts] = useState<string[]>([]);
@@ -112,7 +114,7 @@ export default function MasTestPage() {
     finally { setPreparing(false); }
   }
   async function startLive() {
-    if (!draftsLoaded || !teacherId || !audioReady || !timing || !participants.some(id => (attendance[id] ?? "deelneemt") === "deelneemt") || running || drafts.length) { setError("Bereid de audio voor, kies deelnemers en werk eventuele voorlopige scores eerst af."); return; }
+    if (!draftsLoaded || !teacherId || !audioReady || !timing || !participants.some(id => (attendance[id] ?? "deelneemt") === "deelneemt") || running) { setError("Bereid de audio voor en kies minstens één deelnemende leerling."); return; }
     try {
       const response = await (await caches.open("lo-mas-test-audio-tempowissel-v5")).match(AUDIO_URL);
       if (!response) throw new Error("Offline MP3 niet gevonden.");
@@ -131,7 +133,8 @@ export default function MasTestPage() {
     setElapsed(player.current?.currentTime ?? 0); setRunning(false);
     try { await masWriteQueue; const latest=(await masGet<Draft[]>("drafts")) ?? []; setDrafts(latest); }
     catch(e) { setError(`Niet alle STOP-scores konden lokaal gecontroleerd worden: ${errText(e)}`); }
-    setMessage("Test gestopt. Controleer de voorlopige scores voordat je bevestigt.");
+    setTab("controle");
+    setMessage("Test gestopt. Controleer de voorlopige scores voordat je bevestigt. Oude voorlopige scores blokkeren een nieuwe test nooit.");
   }
   function stopPupil(id: string) {
     if (!running || sessionClosingRef.current || !draftsLoaded || !timing || stopLock.current.has(id) || (attendance[id] ?? "deelneemt") !== "deelneemt") return;
@@ -141,8 +144,8 @@ export default function MasTestPage() {
     const currentSpeed = timing.events.find(e => e.type === "marker" && e.time_s > seconds)?.speed ?? timing.events.at(-1)?.speed ?? 7;
     const lastFull = completed?.speed ?? 7;
     const p = byId.get(id);
-    if (!p || !player.current || player.current.paused) return;
-    const d: Draft = { id: crypto.randomUUID(), leerling_id: id, value: String(lastFull || 7), testdatum: liveDate,
+    if (!p || !player.current || player.current.paused) { stopLock.current.delete(id); return; }
+    const d: Draft = { id: crypto.randomUUID(), leerling_id: id, value: String(lastFull || 7), testdatum: liveDate, schooljaar: p.schooljaar ?? schoolYear, klas_naam: p.klas_naam,
       distance_m: completed?.distance_m ?? 0, duration_s: seconds, completed_speed: lastFull,
       reached_speed: currentSpeed, markers: (completed?.distance_m ?? 0) / 50 };
     void persistDrafts(old => old.some(row => row.leerling_id === id && row.testdatum === liveDate) ? old : [...old, d])
@@ -155,13 +158,13 @@ export default function MasTestPage() {
     for (let from = 0; ; from += 1000) {
       const { data, error: queryError } = await supabase.from("sportfolio_scores")
         .select("id,leerling_id,discipline_id,schooljaar,klas_naam,score_nummer,score_tekst,status,bevestigd_op,extra_data")
-        .eq("discipline_id", discipline).order("bevestigd_op", { ascending: false }).range(from, from + 999);
+        .eq("discipline_id", discipline).eq("schooljaar", schoolYear).order("bevestigd_op", { ascending: false }).range(from, from + 999);
       if (queryError) throw queryError;
       all.push(...((data ?? []) as Score[]));
       if ((data ?? []).length < 1000) break;
     }
     setScores(all);
-  }, []);
+  }, [schoolYear]);
 
   useEffect(() => {
     let cancelled = false;
@@ -270,7 +273,8 @@ export default function MasTestPage() {
   const classes = useMemo(() => [...new Set(pupils.map(p => p.klas_naam).filter((x): x is string => !!x))].sort((a,b) => a.localeCompare(b,"nl",{numeric:true})), [pupils]);
   const byId = useMemo(() => new Map(pupils.map(p => [p.id, p])), [pupils]);
   const classPupils = pupils.filter(p => p.klas_naam === selectedClass).sort((a,b) => String(a.volledige_naam).localeCompare(String(b.volledige_naam),"nl"));
-  const visibleScores = scores.filter(s => s.status === "bevestigd" && (!historyClass || (s.klas_naam ?? byId.get(s.leerling_id)?.klas_naam) === historyClass));
+  const visibleScores = scores.filter(s => s.status === "bevestigd" && s.schooljaar === schoolYear && (!historyClass || (s.klas_naam ?? byId.get(s.leerling_id)?.klas_naam) === historyClass));
+  const historyDates = [...new Set(visibleScores.map(s => String(s.extra_data?.testdatum ?? s.bevestigd_op ?? "").slice(0,10)).filter(Boolean))].sort().reverse();
   const addDraft = () => {
     setError("");
     const n = validMas(value);
@@ -278,8 +282,8 @@ export default function MasTestPage() {
     const p = byId.get(selectedPupil);
     if (!p) { setError("Leerling niet gevonden."); return; }
     if (drafts.some(d => d.leerling_id === selectedPupil && d.testdatum === testDate && d.id !== editingId)) { setError("Voor deze leerling staat al een voorlopige score op die testdatum. Bewerk de bestaande rij."); return; }
-    void persistDrafts(old => editingId ? old.map(d => d.id === editingId ? { ...d, leerling_id: selectedPupil, value: String(n), testdatum: testDate } : d)
-      : [...old, { id: crypto.randomUUID(), leerling_id: selectedPupil, value: String(n), testdatum: testDate }])
+    void persistDrafts(old => editingId ? old.map(d => d.id === editingId ? { ...d, leerling_id: selectedPupil, value: String(n), testdatum: testDate, schooljaar: d.schooljaar ?? p.schooljaar ?? schoolYear, klas_naam: d.klas_naam ?? p.klas_naam } : d)
+      : [...old, { id: crypto.randomUUID(), leerling_id: selectedPupil, value: String(n), testdatum: testDate, schooljaar: p.schooljaar ?? schoolYear, klas_naam: p.klas_naam }])
       .then(()=>{setValue("");setSelectedPupil("");setEditingId("");setMessage("Voorlopige score lokaal opgeslagen. Nog niets gepubliceerd in Sportfolio.");})
       .catch(e=>setError(`Lokale opslag mislukt: ${errText(e)}`));
   };
@@ -298,8 +302,8 @@ export default function MasTestPage() {
         if (p.id.startsWith("email:") || !p.schooljaar) { setError(old => `${old ? old + " · " : ""}${p.volledige_naam ?? p.email}: geen gekoppeld profiel/schooljaar; deze rij blijft lokaal.`); continue; }
         // Een vaste ID voorkomt dubbele publicatie bij opnieuw proberen na netwerkverlies.
         const payload = {
-          id: d.id, leerling_id: p.id, discipline_id: disciplineId, schooljaar: p.schooljaar,
-          klas_naam: p.klas_naam, score_nummer: n, score_tekst: String(n).replace(".", ","), eenheid: "km/u",
+          id: d.id, leerling_id: p.id, discipline_id: disciplineId, schooljaar: d.schooljaar ?? p.schooljaar,
+          klas_naam: d.klas_naam ?? p.klas_naam, score_nummer: n, score_tekst: String(n).replace(".", ","), eenheid: "km/u",
           status: "bevestigd", bevestigd_door: teacherId, bevestigd_op: new Date().toISOString(),
           extra_data: { bron: "lo_mas_test", protocol_id: "leger_boucher_50m_workbook_cumulative", testdatum: `${d.testdatum}T12:00:00`, mas_km_u: n,
             ...(d.distance_m === undefined ? {} : { afstand_meter: d.distance_m, testduur_seconden: d.duration_s, laatste_volledige_snelheid: d.completed_speed, bereikte_snelheid: d.reached_speed, volledige_50m_stukken: d.markers }) },
@@ -327,6 +331,27 @@ export default function MasTestPage() {
     } catch (e) { setError(`${errText(e)} Reeds bevestigde rijen blijven bewaard; controleer de historiek voordat je opnieuw probeert.`); }
     finally { setBusy(false); }
   };
+  async function deleteScores(rows: Score[], label: string) {
+    if (!rows.length || !teacherId || !disciplineId || !online || busy) return;
+    if (!window.confirm(`${label}\n\nJe verwijdert ${rows.length} bevestigde MAS-score(s). Dit kan niet ongedaan worden gemaakt. Doorgaan?`)) return;
+    if (rows.length > 1 && !window.confirm("Laatste controle: deze MAS-scores definitief wissen?")) return;
+    setBusy(true); setError("");
+    try {
+      const {data:auth,error:authError}=await supabase.auth.getUser();
+      if(authError || auth.user?.id!==teacherId) throw new Error("Meld je opnieuw aan als LO-leerkracht.");
+      const {data:me,error:meError}=await supabase.from("profielen").select("rol").eq("id",teacherId).maybeSingle();
+      if(meError || !me || !["lo_leerkracht","admin"].includes(String(me.rol))) throw new Error("Geen toestemming om MAS-scores te wissen.");
+      const ids=rows.map(r=>r.id);
+      for(let i=0;i<ids.length;i+=100){
+        const {error:deleteError}=await supabase.from("sportfolio_scores").delete().eq("discipline_id",disciplineId).in("id",ids.slice(i,i+100));
+        if(deleteError) throw deleteError;
+      }
+      setScores(old=>old.filter(s=>!ids.includes(s.id)));
+      await persistDrafts(old=>old.filter(d=>!ids.includes(d.id)));
+      setMessage(`${ids.length} MAS-score(s) definitief verwijderd.`);
+    } catch(e) { setError(errText(e)); } finally { setBusy(false); }
+  }
+
   const currentStage = timing?.events.find(e => e.type === "marker" && e.time_s > Math.max(0, elapsed - timing.countdown_s))?.speed ?? timing?.events.at(-1)?.speed ?? 7;
   const lastMarker = [...(timing?.events ?? [])].filter(e => e.type === "marker" && e.time_s <= Math.max(0, elapsed - (timing?.countdown_s ?? 4))).at(-1);
   const tabButton = (name: typeof tab, label: string) => <button type="button" key={name} style={{ ...btn, background: tab === name ? "linear-gradient(90deg,#255971,#4B8E8D)" : "#17354b", flex: "1 1 160px" }} onClick={() => setTab(name)}>{label}</button>;
@@ -350,30 +375,30 @@ export default function MasTestPage() {
         <label style={{display:"block",marginTop:12}}>Testdatum<input style={control} type="date" value={liveDate} disabled={running} onChange={e => setLiveDate(e.target.value)}/></label>
 
         <label htmlFor="mas-group">Mijn LO-klasgroep toevoegen</label>
-        <select id="mas-group" style={control} value={selectedGroup} disabled={running || drafts.length>0} onChange={e=>setSelectedGroup(e.target.value)}>
+        <select id="mas-group" style={control} value={selectedGroup} disabled={running} onChange={e=>setSelectedGroup(e.target.value)}>
           <option value="">Kies een LO-klasgroep</option>{groups.map(g=><option key={g.id} value={g.id}>{g.naam} · {g.schooljaar}</option>)}
         </select>
         <p style={{fontSize:13,opacity:.8}}>Zoals in de Beep-test: een gekozen klasgroep wordt toegevoegd aan je bestaande deelnemers.</p>
         <label htmlFor="mas-class">Officiële klas</label>
-        <select id="mas-class" style={control} value={participantClass} disabled={running || drafts.length>0} onChange={e=>setParticipantClass(e.target.value)}>
+        <select id="mas-class" style={control} value={participantClass} disabled={running} onChange={e=>setParticipantClass(e.target.value)}>
           <option value="">Alle officiële klassen</option>{participantClasses.map(c=><option key={c} value={c}>{c}</option>)}
         </select>
         <label htmlFor="mas-search">Zoek leerling of klas</label>
-        <input id="mas-search" style={control} value={participantSearch} disabled={running || drafts.length>0} onChange={e=>setParticipantSearch(e.target.value)} placeholder="Zoek op naam of klas…" />
+        <input id="mas-search" style={control} value={participantSearch} disabled={running} onChange={e=>setParticipantSearch(e.target.value)} placeholder="Zoek op naam of klas…" />
         {schoolLoading && <p>Officiële klassen laden…</p>}
         {schoolError && <p role="alert" style={{color:"#ffd2a8"}}>{schoolError}</p>}
         {!schoolLoading && !participantClasses.length && <p>Geen officiële klassen gevonden. Controleer de melding hierboven en de toegang tot eurofit_class_students_view.</p>}
         <p>{candidatePupils.length} leerlingen gevonden · {schoolStudents.length} officiële leerlingen geladen.</p>
         {candidatePupils.some(p => p.id.startsWith("email:")) && <p style={{fontSize:13,color:"#ffd2a8"}}>⚠ {candidatePupils.filter(p => p.id.startsWith("email:")).length} leerling(en) in de huidige selectie hebben nog geen gekoppeld profiel. Je kunt hen selecteren en hun MAS voorlopig registreren; publicatie in Sportfolio vereist eerst een geldig profiel.</p>}
-        {participantClass && <button type="button" style={btn} disabled={running || drafts.length>0} onClick={()=>setParticipants(old=>[...new Set([...old,...candidatePupils.map(p=>p.id)])])}>+ Volledige gekozen klas toevoegen</button>}
-        <div style={{maxHeight:280,overflowY:"auto",display:"grid",gap:6,marginTop:10}}>{candidatePupils.map(p=><label key={p.id} style={{padding:10,background:"rgba(255,255,255,.06)",borderRadius:10,display:"flex",gap:10,alignItems:"center"}}><input type="checkbox" style={{width:20,height:20,accentColor:"#4B8E8D"}} disabled={running || drafts.length>0} checked={participants.includes(p.id)} onChange={e=>setParticipants(old=>e.target.checked?[...new Set([...old,p.id])]:old.filter(x=>x!==p.id))}/><span>{p.volledige_naam}{profileWarning(p)} · {p.klas_naam}</span></label>)}</div>
+        {participantClass && <button type="button" style={btn} disabled={running} onClick={()=>setParticipants(old=>[...new Set([...old,...candidatePupils.map(p=>p.id)])])}>+ Volledige gekozen klas toevoegen</button>}
+        <div style={{maxHeight:280,overflowY:"auto",display:"grid",gap:6,marginTop:10}}>{candidatePupils.map(p=><label key={p.id} style={{padding:10,background:"rgba(255,255,255,.06)",borderRadius:10,display:"flex",gap:10,alignItems:"center"}}><input type="checkbox" style={{width:20,height:20,accentColor:"#4B8E8D"}} disabled={running} checked={participants.includes(p.id)} onChange={e=>setParticipants(old=>e.target.checked?[...new Set([...old,p.id])]:old.filter(x=>x!==p.id))}/><span>{p.volledige_naam}{profileWarning(p)} · {p.klas_naam}</span></label>)}</div>
         <h3 style={{marginTop:18,paddingTop:12,borderTop:"1px solid rgba(137,194,170,.25)"}}>Geselecteerd voor deze test: {participants.length}</h3>
-        <div style={{display:"grid",gap:6}}>{participants.map(id=>{const p=byId.get(id);const status=attendance[id] ?? "deelneemt";return <div key={id} style={{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(130px,180px) auto",alignItems:"center",gap:10,padding:8,border:"1px solid rgba(137,194,170,.2)",borderRadius:10}}><span>{p?.volledige_naam ?? "Leerling"}{profileWarning(p)} · {p?.klas_naam ?? ""}</span><select aria-label={`Status ${p?.volledige_naam ?? "leerling"}`} style={{...control,minHeight:40,padding:"6px 9px"}} value={status} disabled={running || drafts.length>0} onChange={e=>setAttendance(old=>({...old,[id]:e.target.value as AttendanceStatus}))}><option value="deelneemt">✓ Neemt deel</option><option value="afwezig">○ Afwezig</option><option value="geblesseerd">✚ Geblesseerd</option></select><button type="button" style={{...danger,minHeight:36,padding:"6px 10px"}} disabled={running || drafts.length>0} onClick={()=>{setParticipants(old=>old.filter(x=>x!==id));setAttendance(old=>{const next={...old};delete next[id];return next;});}}>✕</button></div>})}</div>
+        <div style={{display:"grid",gap:6}}>{participants.map(id=>{const p=byId.get(id);const status=attendance[id] ?? "deelneemt";return <div key={id} style={{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(130px,180px) auto",alignItems:"center",gap:10,padding:8,border:"1px solid rgba(137,194,170,.2)",borderRadius:10}}><span>{p?.volledige_naam ?? "Leerling"}{profileWarning(p)} · {p?.klas_naam ?? ""}</span><select aria-label={`Status ${p?.volledige_naam ?? "leerling"}`} style={{...control,minHeight:40,padding:"6px 9px"}} value={status} disabled={running} onChange={e=>setAttendance(old=>({...old,[id]:e.target.value as AttendanceStatus}))}><option value="deelneemt">✓ Neemt deel</option><option value="afwezig">○ Afwezig</option><option value="geblesseerd">✚ Geblesseerd</option></select><button type="button" style={{...danger,minHeight:36,padding:"6px 10px"}} disabled={running} onClick={()=>{setParticipants(old=>old.filter(x=>x!==id));setAttendance(old=>{const next={...old};delete next[id];return next;});}}>✕</button></div>})}</div>
     </div>
     <div style={panel}>
         <h2>3. Gezamenlijke test</h2>
         <h3>Niveau {currentStage} km/u · {timeLabel(Math.max(0,elapsed-(timing?.countdown_s ?? 4)))} · laatst volledig afgelegd: {lastMarker?.distance_m ?? 0} m</h3>
-        <div style={{display:"flex",flexWrap:"wrap",gap:8}}><button type="button" style={btn} disabled={!audioReady || !participants.some(id => (attendance[id] ?? "deelneemt") === "deelneemt") || running || drafts.length>0} onClick={()=>void startLive()}>▶ Start MAS-test</button><button type="button" style={danger} disabled={!running} onClick={()=>void stopAllLive()}>■ STOP ALL</button></div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:8}}><button type="button" style={btn} disabled={!audioReady || !participants.some(id => (attendance[id] ?? "deelneemt") === "deelneemt") || running} onClick={()=>void startLive()}>▶ Start MAS-test</button><button type="button" style={danger} disabled={!running} onClick={()=>void stopAllLive()}>■ STOP ALL</button></div>
         <p style={{fontSize:13,opacity:.85}}>Tik tijdens de test op de <strong>naam van de leerling</strong> zodra die stopt. De MAS-score wordt op dat exacte moment berekend uit de afspeeltijd van de MP3 en voorlopig opgeslagen.</p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(min(100%,220px),1fr))",gap:10,marginTop:12}}>{participants.map(id=>{const p=byId.get(id);const done=stopped.includes(id);const status=attendance[id] ?? "deelneemt";const excluded=status!=="deelneemt";const result=drafts.find(d=>d.leerling_id===id && d.testdatum===liveDate);return <button type="button" key={id} aria-label={`${p?.volledige_naam ?? "Leerling"}: ${done ? "score bewaard" : "MAS registreren"}`} style={{...btn,minHeight:94,width:"100%",textAlign:"left",display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",gap:7,border:"1px solid rgba(137,194,170,.35)",background:done?"#89C2AA":excluded?"#48576a":"linear-gradient(90deg,#255971,#4B8E8D)",color:done?"#102b32":"#fff",opacity:!running&&!done?.75:1}} disabled={!running || done || excluded} onClick={()=>stopPupil(id)}><strong style={{fontSize:17}}>{p?.volledige_naam}{profileWarning(p)}</strong><span style={{fontSize:13}}>{done?`✓ MAS geregistreerd: ${result?.value ?? "—"} km/u · ${result?.distance_m ?? 0} m`:status==="afwezig"?"Afwezig":status==="geblesseerd"?"Geblesseerd":`${p?.klas_naam ?? ""} · Tik om MAS te registreren`}</span></button>})}</div>
         <p style={{fontSize:13}}>Een STOP-score is voorlopig. Controleer en corrigeer de MAS in ‘Te bevestigen’. Het laatst volledig afgelegde niveau is niet automatisch gelijk aan de snelheid waarbij de leerling stopte.</p>
@@ -391,10 +416,10 @@ export default function MasTestPage() {
       {!drafts.length && <p>Er staan geen voorlopige scores klaar.</p>}
       <button type="button" style={{ ...btn, marginTop: 14 }} disabled={busy || running || !online || !selectedDrafts.length || !disciplineId} onClick={() => void publish()}>{busy ? "Bevestigen…" : `Geselecteerde bevestigen (${selectedDrafts.length})`}</button>
     </div>}
-    {tab === "historiek" && <div style={panel}><h2>Bevestigde MAS-scores in Sportfolio</h2><label>Klas<select style={control} value={historyClass} onChange={e => setHistoryClass(e.target.value)}><option value="">Alle klassen</option>{classes.map(c => <option key={c} value={c}>{c}</option>)}</select></label><button type="button" style={{ ...btn, marginTop: 10 }} disabled={!disciplineId || busy} onClick={() => void refreshScores(disciplineId).catch(e => setError(errText(e)))}>Historiek vernieuwen</button>
-      <div style={{ overflowX: "auto", marginTop: 12 }}><table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}><thead><tr>{["Testdatum", "Leerling", "Klas", "MAS", "Status"].map(x => <th key={x} style={{ padding: 10, borderBottom: "1px solid #668" }}>{x}</th>)}</tr></thead><tbody>{visibleScores.map(s => <tr key={s.id}><td style={{ padding: 10 }}>{fmt(typeof s.extra_data?.testdatum === "string" ? s.extra_data.testdatum : s.bevestigd_op)}</td><td style={{ padding: 10 }}>{byId.get(s.leerling_id)?.volledige_naam ?? s.leerling_id}</td><td style={{ padding: 10 }}>{s.klas_naam ?? byId.get(s.leerling_id)?.klas_naam ?? "—"}</td><td style={{ padding: 10 }}>{s.score_nummer ?? s.score_tekst ?? "—"} km/u</td><td style={{ padding: 10 }}>Bevestigd</td></tr>)}</tbody></table>{!visibleScores.length && <p>Geen bevestigde MAS-scores gevonden voor deze selectie.</p>}</div>
+    {tab === "historiek" && <div style={panel}><h2>Historiek MAS-test · {schoolYear}</h2><p>Kies een klas. Je ziet alle bevestigde testmomenten van het huidige schooljaar. Een individuele score of een volledig testmoment kan hier verwijderd worden.</p><label>Klas<select style={control} value={historyClass} onChange={e => {setHistoryClass(e.target.value);setProfileId("");}}><option value="">Kies een klas</option>{classes.map(c => <option key={c} value={c}>{c}</option>)}</select></label><button type="button" style={{ ...btn, marginTop: 10 }} disabled={!disciplineId || busy} onClick={() => void refreshScores(disciplineId).catch(e => setError(errText(e)))}>↻ Historiek vernieuwen</button>
+      {historyClass && <div style={{display:"grid",gap:10,marginTop:14}}>{historyDates.map(day=>{const dayRows=visibleScores.filter(s=>String(s.extra_data?.testdatum ?? s.bevestigd_op ?? "").slice(0,10)===day);return <div key={day} style={{border:"1px solid rgba(137,194,170,.3)",borderRadius:14,padding:12}}><div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap"}}><strong style={{flex:1,fontSize:18}}>{fmt(`${day}T12:00:00`)} · {dayRows.length} leerling(en)</strong><button type="button" style={danger} disabled={busy} onClick={()=>void deleteScores(dayRows,`MAS-testmoment van ${fmt(`${day}T12:00:00`)} voor ${historyClass} wissen?`)}>🗑 Testmoment verwijderen</button></div><div style={{overflowX:"auto",marginTop:8}}><table style={{width:"100%",borderCollapse:"collapse",textAlign:"left"}}><thead><tr>{["Leerling","MAS","Actie"].map(x=><th key={x} style={{padding:8,borderBottom:"1px solid #668"}}>{x}</th>)}</tr></thead><tbody>{dayRows.map(score=><tr key={score.id}><td style={{padding:8}}>{byId.get(score.leerling_id)?.volledige_naam ?? score.leerling_id}</td><td style={{padding:8}}><strong>{score.score_nummer ?? score.score_tekst ?? "—"} km/u</strong></td><td style={{padding:8}}><button type="button" style={{...danger,minHeight:36,padding:"6px 10px"}} disabled={busy} onClick={()=>void deleteScores([score],`Score van ${byId.get(score.leerling_id)?.volledige_naam ?? "leerling"} op ${fmt(`${day}T12:00:00`)} wissen?`)}>🗑 Wis</button></td></tr>)}</tbody></table></div></div>})}{!historyDates.length && <p>Geen bevestigde MAS-tests gevonden voor {historyClass} in {schoolYear}.</p>}</div>}
     </div>}
-    {tab === "klassen" && <div style={panel}><h2>Overzicht per klas</h2><p>Een leerling telt als ‘met score’ zodra er minstens één bevestigde MAS-score in Sportfolio staat.</p><div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}><thead><tr>{["Klas", "Leerlingen", "Met score", "Zonder score", "Voltooid"].map(x => <th key={x} style={{ padding: 10, borderBottom: "1px solid #668" }}>{x}</th>)}</tr></thead><tbody>{classes.map(c => { const members = pupils.filter(p => p.klas_naam === c); const scored = new Set(scores.filter(s => s.status === "bevestigd").map(s => s.leerling_id)); const done = members.filter(p => scored.has(p.id)).length; return <tr key={c}><td style={{ padding: 10 }}>{c}</td><td style={{ padding: 10 }}>{members.length}</td><td style={{ padding: 10 }}>{done}</td><td style={{ padding: 10 }}>{members.length - done}</td><td style={{ padding: 10 }}>{members.length ? Math.round(100 * done / members.length) : 0}%</td></tr>; })}</tbody></table></div></div>}
+    {tab === "klassen" && <div style={panel}><h2>Overzicht klassen · {schoolYear}</h2><p>Dit overzicht laadt automatisch. Per officiële klas zie je hoeveel leerlingen dit schooljaar minstens één bevestigde MAS-score hebben, de laatste testdatum en het aantal testmomenten.</p><button type="button" style={btn} disabled={!disciplineId || busy} onClick={()=>void refreshScores(disciplineId).catch(e=>setError(errText(e)))}>↻ Overzicht vernieuwen</button><div style={{ overflowX: "auto",marginTop:12 }}><table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}><thead><tr>{["Klas","Leerlingen","Getest","Laatste test","Testmomenten"].map(x => <th key={x} style={{ padding: 10, borderBottom: "1px solid #668" }}>{x}</th>)}</tr></thead><tbody>{classes.map(c => { const members=pupils.filter(p=>p.klas_naam===c); const ids=new Set(members.filter(p=>!p.id.startsWith("email:")).map(p=>p.id)); const classScores=scores.filter(s=>s.status==="bevestigd"&&s.schooljaar===schoolYear&&ids.has(s.leerling_id)); const tested=new Set(classScores.map(s=>s.leerling_id)).size; const dates=[...new Set(classScores.map(s=>String(s.extra_data?.testdatum ?? s.bevestigd_op ?? "").slice(0,10)).filter(Boolean))].sort().reverse(); return <tr key={c}><td style={{padding:10}}>{c}</td><td style={{padding:10}}>{members.length}</td><td style={{padding:10,fontWeight:800}}>{tested}/{members.length}</td><td style={{padding:10}}>{dates[0]?fmt(`${dates[0]}T12:00:00`):"—"}</td><td style={{padding:10}}>{dates.length}</td></tr>; })}</tbody></table></div>{!classes.length&&<p>Er zijn nog geen officiële klassen geladen.</p>}</div>}
     {tab === "historiek" && <div style={panel}><h2>MAS-profielkaart</h2><label>Leerling<select style={control} value={profileId} onChange={e=>setProfileId(e.target.value)}><option value="">Kies een leerling</option>{pupils.filter(p=>visibleScores.some(s=>s.leerling_id===p.id)).map(p=><option key={p.id} value={p.id}>{p.volledige_naam} · {p.klas_naam}</option>)}</select></label>{profileId && (()=>{const s=visibleScores.find(x=>x.leerling_id===profileId);if(!s)return <p>Geen bevestigde score.</p>;const mas=Number(s.score_nummer);return <div style={{padding:16,marginTop:12,border:"1px solid #668",borderRadius:14}}><h3>{byId.get(profileId)?.volledige_naam}</h3><p>{byId.get(profileId)?.klas_naam} · {fmt(typeof s.extra_data?.testdatum==="string"?s.extra_data.testdatum:s.bevestigd_op)}</p><h2>{mas.toLocaleString("nl-BE")} km/u</h2><p>VO₂max (schatting volgens profielkaart): {Number.isFinite(mas)?(3.5*mas).toFixed(1):"—"} ml/kg/min</p><p>Afstand: {typeof s.extra_data?.afstand_meter==="number"?`${s.extra_data.afstand_meter} m`:"Niet geregistreerd"}</p><p>Testduur: {typeof s.extra_data?.testduur_seconden==="number"?timeLabel(s.extra_data.testduur_seconden):"Niet geregistreerd"}</p><p>Laatst volledig niveau: {typeof s.extra_data?.laatste_volledige_snelheid==="number"?`${s.extra_data.laatste_volledige_snelheid} km/u`:"Niet geregistreerd"}</p></div>})()}</div>}
     <div style={panel}><h2>Gebruik</h2><p>Start de gezamenlijke test met de MP3 zonder muziek of voer een eerder gemeten MAS handmatig in. Controleer de voorlopige scores en bevestig ze vervolgens in Sportfolio.</p><p style={{ fontSize: 13, opacity: .8 }}>MAS is de bevestigde snelheid in km/u. Bij een STOP tijdens een niveau is de voorgestelde score de snelheid van het laatst volledig voltooide niveau; controleer dit met je eigen beoordelingsafspraken. De profielkaart gebruikt VO₂max = 3,5 × MAS als schatting. Er worden geen Eurofitnormkleuren toegepast zonder MAS-specifieke normtabel.</p></div>
   </AppShell>;
