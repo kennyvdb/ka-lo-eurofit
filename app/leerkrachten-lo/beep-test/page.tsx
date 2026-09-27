@@ -74,6 +74,14 @@ function updateResults(mutator: (rows: Result[]) => Result[]): Promise<Result[]>
   return operation;
 }
 
+function sortByFirstName<T extends { volledige_naam?: string; naam?: string }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const nameA = String(a.volledige_naam ?? a.naam ?? "").trim();
+    const nameB = String(b.volledige_naam ?? b.naam ?? "").trim();
+    return nameA.localeCompare(nameB, "nl-BE", { sensitivity: "base", numeric: true });
+  });
+}
+
 export default function BeepTestPage() {
   const [tab, setTab] = useState<"invoer" | "controle" | "historiek" | "klassen">("invoer");
   const [groups, setGroups] = useState<Group[]>([]);
@@ -124,10 +132,14 @@ export default function BeepTestPage() {
   const teacherRef = useRef<string | null>(null);
   const authorizedRef = useRef(false);
   const classNames = [...new Set(schoolStudents.map(s => s.klas_naam).filter(Boolean))].sort((a,b) => a.localeCompare(b, "nl", { numeric: true }));
-  const candidates = schoolStudents.filter(s => (!className || s.klas_naam === className) && (!search.trim() || `${s.volledige_naam} ${s.klas_naam}`.toLocaleLowerCase("nl").includes(search.trim().toLocaleLowerCase("nl"))));
+  const candidates = sortByFirstName(
+    schoolStudents.filter(s => (!className || s.klas_naam === className) && (!search.trim() || `${s.volledige_naam} ${s.klas_naam}`.toLocaleLowerCase("nl").includes(search.trim().toLocaleLowerCase("nl"))))
+  );
+  const sortedStudents = sortByFirstName(students);
   const historyDates = [...new Set(historyRows.map(r => r.datum.slice(0, 10)).filter(Boolean))].sort().reverse();
-  const historyPupils = [...new Map(historyRows.map(r => [r.naam + "|" + r.klas, { naam:r.naam, klas:r.klas }])).values()]
-    .sort((a,b) => a.naam.localeCompare(b.naam,"nl",{numeric:true}));
+  const historyPupils = sortByFirstName(
+    [...new Map(historyRows.map(r => [r.naam + "|" + r.klas, { naam:r.naam, klas:r.klas }])).values()]
+  );
   const historyVisible = historyPupils.map(p => {
     const matches = historyRows.filter(r => r.naam === p.naam && r.klas === p.klas && (historyDate === "latest" || r.datum.slice(0,10) === historyDate));
     return { ...p, result: matches.sort((a,b)=>b.datum.localeCompare(a.datum))[0] ?? null };
@@ -180,9 +192,9 @@ export default function BeepTestPage() {
   const shuttle = last?.shuttle ?? 0;
   const current = results.filter(r => r.session_id === sessionId && !r.confirmed && !r.sportfolio_synced && !r.archived && !r.parked);
   // Houd de controlelijst stabiel. Sorteren op score liet rijen verspringen zodra één score handmatig werd gewijzigd.
-  const reviewRows = [...current].sort((a,b) => a.naam.localeCompare(b.naam,"nl",{numeric:true}) || a.saved_at.localeCompare(b.saved_at));
-  const active = students.filter(s => (attendance[studentKey(s)] ?? "deelneemt") === "deelneemt" && !current.some(r => r.email === s.leerling_email));
-  const participatingStudents = students.filter(s => (attendance[studentKey(s)] ?? "deelneemt") === "deelneemt");
+  const reviewRows = sortByFirstName(current);
+  const active = sortByFirstName(students.filter(s => (attendance[studentKey(s)] ?? "deelneemt") === "deelneemt" && !current.some(r => r.email.trim().toLowerCase() === s.leerling_email.trim().toLowerCase())));
+  const participatingStudents = sortByFirstName(students.filter(s => (attendance[studentKey(s)] ?? "deelneemt") === "deelneemt"));
   const absentCount = students.filter(s => attendance[studentKey(s)] === "afwezig").length;
   const injuredCount = students.filter(s => attendance[studentKey(s)] === "geblesseerd").length;
   const pending = results.filter(r => r.confirmed && !r.archived && r.sync_status !== "synced");
@@ -778,7 +790,7 @@ export default function BeepTestPage() {
         <h3>Geselecteerd voor deze test: {students.length}</h3>
         <p style={{ fontSize: 13, opacity: .8 }}>Duid vóór de start per leerling aan: neemt deel, afwezig of geblesseerd. Alleen deelnemers krijgen tijdens de test een STOP-knop. Tijdens de test blijft deze status vaststaan.</p>
         <div style={{ display: "grid", gap: 7 }}>
-          {students.map(s => {
+          {sortedStudents.map(s => {
             const status = attendance[studentKey(s)] ?? "deelneemt";
             return <div key={studentKey(s)} style={{ display: "grid", gridTemplateColumns: "minmax(150px,1fr) minmax(130px,180px) auto", alignItems: "center", gap: 8, padding: 8, border: "1px solid rgba(137,194,170,.2)", borderRadius: 10 }}>
               <span>{s.volledige_naam} <small style={{ opacity: .7 }}>· {s.klas_naam}</small></span>
@@ -797,15 +809,14 @@ export default function BeepTestPage() {
         <button style={{ ...button, background: "#71394b" }} disabled={!running} onClick={() => void stopAll()}>■ STOP ALL</button>
       </div>
       <p>Actief: {active.length} / {participatingStudents.length} · Afwezig: {absentCount} · Geblesseerd: {injuredCount}</p>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,220px),1fr))", gap: 10 }}>
-        {students.map(s => {
-          const done = current.find(r => r.email === s.leerling_email);
-          const status = attendance[studentKey(s)] ?? "deelneemt";
-          const excluded = status !== "deelneemt";
-          return <div key={s.leerling_email} style={{ border: "1px solid rgba(137,194,170,.28)", borderRadius: 14, padding: 12, minWidth: 0, opacity: excluded ? .65 : 1 }}>
-            <strong>{s.volledige_naam}</strong><p>{s.klas_naam}</p>
-            <button style={{ ...button, width: "100%", background: done ? "#89C2AA" : excluded ? "#48576a" : "linear-gradient(90deg,#255971,#4B8E8D)", color: done ? "#102b32" : "#fff" }} disabled={!running || !!done || excluded} onClick={() => void stopStudent(s)}>
-              {done ? `Bewaard: ${done.level}.${done.shuttle}${done.sync_status === "synced" ? " ✓" : " · lokaal"}` : status === "afwezig" ? "Afwezig" : status === "geblesseerd" ? "Geblesseerd" : "STOP leerling"}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 6 }}>
+        {participatingStudents.map(s => {
+          const done = current.find(r => r.email.trim().toLowerCase() === s.leerling_email.trim().toLowerCase());
+          return <div key={s.leerling_email} style={{ border: "1px solid rgba(137,194,170,.28)", borderRadius: 10, padding: 7, minWidth: 0, background: done ? "rgba(137,194,170,.10)" : "rgba(255,255,255,.025)" }}>
+            <div style={{ fontWeight: 850, fontSize: 14, lineHeight: 1.15, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis" }}>{s.volledige_naam}</div>
+            <div style={{ fontSize: 11, lineHeight: 1.1, opacity: .65, marginBottom: 5 }}>{s.klas_naam}</div>
+            <button type="button" style={{ ...button, width: "100%", minHeight: 38, padding: "5px 6px", borderRadius: 9, fontSize: 12, background: done ? "#89C2AA" : "linear-gradient(90deg,#255971,#4B8E8D)", color: done ? "#102b32" : "#fff" }} disabled={!running || !!done} onClick={() => void stopStudent(s)}>
+              {done ? `${done.level}.${done.shuttle} ✓` : "STOP"}
             </button>
           </div>;
         })}
