@@ -10,6 +10,10 @@ type ProfielLite = {
   volledige_naam: string | null;
   klas_naam: string | null;
   schooljaar: string | null;
+  role?: string | null;
+  rol?: string | null;
+  leerjaar?: number | string | null;
+  graad?: number | string | null;
   geslacht?: string | null;
   gender?: string | null;
   raw?: unknown;
@@ -394,7 +398,10 @@ type SecondGradeForm = {
   date: string;
   gender: GenderChoice;
   mas: string;
-  trainingType: "Duur" | "Interval" | "";
+  trainingType: "Duur" | "Tempo" | "Interval" | "";
+  trainingGoal: "Basisconditie" | "Langer lopen" | "MAS verbeteren" | "";
+  expectedRpe: string;
+  expectedTalk: TalkTest;
   warmupMin: string;
   coreText: string;
   cooldownMin: string;
@@ -423,6 +430,9 @@ function initSecond(
     gender: defaultGender,
     mas: defaultMas && Number.isFinite(defaultMas) ? String(defaultMas) : "",
     trainingType: "",
+    trainingGoal: "",
+    expectedRpe: "",
+    expectedTalk: "",
     warmupMin: "",
     coreText: "",
     cooldownMin: "",
@@ -439,31 +449,25 @@ function initSecond(
   };
 }
 
+function speedToPace(speed: number) {
+  if (!Number.isFinite(speed) || speed <= 0) return "—";
+  const totalSec = Math.round(3600 / speed);
+  const min = Math.floor(totalSec / 60);
+  const sec = String(totalSec % 60).padStart(2, "0");
+  return `${min}:${sec}/km`;
+}
+
 function getMasSpeedText(masRaw: string) {
   const mas = toNum(masRaw);
   if (!Number.isFinite(mas) || mas <= 0)
-    return "Vul je MAS in om je persoonlijke richttempo's te zien.";
+    return "Vul je MAS in om je persoonlijke trainingszones te zien.";
 
-  const speedToPace = (speed: number) => {
-    if (!Number.isFinite(speed) || speed <= 0) return "—";
-    const totalSec = Math.round(3600 / speed);
-    const min = Math.floor(totalSec / 60);
-    const sec = String(totalSec % 60).padStart(2, "0");
-    return `${min}:${sec}/km`;
+  const zone = (pct: number) => {
+    const speed = mas * pct;
+    return `${Math.round(pct * 100)}% = ${speed.toFixed(1)} km/u (${speedToPace(speed)})`;
   };
 
-  const duur70 = mas * 0.7;
-  const duur80 = mas * 0.8;
-  const int90 = mas * 0.9;
-  const int100 = mas;
-
-  return `Met jouw MAS van ${mas.toFixed(1)} km/u: duurtraining ≈ 70–80% MAS (${duur70.toFixed(
-    1,
-  )}–${duur80.toFixed(1)} km/u = ${speedToPace(duur70)} tot ${speedToPace(
-    duur80,
-  )}). Interval ≈ 90–100% MAS (${int90.toFixed(1)}–${int100.toFixed(
-    1,
-  )} km/u = ${speedToPace(int90)} tot ${speedToPace(int100)}).`;
+  return `Jouw MAS = ${mas.toFixed(1)} km/u (${speedToPace(mas)}). ${zone(0.70)} • ${zone(0.80)} • ${zone(0.90)} • ${zone(1.00)}`;
 }
 
 function getMasPerformanceEvaluation(f: SecondGradeForm): RubricItem {
@@ -618,6 +622,13 @@ function rubricsSecond(f: SecondGradeForm): RubricItem[] {
   const hasMas = Number.isFinite(mas) && mas > 0;
   const hasGender = Boolean(f.gender);
   const hasType = Boolean(f.trainingType);
+  const hasGoal = Boolean(f.trainingGoal);
+  const expectedRpe = toNum(f.expectedRpe);
+  const hasPrediction =
+    Number.isFinite(expectedRpe) &&
+    expectedRpe >= 1 &&
+    expectedRpe <= 10 &&
+    Boolean(f.expectedTalk);
   const hasWarm =
     Boolean(f.warmupMin.trim()) &&
     Number.isFinite(toNum(f.warmupMin)) &&
@@ -655,6 +666,8 @@ function rubricsSecond(f: SecondGradeForm): RubricItem[] {
     hasMas,
     hasGender,
     hasType,
+    hasGoal,
+    hasPrediction,
     hasWarm,
     hasCore,
     hasCool,
@@ -668,15 +681,17 @@ function rubricsSecond(f: SecondGradeForm): RubricItem[] {
   const score = checks.filter(Boolean).length;
 
   let level: RubricLevel = "-";
-  if (score >= 10) level = "++";
-  else if (score >= 8) level = "+";
-  else if (score >= 6) level = "+/-";
+  if (score >= 12) level = "++";
+  else if (score >= 10) level = "+";
+  else if (score >= 7) level = "+/-";
 
   const missing: string[] = [];
   if (!hasMas) missing.push("vul je MAS correct in");
   if (!hasGender)
     missing.push("geslacht werd niet automatisch gevonden in profielen.geslacht (M/V)");
-  if (!hasType) missing.push("kies duurtraining of intervaltraining");
+  if (!hasType) missing.push("kies duurloop, tempoloop of intervaltraining");
+  if (!hasGoal) missing.push("kies wat je met deze training wil verbeteren");
+  if (!hasPrediction) missing.push("voorspel vóór de training je RPE en praattest");
   if (!hasWarm || !hasCore || !hasCool)
     missing.push("maak je plan volledig: opwarming, kern en cooling-down");
   if (hasCore && !coreMentionsMas)
@@ -923,12 +938,82 @@ function rubricsThird(f: ThirdGradeForm): {
     flags,
   };
 }
+
+function isLoTeacher(profiel: ProfielLite | null) {
+  const role = String(profiel?.rol ?? profiel?.role ?? "").trim().toLowerCase();
+  return [
+    "lo_leerkracht",
+    "lo-leerkracht",
+    "lo leerkracht",
+    "admin",
+    "teacher",
+    "leerkracht",
+  ].includes(role);
+}
+
+function gradeModeFromProfile(profiel: ProfielLite | null): GradeMode {
+  const leerjaarRaw = Number(profiel?.leerjaar);
+  if (Number.isFinite(leerjaarRaw)) {
+    if (leerjaarRaw >= 5) return "3e";
+    if (leerjaarRaw >= 3) return "2e";
+  }
+
+  const graadRaw = Number(profiel?.graad);
+  if (Number.isFinite(graadRaw)) return graadRaw >= 3 ? "3e" : "2e";
+
+  const klas = String(profiel?.klas_naam ?? "").trim();
+  const match = klas.match(/^([1-6])/);
+  const year = match ? Number(match[1]) : NaN;
+  if (year >= 5) return "3e";
+  return "2e";
+}
+
+type TeacherSubmission = {
+  id: string;
+  user_id: string;
+  schooljaar: string | null;
+  klas_naam: string | null;
+  date: string;
+  grade: GradeMode;
+  payload: any;
+  created_at: string;
+  leerling_naam?: string;
+};
+
+const RUBRIC_EXPLANATION = {
+  "2e": [
+    "MAS/VMA correct ingevuld en gekoppeld aan de training.",
+    "Persoonlijk trainingsdoel gekozen.",
+    "Bewuste keuze tussen duurloop (zone 2), tempoloop en intervaltraining.",
+    "Vooraf voorspelling van RPE en praattest.",
+    "Volledig plan: opwarming, kern en cooling-down.",
+    "Kern concreet gekoppeld aan MAS, tempo, tijd en/of herstel.",
+    "Rust-, piek- en herstelhartslag volledig en logisch.",
+    "Praattest ingevuld én kort verklaard.",
+    "RPE na de training correct ingevuld.",
+    "Reflectie koppelt minstens twee gegevens aan elkaar: MAS/tempo, hartslag, praattest of RPE.",
+  ],
+  "3e": [
+    "Volledige dagregistratie van energie-inname.",
+    "Kcal-inname en geschat kcal-verbruik ingevuld.",
+    "Eiwitten, koolhydraten en vetten geregistreerd.",
+    "Energiebalans correct geïnterpreteerd.",
+    "Macroverdeling besproken.",
+    "Persoonlijke conclusie en realistisch verbeterpunt geformuleerd.",
+  ],
+} satisfies Record<GradeMode, string[]>;
+
 /* =========================
    HOOFDCOMPONENT
 ========================= */
 
 export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
-  const [mode, setMode] = useState<GradeMode>("2e");
+  const teacherMode = isLoTeacher(profiel);
+  const studentMode = gradeModeFromProfile(profiel);
+  const [mode, setMode] = useState<GradeMode>(() =>
+    teacherMode ? "2e" : studentMode,
+  );
+  const [showAllRubrics, setShowAllRubrics] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -1024,6 +1109,10 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
     };
   }, [uid, profiel?.geslacht, profiel?.gender, profiel?.raw]);
 
+  useEffect(() => {
+    if (!teacherMode) setMode(studentMode);
+  }, [teacherMode, studentMode]);
+
   const rub2 = useMemo(() => rubricsSecond(f2), [f2]);
   const rub3 = useMemo(() => rubricsThird(f3), [f3]);
 
@@ -1066,7 +1155,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
       };
 
       const { error } = await supabase
-        .from("functional_huiswerk_submissions")
+        .from("eurofit_huiswerk_submissions")
         .insert(row);
       if (error) throw new Error(error.message);
 
@@ -1092,35 +1181,160 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
           <div>
             <div style={styles.sectionTitle}>📚 Huiswerk</div>
             <div style={{ ...styles.small, marginTop: 6 }}>
-              Kies je graad en vul de opdracht in. De app berekent automatisch
-              rubrics.
+              {teacherMode
+                ? "LO-leerkrachtmodus: bekijk 2e of 3e graad en alle evaluatierubrics."
+                : `Je ziet automatisch alleen het huiswerk van de ${studentMode === "2e" ? "2e" : "3e"} graad.`}
             </div>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              alignItems: "center",
-              flexWrap: "wrap",
-            }}
-          >
-            <span style={styles.pill}>Graad</span>
-            <select
-              value={mode}
-              onChange={(e) => {
-                setInfo(null);
-                setError(null);
-                setMode(e.target.value as GradeMode);
-              }}
-              style={{ ...styles.input, marginTop: 0, height: 46, width: 180 }}
-            >
-              <option value="2e">2e graad</option>
-              <option value="3e">3e graad</option>
-            </select>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            {teacherMode ? (
+              <>
+                <span style={styles.pill}>Graad</span>
+                <select
+                  value={mode}
+                  onChange={(e) => {
+                    setInfo(null);
+                    setError(null);
+                    setMode(e.target.value as GradeMode);
+                  }}
+                  style={{ ...styles.input, marginTop: 0, height: 46, width: 180 }}
+                >
+                  <option value="2e">2e graad</option>
+                  <option value="3e">3e graad</option>
+                </select>
+                <button
+                  type="button"
+                  onClick={() => setShowAllRubrics((v) => !v)}
+                  style={styles.ghostBtn}
+                >
+                  {showAllRubrics ? "Rubrics sluiten" : "📊 Alle rubrics"}
+                </button>
+              </>
+            ) : (
+              <span style={styles.pill}>
+                {studentMode === "2e" ? "2e graad" : "3e graad"}
+              </span>
+            )}
           </div>
         </div>
       </div>
+
+      {teacherMode && showAllRubrics ? (
+        <div style={styles.panel}>
+          <div style={styles.sectionTitle}>
+            📊 Alle rubrics — {mode === "2e" ? "2e graad" : "3e graad"}
+          </div>
+
+          {mode === "2e" ? (
+            <>
+              <div style={{ ...styles.small, marginTop: 8 }}>
+                De evaluatie van het huiswerk 2e graad gebruikt geen punten op 10.
+                De code controleert <b style={{ color: ui.text }}>14 concrete onderdelen</b>.
+                Het aantal onderdelen dat correct/controleerbaar aanwezig is, bepaalt de rubric.
+              </div>
+
+              <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+                {[
+                  {
+                    level: "++",
+                    title: "Zeer goed",
+                    range: "12–14 van de 14 onderdelen aanwezig",
+                    text: "Het huiswerk is zeer volledig. De leerling gebruikt de MAS persoonlijk, plant de training concreet, meet de hartslag logisch, gebruikt praattest en RPE en reflecteert voldoende uitgebreid.",
+                    color: rubricColors["++"],
+                  },
+                  {
+                    level: "+",
+                    title: "In orde",
+                    range: "10–11 van de 14 onderdelen aanwezig",
+                    text: "Het huiswerk is logisch en voldoende volledig om de training te kunnen beoordelen. Er ontbreken nog enkele details of onderdelen voor een ++.",
+                    color: rubricColors["+"],
+                  },
+                  {
+                    level: "+/-",
+                    title: "Basis aanwezig",
+                    range: "7–9 van de 14 onderdelen aanwezig",
+                    text: "Een belangrijk deel van het huiswerk is ingevuld, maar meerdere onderdelen ontbreken of zijn onvoldoende duidelijk. De leerling toont de basis, maar het geheel is nog niet volledig controleerbaar.",
+                    color: rubricColors["+/-"],
+                  },
+                  {
+                    level: "-",
+                    title: "Onvoldoende / onvolledig",
+                    range: "0–6 van de 14 onderdelen aanwezig",
+                    text: "Te veel verplichte onderdelen ontbreken. Daardoor kan de uitvoering, intensiteit en reflectie van de training onvoldoende beoordeeld worden.",
+                    color: rubricColors["-"],
+                  },
+                ].map((r) => (
+                  <div key={r.level} style={{ ...styles.rubricCard, borderColor: r.color }}>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                      <span style={{
+                        display: "inline-flex",
+                        minWidth: 48,
+                        justifyContent: "center",
+                        borderRadius: 999,
+                        padding: "6px 10px",
+                        fontWeight: 1000,
+                        background: r.color,
+                        color: "#081018",
+                      }}>
+                        {r.level}
+                      </span>
+                      <b style={{ color: ui.text }}>{r.title}</b>
+                      <span style={styles.pill}>{r.range}</span>
+                    </div>
+                    <div style={{ ...styles.small, marginTop: 8 }}>{r.text}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ ...styles.infoBox, marginTop: 14 }}>
+                <b style={{ color: ui.text }}>De 14 controlepunten</b>
+                <div style={{ marginTop: 10, display: "grid", gap: 7 }}>
+                  {[
+                    "1. MAS is correct ingevuld en groter dan 0.",
+                    "2. Geslacht is beschikbaar in het profiel.",
+                    "3. Trainingsvorm is gekozen: duurloop, tempoloop of intervaltraining.",
+                    "4. Persoonlijk trainingsdoel is gekozen.",
+                    "5. Vooraf zijn zowel verwachte RPE (1–10) als verwachte praattest ingevuld.",
+                    "6. Opwarming bevat een geldige duur in minuten.",
+                    "7. De kern van de training is ingevuld.",
+                    "8. Cooling-down bevat een geldige duur in minuten.",
+                    "9. De kern verwijst concreet naar MAS, %, km/u, tempo, minuten, rust of herhalingen.",
+                    "10. Rusthartslag, piekhartslag en herstelhartslag na 1 minuut zijn alle drie ingevuld.",
+                    "11. De hartslagwaarden zijn logisch: piek > rust en herstel na 1 minuut < piek.",
+                    "12. Praattest is gekozen én kort uitgelegd.",
+                    "13. RPE na de training is geldig ingevuld van 1 tot 10.",
+                    "14. Reflectie bevat minstens 2 duidelijke zinnen en minstens 80 tekens.",
+                  ].map((x) => (
+                    <div key={x} style={styles.rubricCard}>{x}</div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ ...styles.small, marginTop: 12 }}>
+                Belangrijk: de rubric beoordeelt hier vooral of het huiswerk
+                <b style={{ color: ui.text }}> volledig, logisch en controleerbaar </b>
+                is ingevuld. De MAS-prestatie zelf wordt daarnaast apart weergegeven en bepaalt
+                niet rechtstreeks de huiswerkrubric.
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ ...styles.small, marginTop: 8 }}>
+                De leerling krijgt geen cijfer op 10. De evaluatie gebruikt
+                <b style={{ color: ui.text }}> - / +/- / + / ++</b>.
+              </div>
+              <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
+                {RUBRIC_EXPLANATION[mode].map((criterion, index) => (
+                  <div key={criterion} style={styles.rubricCard}>
+                    <b style={{ color: ui.text }}>{index + 1}. {criterion}</b>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
 
       {error && (
         <div style={styles.errorBox}>
@@ -1137,7 +1351,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
       {mode === "2e" ? (
         <>
           <SecondGradePanel value={f2} onChange={setF2} />
-          <RubricPanel title="Evaluatie (2e graad)" items={rub2} />
+          {teacherMode ? <RubricPanel title="Evaluatie (2e graad)" items={rub2} /> : null}
         </>
       ) : (
         <>
@@ -1147,7 +1361,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
             derived={rub3.totals}
             flags={rub3.flags}
           />
-          <RubricPanel
+          {teacherMode ? <RubricPanel
             title="Rubrics (3e graad)"
             items={rub3.items}
             extraRight={`Energiebalans: ${
@@ -1155,7 +1369,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
                 ? "—"
                 : `${Math.round(rub3.totals.kcalBalance)} kcal`
             }`}
-          />
+          /> : null}
         </>
       )}
 
@@ -1279,8 +1493,8 @@ function SecondGradePanel({
         <div style={{ ...styles.small, marginTop: 8 }}>
           Je werkt thuis{" "}
           <b style={{ color: ui.text }}>één volledige training</b> af. Je kiest
-          zelf:
-          <b style={{ color: ui.text }}> duurtraining</b> of{" "}
+          zelf tussen <b style={{ color: ui.text }}>duurloop (zone 2)</b>,{" "}
+          <b style={{ color: ui.text }}>tempoloop</b> of{" "}
           <b style={{ color: ui.text }}>intervaltraining</b>. Gebruik je{" "}
           <b style={{ color: ui.text }}>MAS/VMA</b> om je tempo te bepalen. Meet
           je hartslag voor, tijdens/na de kern en na 1 minuut herstel. Tijdens
@@ -1293,20 +1507,33 @@ function SecondGradePanel({
           Wat moet je precies doen?
         </div>
         <div style={{ ...styles.small, marginTop: 8, display: "grid", gap: 6 }}>
-          <div>1. Kies één training: duur of interval.</div>
-          <div>2. Maak een plan met opwarming, kern en cooling-down.</div>
-          <div>3. Gebruik je MAS om je tempo te kiezen.</div>
-          <div>
-            4. Meet rusthartslag, hoogste hartslag en herstelhartslag na exact 1
-            minuut.
-          </div>
-          <div>5. Noteer praattest, RPE en een korte reflectie.</div>
+          <div>1. Kies wat je wil verbeteren en daarna één trainingsvorm.</div>
+          <div>2. Voorspel vóór de training je RPE en praattest.</div>
+          <div>3. Maak een plan met opwarming, kern en cooling-down.</div>
+          <div>4. Gebruik je MAS om je persoonlijke tempo te kiezen.</div>
+          <div>5. Meet rusthartslag, hoogste hartslag en herstelhartslag na exact 1 minuut.</div>
+          <div>6. Vergelijk na afloop je voorspelling met praattest, RPE en hartslag.</div>
         </div>
       </div>
 
       <div className="row2" style={styles.row2}>
         <div style={styles.panel}>
           <div style={styles.sectionTitle}>1) Basis</div>
+          <div style={{ ...styles.infoBox, marginTop: 12 }}>
+            <div style={{ fontWeight: 980, color: ui.text }}>RPE en praattest — wat betekent dit?</div>
+            <div style={{ ...styles.small, marginTop: 8 }}>
+              <b style={{ color: ui.text }}>RPE</b> betekent hoe zwaar de inspanning voor jou aanvoelt op een schaal van 1 tot 10:
+              1–2 = zeer licht, 3–4 = rustig, 5–6 = matig, 7–8 = zwaar en 9–10 = zeer zwaar tot maximaal.
+            </div>
+            <div style={{ ...styles.small, marginTop: 8 }}>
+              <b style={{ color: ui.text }}>Praattest</b> helpt je de intensiteit tijdens het lopen inschatten:
+              groen = je kunt vlot in zinnen praten; oranje = je kunt nog korte zinnen zeggen maar praten wordt moeilijk;
+              rood = je krijgt slechts enkele woorden uit zonder extra adem te halen.
+            </div>
+            <div style={{ ...styles.small, marginTop: 8 }}>
+              Je gebruikt beide om vóór de training te voorspellen hoe zwaar ze zal zijn en achteraf te controleren of je gekozen tempo bij je trainingsdoel paste.
+            </div>
+          </div>
 
           <div style={{ marginTop: 12 }}>
             <div style={styles.label}>Datum</div>
@@ -1364,16 +1591,65 @@ function SecondGradePanel({
           </div>
 
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Keuze training</div>
+            <div style={styles.label}>Wat wil je vooral verbeteren?</div>
             <select
-              value={value.trainingType}
-              onChange={(e) => set({ trainingType: e.target.value as any })}
+              value={value.trainingGoal}
+              onChange={(e) => set({ trainingGoal: e.target.value as SecondGradeForm["trainingGoal"] })}
               style={{ ...styles.input, marginTop: 10 }}
             >
               <option value="">Kies…</option>
-              <option value="Duur">Duurtraining</option>
-              <option value="Interval">Intervaltraining</option>
+              <option value="Basisconditie">Mijn basisconditie verbeteren</option>
+              <option value="Langer lopen">Langer comfortabel kunnen lopen</option>
+              <option value="MAS verbeteren">Mijn MAS / maximale aerobe snelheid verbeteren</option>
             </select>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Keuze training</div>
+            <select
+              value={value.trainingType}
+              onChange={(e) => set({ trainingType: e.target.value as SecondGradeForm["trainingType"] })}
+              style={{ ...styles.input, marginTop: 10 }}
+            >
+              <option value="">Kies…</option>
+              <option value="Duur">Duurloop / zone 2 — rustig en lang volhouden</option>
+              <option value="Tempo">Tempoloop — stevig, gecontroleerd tempo</option>
+              <option value="Interval">Intervaltraining — snelle blokken met herstel</option>
+            </select>
+            <div style={{ ...styles.small, marginTop: 8 }}>
+              <b style={{ color: ui.text }}>Duurloop:</b> ±65–75% MAS, praten blijft vlot.{" "}
+              <b style={{ color: ui.text }}>Tempoloop:</b> ±75–85% MAS, korte zinnen worden moeilijker.{" "}
+              <b style={{ color: ui.text }}>Interval:</b> werkblokken meestal ±90–110% MAS, afgewisseld met rustig herstel.
+            </div>
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <div style={styles.label}>Voorspelling vóór de training</div>
+            <div className="row2" style={{ ...styles.row2, marginTop: 8 }}>
+              <div>
+                <div style={styles.label}>Verwachte RPE (1–10)</div>
+                <input
+                  value={value.expectedRpe}
+                  onChange={(e) => set({ expectedRpe: e.target.value })}
+                  style={styles.input}
+                  inputMode="numeric"
+                  placeholder="bv. 6"
+                />
+              </div>
+              <div>
+                <div style={styles.label}>Verwachte praattest</div>
+                <select
+                  value={value.expectedTalk}
+                  onChange={(e) => set({ expectedTalk: e.target.value as TalkTest })}
+                  style={{ ...styles.input, marginTop: 10 }}
+                >
+                  <option value="">Kies…</option>
+                  <option value="Groen">Groen</option>
+                  <option value="Oranje">Oranje</option>
+                  <option value="Rood">Rood</option>
+                </select>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -1382,15 +1658,13 @@ function SecondGradePanel({
             2) Plan met MAS (opwarming – kern – cooling-down)
           </div>
           <div style={{ ...styles.small, marginTop: 8 }}>
-            <b style={{ color: ui.text }}>Duurtraining:</b> loop of wandel-loop
-            15–30 minuten aan een tempo dat je lang kan volhouden. Richting:
-            70–80% MAS. Je blijft meestal in praattest groen/oranje.
+            <b style={{ color: ui.text }}>Duurloop / zone 2:</b> rustig, gelijkmatig en lang volhouden. Richting ±65–75% MAS; praattest meestal groen.
           </div>
           <div style={{ ...styles.small, marginTop: 8 }}>
-            <b style={{ color: ui.text }}>Intervaltraining:</b> wissel
-            inspanning en herstel af. Dat kan als wandelen → lopen, of als
-            rustig lopen → versnellen. Richting: inspanningen aan 90–100% MAS,
-            herstel zeer rustig wandelen of joggen.
+            <b style={{ color: ui.text }}>Tempoloop:</b> een langere periode stevig maar gecontroleerd lopen. Richting ±75–85% MAS; praattest groen/oranje tot oranje.
+          </div>
+          <div style={{ ...styles.small, marginTop: 8 }}>
+            <b style={{ color: ui.text }}>Intervaltraining:</b> snelle werkblokken afwisselen met herstel. Werkblokken meestal ±90–110% MAS, afhankelijk van de duur; herstel rustig wandelen of joggen.
           </div>
 
           <div style={{ marginTop: 12 }}>
@@ -1412,8 +1686,10 @@ function SecondGradePanel({
               style={styles.textarea}
               placeholder={
                 value.trainingType === "Interval"
-                  ? "bv. 8×1 min aan 90–95% MAS met 1 min wandelen/joggen als rust. Of: 10×30 sec versnellen + 60 sec rustig lopen."
-                  : "bv. 20 min aan 70–80% MAS. Ik loop rustig door en blijf in praattest groen/oranje."
+                  ? "bv. 8×1 min aan 95–100% MAS met 1 min rustig joggen als herstel."
+                  : value.trainingType === "Tempo"
+                    ? "bv. 15 min aan ongeveer 80% MAS. Stevig maar controleerbaar tempo."
+                    : "bv. 25 min aan ongeveer 70% MAS. Rustig tempo met groene praattest."
               }
             />
             <div style={{ ...styles.small, marginTop: 8 }}>
@@ -1543,7 +1819,7 @@ function SecondGradePanel({
               value={value.reflection}
               onChange={(e) => set({ reflection: e.target.value })}
               style={styles.textarea}
-              placeholder="Schrijf: wat ging goed? wat zegt mijn hartslag/praattest/RPE? wat neem ik mee naar volgende keer?"
+              placeholder="Paste je gekozen intensiteit bij je MAS? Vergelijk je voorspelling met de werkelijkheid en gebruik minstens 2 gegevens: tempo/MAS, hartslag, praattest of RPE."
             />
           </div>
         </div>

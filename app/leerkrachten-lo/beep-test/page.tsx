@@ -82,6 +82,19 @@ function updateResults(mutator: (rows: Result[]) => Result[]): Promise<Result[]>
   return operation;
 }
 
+function currentSchoolYear(date = new Date()) {
+  const year = date.getFullYear();
+  const start = date.getMonth() >= 8 ? year : year - 1;
+  return `${start}-${start + 1}`;
+}
+
+type ClassOverviewScore = {
+  id: string;
+  leerling_id: string;
+  bevestigd_op: string | null;
+  extra_data: Record<string, unknown> | null;
+};
+
 function sortByFirstName<T extends { volledige_naam?: string; naam?: string }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
     const nameA = String(a.volledige_naam ?? a.naam ?? "").trim();
@@ -129,6 +142,11 @@ export default function BeepTestPage() {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [historyDate, setHistoryDate] = useState("latest");
   const [historyExpanded, setHistoryExpanded] = useState<string | null>(null);
+  const [classOverviewScores, setClassOverviewScores] = useState<ClassOverviewScore[]>([]);
+  const [classOverviewPupilClass, setClassOverviewPupilClass] = useState<Record<string, string>>({});
+  const [classOverviewLoading, setClassOverviewLoading] = useState(false);
+  const [classOverviewError, setClassOverviewError] = useState("");
+  const schoolYear = currentSchoolYear();
   const [message, setMessage] = useState("Laad je klasgroep en audio vóór de les.");
   const audio = useRef<HTMLAudioElement | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -632,6 +650,77 @@ export default function BeepTestPage() {
     finally {setHistoryLoading(false);}
   }
 
+
+  const loadClassOverview = useCallback(async () => {
+    if (!authorizedRef.current || !teacherRef.current) return;
+    setClassOverviewLoading(true);
+    setClassOverviewError("");
+    try {
+      const { data: discipline, error: disciplineError } = await supabase
+        .from("sportfolio_disciplines")
+        .select("id")
+        .eq("slug", "beep_test")
+        .single();
+      if (disciplineError || !discipline) {
+        throw disciplineError ?? new Error("Beep-testdiscipline niet gevonden.");
+      }
+
+      // Koppel de officiële leerlingenlijst aan profiel-ID's. Zo tellen we een score
+      // bij de huidige officiële klas en hoeven we de Historiek helemaal niet te laden.
+      const emails = [...new Set(
+        schoolStudents.map(student => student.leerling_email.trim().toLowerCase()).filter(Boolean)
+      )];
+
+      const pupilClass: Record<string, string> = {};
+      for (let i = 0; i < emails.length; i += 100) {
+        const { data: profiles, error: profileError } = await supabase
+          .from("profielen")
+          .select("id,email")
+          .in("email", emails.slice(i, i + 100));
+        if (profileError) throw profileError;
+
+        for (const profile of profiles ?? []) {
+          const email = String(profile.email ?? "").trim().toLowerCase();
+          const official = schoolStudents.find(
+            student => student.leerling_email.trim().toLowerCase() === email
+          );
+          if (official) pupilClass[String(profile.id)] = official.klas_naam;
+        }
+      }
+
+      const ids = Object.keys(pupilClass);
+      const scores: ClassOverviewScore[] = [];
+      for (let i = 0; i < ids.length; i += 100) {
+        const { data, error } = await supabase
+          .from("sportfolio_scores")
+          .select("id,leerling_id,bevestigd_op,extra_data")
+          .eq("discipline_id", discipline.id)
+          .eq("status", "bevestigd")
+          .eq("schooljaar", schoolYear)
+          .in("leerling_id", ids.slice(i, i + 100))
+          .order("bevestigd_op", { ascending: false })
+          .limit(1000);
+        if (error) throw error;
+        scores.push(...((data ?? []) as ClassOverviewScore[]));
+      }
+
+      setClassOverviewPupilClass(pupilClass);
+      setClassOverviewScores(scores);
+    } catch (error) {
+      setClassOverviewScores([]);
+      setClassOverviewPupilClass({});
+      setClassOverviewError(describeSyncError(error));
+    } finally {
+      setClassOverviewLoading(false);
+    }
+  }, [schoolStudents, schoolYear]);
+
+  useEffect(() => {
+    if (tab !== "klassen" || !authorized || !teacherId || !schoolStudents.length) return;
+    void loadClassOverview();
+  }, [tab, authorized, teacherId, schoolStudents.length, loadClassOverview]);
+
+
   // Een oude lokale registratie kan een ander ID hebben dan de bevestigde Sportfolio-score.
   // Verberg ze uitsluitend na een expliciete keuze én controle op een bestaande bevestigde score.
   // Dit schrijft niets naar Sportfolio en verwijdert geen lokale gegevens.
@@ -1098,18 +1187,49 @@ export default function BeepTestPage() {
     </div>
     </>}
     {tab === "klassen" && <div style={panel}>
-      <h2>Overzicht klassen</h2>
-      <p>Dit overzicht toont de officiële leerlingenlijst. Bevestigde scores worden alleen geteld voor de klas waarvan je de historiek in het tabblad ‘Historiek’ hebt geladen.</p>
-      <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
-        <thead><tr>{["Klas", "Leerlingen", "Bevestigde score", "Nog geen score", "Status"].map(h => <th key={h} style={{ padding: 10, borderBottom: "1px solid rgba(137,194,170,.3)" }}>{h}</th>)}</tr></thead>
-        <tbody>{classNames.map(c => {
-          const members = schoolStudents.filter(s => s.klas_naam === c);
-          const loaded = historyLoaded && !historyGroup && historyClass === c && historyDate === "latest";
-          const scored = loaded ? members.filter(s => historyRows.some(r => r.klas === c && r.naam === s.volledige_naam)).length : 0;
-          return <tr key={c}><td style={{ padding: 10 }}>{c}</td><td style={{ padding: 10 }}>{members.length}</td><td style={{ padding: 10 }}>{loaded ? scored : "—"}</td><td style={{ padding: 10 }}>{loaded ? members.length - scored : "—"}</td><td style={{ padding: 10 }}>{loaded ? "Historiek geladen" : "Laad eerst historiek"}</td></tr>;
-        })}</tbody>
-      </table></div>
+      <h2>Overzicht klassen · {schoolYear}</h2>
+      <p>Dit overzicht laadt automatisch en staat volledig los van Historiek. Per officiële klas zie je hoeveel leerlingen dit schooljaar minstens één bevestigde Beep-testscore hebben, de laatste testdatum en het aantal testmomenten.</p>
+      <button type="button" style={button} disabled={classOverviewLoading || !authorized}
+        onClick={() => void loadClassOverview()}>
+        {classOverviewLoading ? "Overzicht laden…" : "↻ Overzicht vernieuwen"}
+      </button>
+      {classOverviewError && <p role="alert" style={{ color: "#ffb8b8" }}>{classOverviewError}</p>}
+      <div style={{ overflowX: "auto", marginTop: 12 }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left" }}>
+          <thead>
+            <tr>{["Klas", "Leerlingen", "Getest", "Laatste test", "Testmomenten"].map(h =>
+              <th key={h} style={{ padding: 10, borderBottom: "1px solid rgba(137,194,170,.3)" }}>{h}</th>
+            )}</tr>
+          </thead>
+          <tbody>{classNames.map(c => {
+            const members = schoolStudents.filter(student => student.klas_naam === c);
+            const memberIds = new Set(
+              Object.entries(classOverviewPupilClass)
+                .filter(([, klas]) => klas === c)
+                .map(([id]) => id)
+            );
+            const classScores = classOverviewScores.filter(score => memberIds.has(score.leerling_id));
+            const tested = new Set(classScores.map(score => score.leerling_id)).size;
+            const dates = [...new Set(
+              classScores
+                .map(score => String(score.extra_data?.testdatum ?? score.bevestigd_op ?? "").slice(0, 10))
+                .filter(Boolean)
+            )].sort().reverse();
+
+            return <tr key={c}>
+              <td style={{ padding: 10 }}>{c}</td>
+              <td style={{ padding: 10 }}>{members.length}</td>
+              <td style={{ padding: 10, fontWeight: 800 }}>{classOverviewLoading ? "…" : `${tested}/${members.length}`}</td>
+              <td style={{ padding: 10 }}>{classOverviewLoading ? "…" : dates[0] ? new Date(`${dates[0]}T12:00:00`).toLocaleDateString("nl-BE") : "—"}</td>
+              <td style={{ padding: 10 }}>{classOverviewLoading ? "…" : dates.length}</td>
+            </tr>;
+          })}</tbody>
+        </table>
+      </div>
       {!classNames.length && <p>Er zijn nog geen officiële klassen geladen.</p>}
+      <p style={{ fontSize: 12, opacity: .8, marginTop: 10 }}>
+        Het tabblad Historiek wordt hierdoor niet geladen. Historiek wordt alleen opgehaald wanneer je daar zelf een klas of klasgroep kiest en op ‘Toon historiek’ drukt.
+      </p>
     </div>}
     {tab === "controle" && <div style={panel}><h2>Resultaten opslaan</h2>
       <p style={{ color: "#89C2AA", fontWeight: 800 }}>☁ {sessionSynced} lokaal als gesynchroniseerd gemarkeerd in deze testsessie</p>
