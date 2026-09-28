@@ -81,6 +81,9 @@ type ExistingScore = {
   status: string | null;
   bevestigd_op: string | null;
   aangemaakt_op: string | null;
+  bron?: "profiel" | "voorlopig";
+  leerling_email?: string | null;
+  leerling_username?: string | null;
 };
 
 type GradeMap = Record<string, number[]>;
@@ -236,7 +239,7 @@ function ExistingScoreRow({
   rubric: RubricRow | null;
   savingId: string | null;
   onSave: (score: ExistingScore, nummer: string, tekst: string) => Promise<void>;
-  onDelete: (scoreId: string) => Promise<void>;
+  onDelete: (score: ExistingScore) => Promise<void>;
 }) {
   const [nummer, setNummer] = useState(
     score.score_nummer == null ? "" : String(score.score_nummer)
@@ -257,6 +260,11 @@ function ExistingScoreRow({
       <td className="px-4 py-3">
         <div className="font-bold text-white">
           {leerling?.naam ?? "Onbekende leerling"}
+          {score.bron === "voorlopig" ? (
+            <span className="ml-2 inline-flex rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-black text-amber-200">
+              Voorlopig
+            </span>
+          ) : null}
         </div>
         <div className="mt-0.5 text-[11px] text-white/40">
           {leerling?.klas_naam ?? "—"}
@@ -309,7 +317,7 @@ function ExistingScoreRow({
             Wijzigen
           </button>
           <button
-            onClick={() => void onDelete(score.id)}
+            onClick={() => void onDelete(score)}
             disabled={busy}
             className="rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-xs font-black text-red-100 disabled:opacity-40"
           >
@@ -756,24 +764,92 @@ export default function SportfolioBeheerPage() {
       setLoadingExistingScores(true);
 
       const leerlingIds = leerlingen.filter((l) => l.heeftProfiel).map((l) => l.id);
-      if (!leerlingIds.length) { setExistingScores([]); return; }
-      const { data, error } = await supabase
-        .from("sportfolio_scores")
-        .select(
-          "id, leerling_id, discipline_id, schooljaar, score_nummer, score_tekst, eenheid, status, bevestigd_op, aangemaakt_op"
-        )
-        .eq("discipline_id", disciplineId)
-        .eq("schooljaar", selectedSchooljaar)
-        .in("leerling_id", leerlingIds)
-        .order("aangemaakt_op", { ascending: false });
+      const emails = leerlingen
+        .map((l) => l.email?.trim().toLowerCase())
+        .filter((v): v is string => Boolean(v));
 
-      if (error) {
-        throw new Error(
-          readableSupabaseError(error, "Bestaande scores laden mislukt.")
+      const profielScores: ExistingScore[] = [];
+
+      if (leerlingIds.length) {
+        const { data, error } = await supabase
+          .from("sportfolio_scores")
+          .select(
+            "id, leerling_id, discipline_id, schooljaar, score_nummer, score_tekst, eenheid, status, bevestigd_op, aangemaakt_op"
+          )
+          .eq("discipline_id", disciplineId)
+          .eq("schooljaar", selectedSchooljaar)
+          .in("leerling_id", leerlingIds)
+          .order("aangemaakt_op", { ascending: false });
+
+        if (error) {
+          throw new Error(
+            readableSupabaseError(error, "Bestaande profielscores laden mislukt.")
+          );
+        }
+
+        profielScores.push(
+          ...((data ?? []) as ExistingScore[]).map((score) => ({
+            ...score,
+            bron: "profiel" as const,
+          }))
         );
       }
 
-      setExistingScores((data ?? []) as ExistingScore[]);
+      const voorlopigeScores: ExistingScore[] = [];
+
+      if (emails.length) {
+        const { data, error } = await supabase.rpc(
+          "sportfolio_pending_for_selection",
+          {
+            p_discipline_id: disciplineId,
+            p_schooljaar: selectedSchooljaar,
+            p_emails: emails,
+          }
+        );
+
+        if (error) {
+          throw new Error(
+            readableSupabaseError(error, "Voorlopige scores laden mislukt.")
+          );
+        }
+
+        for (const row of (data ?? []) as RawRow[]) {
+          const email = String(row.leerling_email ?? "").trim().toLowerCase();
+          const leerling = leerlingen.find(
+            (l) => l.email?.trim().toLowerCase() === email
+          );
+
+          voorlopigeScores.push({
+            id: String(row.id),
+            leerling_id: leerling?.id ?? `zonder-profiel:${email}`,
+            discipline_id: String(row.discipline_id),
+            schooljaar: String(row.schooljaar),
+            score_nummer:
+              row.score_nummer == null ? null : Number(row.score_nummer),
+            score_tekst: row.score_tekst == null ? null : String(row.score_tekst),
+            eenheid: row.eenheid == null ? null : String(row.eenheid),
+            status: row.status == null ? "bevestigd" : String(row.status),
+            bevestigd_op:
+              row.bevestigd_op == null ? null : String(row.bevestigd_op),
+            aangemaakt_op:
+              row.aangemaakt_op == null ? null : String(row.aangemaakt_op),
+            bron: "voorlopig",
+            leerling_email: email,
+            leerling_username:
+              row.leerling_username == null
+                ? null
+                : String(row.leerling_username),
+          });
+        }
+      }
+
+      setExistingScores(
+        [...profielScores, ...voorlopigeScores].sort((a, b) =>
+          String(b.aangemaakt_op ?? "").localeCompare(
+            String(a.aangemaakt_op ?? "")
+          )
+        )
+      );
     } catch (err) {
       setExistingScores([]);
       setError(
@@ -807,21 +883,35 @@ export default function SportfolioBeheerPage() {
     setSavingId(`score-${score.id}`);
 
     try {
-      const { error } = await supabase
-        .from("sportfolio_scores")
-        .update({
-          score_nummer: scoreNummer,
-          score_tekst: scoreTekst,
-          status: "bevestigd",
-          bevestigd_door: profiel.id,
-          bevestigd_op: new Date().toISOString(),
-        })
-        .eq("id", score.id);
+      if (score.bron === "voorlopig") {
+        const { error } = await supabase.rpc("sportfolio_update_pending_score", {
+          p_id: score.id,
+          p_score_nummer: scoreNummer,
+          p_score_tekst: scoreTekst,
+        });
 
-      if (error) {
-        throw new Error(
-          readableSupabaseError(error, "Score wijzigen mislukt.")
-        );
+        if (error) {
+          throw new Error(
+            readableSupabaseError(error, "Voorlopige score wijzigen mislukt.")
+          );
+        }
+      } else {
+        const { error } = await supabase
+          .from("sportfolio_scores")
+          .update({
+            score_nummer: scoreNummer,
+            score_tekst: scoreTekst,
+            status: "bevestigd",
+            bevestigd_door: profiel.id,
+            bevestigd_op: new Date().toISOString(),
+          })
+          .eq("id", score.id);
+
+        if (error) {
+          throw new Error(
+            readableSupabaseError(error, "Score wijzigen mislukt.")
+          );
+        }
       }
 
       await loadExistingScores();
@@ -833,22 +923,33 @@ export default function SportfolioBeheerPage() {
     }
   }
 
-  async function deleteExistingScore(scoreId: string) {
+  async function deleteExistingScore(score: ExistingScore) {
     if (!window.confirm("Deze score definitief verwijderen?")) return;
 
     clearMessages();
-    setSavingId(`delete-score-${scoreId}`);
+    setSavingId(`delete-score-${score.id}`);
 
     try {
-      const { error } = await supabase
-        .from("sportfolio_scores")
-        .delete()
-        .eq("id", scoreId);
+      if (score.bron === "voorlopig") {
+        const { error } = await supabase.rpc("sportfolio_delete_pending_score", {
+          p_id: score.id,
+        });
+        if (error) {
+          throw new Error(
+            readableSupabaseError(error, "Voorlopige score verwijderen mislukt.")
+          );
+        }
+      } else {
+        const { error } = await supabase
+          .from("sportfolio_scores")
+          .delete()
+          .eq("id", score.id);
 
-      if (error) {
-        throw new Error(
-          readableSupabaseError(error, "Score verwijderen mislukt.")
-        );
+        if (error) {
+          throw new Error(
+            readableSupabaseError(error, "Score verwijderen mislukt.")
+          );
+        }
       }
 
       await loadExistingScores();
@@ -864,7 +965,9 @@ export default function SportfolioBeheerPage() {
     if (!profiel || !selectedDiscipline || targetLeerlingen.length === 0) return;
 
     const submitted = existingScores.filter(
-      (score) => String(score.status ?? "").toLowerCase() === "ingediend"
+      (score) =>
+        score.bron !== "voorlopig" &&
+        String(score.status ?? "").toLowerCase() === "ingediend"
     );
 
     if (submitted.length === 0) {
@@ -927,7 +1030,7 @@ export default function SportfolioBeheerPage() {
         : `de gekozen klasgroep (${targetLeerlingen.length} leerlingen)`;
 
     const confirmed = window.confirm(
-      `Alle scores voor ${selectedDiscipline.naam} van ${groupLabel} in ${selectedSchooljaar} verwijderen?\n\nDit verwijdert ALLE pogingen voor deze discipline van de leerlingen in de huidige selectie. Deze actie kan niet ongedaan worden gemaakt.`
+      `Alle scores voor ${selectedDiscipline.naam} van ${groupLabel} in ${selectedSchooljaar} verwijderen?\n\nDit verwijdert zowel gekoppelde als voorlopige scores. Deze actie kan niet ongedaan worden gemaakt.`
     );
 
     if (!confirmed) return;
@@ -936,20 +1039,44 @@ export default function SportfolioBeheerPage() {
     setSavingId("delete-group");
 
     try {
-      const leerlingIds = targetLeerlingen.filter((l) => l.heeftProfiel).map((l) => l.id);
-      if (!leerlingIds.length) { setSuccess("Geen gekoppelde scores om te verwijderen."); return; }
+      const leerlingIds = targetLeerlingen
+        .filter((l) => l.heeftProfiel)
+        .map((l) => l.id);
 
-      const { error } = await supabase
-        .from("sportfolio_scores")
-        .delete()
-        .eq("discipline_id", selectedDiscipline.id)
-        .eq("schooljaar", selectedSchooljaar)
-        .in("leerling_id", leerlingIds);
+      if (leerlingIds.length) {
+        const { error } = await supabase
+          .from("sportfolio_scores")
+          .delete()
+          .eq("discipline_id", selectedDiscipline.id)
+          .eq("schooljaar", selectedSchooljaar)
+          .in("leerling_id", leerlingIds);
 
-      if (error) {
-        throw new Error(
-          readableSupabaseError(error, "Groepsscores verwijderen mislukt.")
+        if (error) {
+          throw new Error(
+            readableSupabaseError(error, "Gekoppelde groepsscores verwijderen mislukt.")
+          );
+        }
+      }
+
+      const emails = targetLeerlingen
+        .map((l) => l.email?.trim().toLowerCase())
+        .filter((v): v is string => Boolean(v));
+
+      if (emails.length) {
+        const { error } = await supabase.rpc(
+          "sportfolio_delete_pending_for_selection",
+          {
+            p_discipline_id: selectedDiscipline.id,
+            p_schooljaar: selectedSchooljaar,
+            p_emails: emails,
+          }
         );
+
+        if (error) {
+          throw new Error(
+            readableSupabaseError(error, "Voorlopige groepsscores verwijderen mislukt.")
+          );
+        }
       }
 
       await loadExistingScores();
@@ -1250,7 +1377,12 @@ export default function SportfolioBeheerPage() {
           p_eenheid: selectedDiscipline.eenheid,
         });
         if (pendingError) {
-          throw new Error(`${pendingSaved} voorlopige score(s) opgeslagen; fout bij ${leerling.naam}: ${pendingError.message}. Controleer voor je opnieuw opslaat.`);
+          throw new Error(
+            readableSupabaseError(
+              pendingError,
+              `${pendingSaved} voorlopige score(s) opgeslagen; fout bij ${leerling.naam}`
+            )
+          );
         }
         pendingSaved++;
       }
@@ -1883,8 +2015,8 @@ export default function SportfolioBeheerPage() {
                   Reeds opgeslagen scores
                 </div>
                 <div className="mt-1 text-xs text-white/60">
-                  Alle pogingen voor de gekozen discipline, het schooljaar en de huidige klas/klasgroep.
-                  Je kunt ingediende leerlingenscores in één keer bevestigen, een score corrigeren of verwijderen, of de volledige selectie wissen.
+                  Alle gekoppelde én voorlopige scores voor de gekozen discipline, het schooljaar en de huidige klas/klasgroep.
+                  Een gele badge “Voorlopig” betekent dat de leerling nog geen profiel heeft. De score wordt automatisch gekoppeld zodra het profiel beschikbaar is.
                 </div>
               </div>
 
