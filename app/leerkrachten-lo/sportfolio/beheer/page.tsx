@@ -67,7 +67,7 @@ type ScoreDraft = {
   nummer: string;
   poging2: string;
   poging3: string;
-  tekst: string;
+  status: "" | "geblesseerd" | "afwezig";
 };
 
 type ExistingScore = {
@@ -89,7 +89,7 @@ type ExistingScore = {
 type GradeMap = Record<string, number[]>;
 type EigenKlasgroep = { id: string; naam: string; schooljaar: string; leerkracht_id: string };
 
-const EMPTY_DRAFT: ScoreDraft = { nummer: "", poging2: "", poging3: "", tekst: "" };
+const EMPTY_DRAFT: ScoreDraft = { nummer: "", poging2: "", poging3: "", status: "" };
 
 function getValue(row: RawRow, keys: string[]) {
   for (const key of keys) {
@@ -1296,13 +1296,61 @@ export default function SportfolioBeheerPage() {
     field: keyof ScoreDraft,
     value: string
   ) {
-    setScoreDrafts((current) => ({
-      ...current,
-      [leerlingId]: {
-        ...(current[leerlingId] ?? EMPTY_DRAFT),
-        [field]: value,
-      },
-    }));
+    setScoreDrafts((current) => {
+      const previous = current[leerlingId] ?? EMPTY_DRAFT;
+      const next = { ...previous, [field]: value } as ScoreDraft;
+
+      // Afwezig/geblesseerd en een effectieve score sluiten elkaar uit.
+      if (field === "status" && value) {
+        next.nummer = "";
+        next.poging2 = "";
+        next.poging3 = "";
+      } else if (field !== "status" && value.trim()) {
+        next.status = "";
+      }
+
+      return { ...current, [leerlingId]: next };
+    });
+  }
+
+  function focusScoreInput(
+    leerlingIndex: number,
+    field: "nummer" | "poging2" | "poging3",
+    direction: -1 | 1,
+    layout: "mobile" | "desktop"
+  ) {
+    let nextIndex = leerlingIndex + direction;
+
+    while (nextIndex >= 0 && nextIndex < targetLeerlingen.length) {
+      const nextLeerling = targetLeerlingen[nextIndex];
+      const nextDraft = scoreDrafts[nextLeerling.id] ?? EMPTY_DRAFT;
+
+      if (!nextDraft.status) {
+        const selector = `[data-score-input="${layout}-${nextLeerling.id}-${field}"]`;
+        const input = document.querySelector<HTMLInputElement>(selector);
+        if (input && !input.disabled) {
+          input.focus();
+          input.select();
+          return;
+        }
+      }
+      nextIndex += direction;
+    }
+  }
+
+  function handleScoreKeyDown(
+    event: React.KeyboardEvent<HTMLInputElement>,
+    leerlingIndex: number,
+    field: "nummer" | "poging2" | "poging3",
+    layout: "mobile" | "desktop"
+  ) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusScoreInput(leerlingIndex, field, 1, layout);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      focusScoreInput(leerlingIndex, field, -1, layout);
+    }
   }
 
   async function saveClassScores() {
@@ -1311,7 +1359,7 @@ export default function SportfolioBeheerPage() {
     clearMessages();
 
     const pending = targetLeerlingen.filter((l) => !l.heeftProfiel &&
-      (scoreDrafts[l.id]?.nummer.trim() || scoreDrafts[l.id]?.poging2.trim() || scoreDrafts[l.id]?.poging3.trim() || scoreDrafts[l.id]?.tekst.trim()));
+      (scoreDrafts[l.id]?.nummer.trim() || scoreDrafts[l.id]?.poging2.trim() || scoreDrafts[l.id]?.poging3.trim() || scoreDrafts[l.id]?.status));
     if (pending.some((l) => !l.email || !l.username)) {
       setError("Een leerling zonder profiel heeft geen officiële e-mail of gebruikersnaam. Controleer Smartschool.");
       return;
@@ -1329,8 +1377,8 @@ export default function SportfolioBeheerPage() {
     const rows = targetLeerlingen.filter((l) => l.heeftProfiel)
       .map((leerling) => {
         const draft = scoreDrafts[leerling.id] ?? EMPTY_DRAFT;
-        const scoreNummer = bestePoging(draft, selectedDiscipline);
-        const scoreTekst = draft.tekst.trim() || null;
+        const scoreNummer = draft.status ? null : bestePoging(draft, selectedDiscipline);
+        const scoreTekst = draft.status === "geblesseerd" ? "Geblesseerd" : draft.status === "afwezig" ? "Afwezig" : null;
 
         if (scoreNummer == null && !scoreTekst) return null;
 
@@ -1372,8 +1420,8 @@ export default function SportfolioBeheerPage() {
           p_discipline_id: selectedDiscipline.id,
           p_schooljaar: selectedSchooljaar,
           p_klas_naam: leerling.klas_naam ?? (doelType === "klas" ? selectedKlasNaam : null),
-          p_score_nummer: bestePoging(draft, selectedDiscipline),
-          p_score_tekst: draft.tekst.trim() || null,
+          p_score_nummer: draft.status ? null : bestePoging(draft, selectedDiscipline),
+          p_score_tekst: draft.status === "geblesseerd" ? "Geblesseerd" : draft.status === "afwezig" ? "Afwezig" : null,
           p_eenheid: selectedDiscipline.eenheid,
         });
         if (pendingError) {
@@ -1874,125 +1922,161 @@ export default function SportfolioBeheerPage() {
                 Geen leerlingen gevonden voor deze selectie.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left md:min-w-[860px]">
-                  <thead className="hidden bg-black/20 text-xs uppercase tracking-[0.08em] text-white/50 md:table-header-group">
-                    <tr>
-                      <th className="px-4 py-3">Leerling</th>
-                      <th className="px-4 py-3">Klas</th>
-                      <th className="px-4 py-3">Geslacht</th>
-                      <th className="px-4 py-3">Score</th>
-                      <th className="px-4 py-3">Tekst / opmerking</th>
-                      <th className="px-4 py-3">Rubric</th>
-                    </tr>
-                  </thead>
-                  <tbody className="block space-y-3 p-3 md:table-row-group md:space-y-0 md:p-0">
-                    {targetLeerlingen.map((leerling) => {
-                      const draft = scoreDrafts[leerling.id] ?? EMPTY_DRAFT;
-                      const numericScore = bestePoging(draft, selectedDiscipline);
-                      const rubric = selectedDiscipline
-                        ? getRubricForScore(
-                            rubrics,
-                            selectedDiscipline.id,
-                            numericScore,
-                            leerling.geslacht,
-                            leerling.leerjaar
-                          )
-                        : null;
+              <>
+                <div className="border-b border-white/10 px-4 py-3 text-xs font-bold text-white/60">
+                  {targetLeerlingen.filter((leerling) => {
+                    const d = scoreDrafts[leerling.id] ?? EMPTY_DRAFT;
+                    return Boolean(d.status || d.nummer.trim() || d.poging2.trim() || d.poging3.trim());
+                  }).length}/{targetLeerlingen.length} verwerkt
+                </div>
 
-                      return (
-                        <tr key={leerling.id} className="block rounded-2xl border border-white/10 bg-black/20 p-3 text-sm text-white/80 md:table-row md:rounded-none md:border-0 md:bg-transparent md:p-0">
-                          <td className="block px-1 py-2 md:table-cell md:px-4 md:py-3 font-bold text-white">
-                            {leerling.naam}
-                            {!leerling.heeftProfiel && (
-                              <span className="ml-2 inline-flex rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] font-bold text-amber-200" title="Vraag de leerling om met het schoolaccount in te loggen">Geen profiel</span>
-                            )}
-                            <div className="mt-0.5 text-[11px] font-medium text-white/40">
-                              L{leerling.leerjaar ?? "?"} • graad {leerling.graad ?? "?"}
-                            </div>
-                          </td>
-                          <td className="hidden px-1 py-2 text-white/60 md:table-cell md:px-4 md:py-3">
-                            {leerling.klas_naam ?? "—"}
-                          </td>
-                          <td className="hidden px-1 py-2 text-white/60 md:table-cell md:px-4 md:py-3">
-                            {leerling.geslacht ?? "onbekend"}
-                          </td>
-                          <td className="block px-1 py-2 md:table-cell md:px-4 md:py-3">
-                            <label className="mb-1 block text-xs font-bold text-white/60 md:hidden" htmlFor={`score-${leerling.id}`}>Score</label>
-                            <div className="flex flex-wrap items-center gap-2">
-                              {[
-                                ["nummer", "P1"],
-                                ...(heeftDriePogingen(selectedDiscipline)
-                                  ? [["poging2", "P2"], ["poging3", "P3"]]
-                                  : []),
-                              ].map(([field, label]) => (
-                                <div key={field} className="flex items-center gap-1">
-                                  {heeftDriePogingen(selectedDiscipline) ? (
-                                    <span className="text-[10px] font-black text-white/40">{label}</span>
-                                  ) : null}
-                                  <input
-                                    id={`${field}-${leerling.id}`}
-                                    inputMode="decimal"
-                                    value={draft[field as keyof ScoreDraft]}
-                                    onChange={(e) =>
-                                      updateDraft(leerling.id, field as keyof ScoreDraft, e.target.value)
-                                    }
-                                    placeholder="0"
-                                    className="h-12 w-24 min-w-0 rounded-xl border border-white/10 bg-white/5 px-3 font-bold text-white outline-none focus:border-white/25 md:h-10"
-                                  />
-                                </div>
-                              ))}
-                              <span className="text-xs text-white/45">
-                                {selectedDiscipline?.eenheid ?? ""}
-                              </span>
-                              {heeftDriePogingen(selectedDiscipline) && numericScore !== null ? (
-                                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-1 text-[11px] font-black text-emerald-100">
-                                  beste: {numericScore}
-                                </span>
-                              ) : null}
-                            </div>
-                          </td>
-                          <td className="block px-1 py-2 md:table-cell md:px-4 md:py-3">
-                            <label className="mb-1 block text-xs font-bold text-white/60 md:hidden" htmlFor={`tekst-${leerling.id}`}>Tekst / opmerking</label>
-                            <input id={`tekst-${leerling.id}`}
-                                                            value={draft.tekst}
-                              onChange={(e) =>
-                                updateDraft(leerling.id, "tekst", e.target.value)
-                              }
-                              placeholder="optioneel"
-                              className="h-12 w-full min-w-0 rounded-xl md:h-10 md:min-w-44 border border-white/10 bg-white/5 px-3 text-white outline-none focus:border-white/25"
-                            />
-                          </td>
-                          <td className="block px-1 py-2 md:table-cell md:px-4 md:py-3">
-                            <span className="mr-2 text-xs text-white/60 md:hidden">Rubric:</span>
-                            {numericScore == null ? (
-                              <span className="text-xs text-white/35">—</span>
+                {/* Mobiel: kaarten zonder horizontaal scrollen. */}
+                <div className="divide-y divide-white/10 md:hidden">
+                  {targetLeerlingen.map((leerling, leerlingIndex) => {
+                    const draft = scoreDrafts[leerling.id] ?? EMPTY_DRAFT;
+                    const numericScore = draft.status ? null : bestePoging(draft, selectedDiscipline);
+                    const rubric = selectedDiscipline
+                      ? getRubricForScore(rubrics, selectedDiscipline.id, numericScore, leerling.geslacht, leerling.leerjaar)
+                      : null;
+                    const disabled = Boolean(draft.status);
+                    const fields: Array<"nummer" | "poging2" | "poging3"> = heeftDriePogingen(selectedDiscipline)
+                      ? ["nummer", "poging2", "poging3"]
+                      : ["nummer"];
+
+                    return (
+                      <div key={leerling.id} className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-black text-white">{leerling.naam}</div>
+                            <div className="mt-0.5 text-[11px] text-white/40">{leerling.klas_naam ?? "—"}</div>
+                            {!leerling.heeftProfiel ? (
+                              <span className="mt-1 inline-flex rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[10px] font-bold text-amber-200">Geen profiel</span>
+                            ) : null}
+                          </div>
+                          <div className="shrink-0">
+                            {draft.status ? (
+                              <span className="text-xs font-bold text-white/55">{draft.status === "geblesseerd" ? "Geblesseerd" : "Afwezig"}</span>
                             ) : rubric ? (
-                              <span
-                                className={[
-                                  "inline-flex rounded-full border px-2.5 py-1 text-xs font-black",
-                                  rubricBadgeClass(rubric.niveau),
-                                ].join(" ")}
-                              >
+                              <span className={["inline-flex rounded-full border px-2.5 py-1 text-xs font-black", rubricBadgeClass(rubric.niveau)].join(" ")}>
                                 {rubric.niveau ?? rubric.label ?? "Rubric"}
                               </span>
-                            ) : (
-                              <span className="inline-flex rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-xs font-bold text-amber-100">
-                                Geen rubric
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className={`mt-3 grid gap-2 ${fields.length === 3 ? "grid-cols-3" : "grid-cols-1"}`}>
+                          {fields.map((field, fieldIndex) => (
+                            <label key={field} className="block min-w-0">
+                              <span className="mb-1 block text-center text-[10px] font-black uppercase tracking-wider text-white/45">
+                                {fields.length === 1 ? "Score" : `P${fieldIndex + 1}`}
                               </span>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                              <input
+                                data-score-input={`mobile-${leerling.id}-${field}`}
+                                aria-label={`${leerling.naam} ${fields.length === 1 ? "score" : `poging ${fieldIndex + 1}`}`}
+                                inputMode="decimal"
+                                enterKeyHint="next"
+                                value={draft[field]}
+                                disabled={disabled}
+                                onChange={(e) => updateDraft(leerling.id, field, e.target.value)}
+                                onKeyDown={(e) => handleScoreKeyDown(e, leerlingIndex, field, "mobile")}
+                                onFocus={(e) => e.currentTarget.select()}
+                                placeholder="—"
+                                className="h-12 w-full min-w-0 rounded-xl border border-white/10 bg-white/5 px-2 text-center text-base font-black text-white outline-none focus:border-sky-400/60 focus:bg-sky-400/10 disabled:cursor-not-allowed disabled:opacity-25"
+                              />
+                            </label>
+                          ))}
+                        </div>
+
+                        {numericScore !== null && heeftDriePogingen(selectedDiscipline) && !draft.status ? (
+                          <div className="mt-2 text-center text-[10px] font-bold text-white/45">
+                            Beste: {numericScore} {selectedDiscipline?.eenheid ?? ""}
+                          </div>
+                        ) : null}
+
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => updateDraft(leerling.id, "status", draft.status === "geblesseerd" ? "" : "geblesseerd")}
+                            className={[
+                              "min-h-11 rounded-xl border px-2 text-xs font-black transition",
+                              draft.status === "geblesseerd"
+                                ? "border-amber-400/50 bg-amber-400/20 text-amber-100"
+                                : "border-white/10 bg-white/5 text-white/65",
+                            ].join(" ")}
+                          >
+                            Geblesseerd
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => updateDraft(leerling.id, "status", draft.status === "afwezig" ? "" : "afwezig")}
+                            className={[
+                              "min-h-11 rounded-xl border px-2 text-xs font-black transition",
+                              draft.status === "afwezig"
+                                ? "border-red-400/50 bg-red-400/20 text-red-100"
+                                : "border-white/10 bg-white/5 text-white/65",
+                            ].join(" ")}
+                          >
+                            Afwezig
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Desktop/tablet: compacte tabel. */}
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="w-full min-w-[760px] text-left">
+                    <thead className="bg-black/20 text-xs uppercase tracking-[0.08em] text-white/50">
+                      <tr>
+                        <th className="sticky left-0 z-10 bg-[#10131a] px-3 py-3">Leerling</th>
+                        <th className="px-2 py-3 text-center">P1</th>
+                        {heeftDriePogingen(selectedDiscipline) ? (<><th className="px-2 py-3 text-center">P2</th><th className="px-2 py-3 text-center">P3</th></>) : null}
+                        <th className="px-2 py-3 text-center">Geblesseerd</th>
+                        <th className="px-2 py-3 text-center">Afwezig</th>
+                        <th className="px-3 py-3 text-center">Rubric</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {targetLeerlingen.map((leerling, leerlingIndex) => {
+                        const draft = scoreDrafts[leerling.id] ?? EMPTY_DRAFT;
+                        const numericScore = draft.status ? null : bestePoging(draft, selectedDiscipline);
+                        const rubric = selectedDiscipline ? getRubricForScore(rubrics, selectedDiscipline.id, numericScore, leerling.geslacht, leerling.leerjaar) : null;
+                        const disabled = Boolean(draft.status);
+                        const scoreInput = (field: "nummer" | "poging2" | "poging3") => (
+                          <input
+                            data-score-input={`desktop-${leerling.id}-${field}`}
+                            aria-label={`${leerling.naam} ${field}`}
+                            inputMode="decimal"
+                            value={draft[field]}
+                            disabled={disabled}
+                            onChange={(e) => updateDraft(leerling.id, field, e.target.value)}
+                            onKeyDown={(e) => handleScoreKeyDown(e, leerlingIndex, field, "desktop")}
+                            onFocus={(e) => e.currentTarget.select()}
+                            placeholder="—"
+                            className="h-11 w-20 rounded-xl border border-white/10 bg-white/5 px-2 text-center font-bold text-white outline-none focus:border-sky-400/60 disabled:cursor-not-allowed disabled:opacity-25"
+                          />
+                        );
+                        return (
+                          <tr key={leerling.id} className="border-t border-white/10 text-sm text-white/80">
+                            <td className="sticky left-0 z-10 bg-[#10131a] px-3 py-2.5"><div className="whitespace-nowrap font-bold text-white">{leerling.naam}</div><div className="text-[11px] text-white/40">{leerling.klas_naam ?? "—"}</div></td>
+                            <td className="px-2 py-2.5 text-center">{scoreInput("nummer")}</td>
+                            {heeftDriePogingen(selectedDiscipline) ? (<><td className="px-2 py-2.5 text-center">{scoreInput("poging2")}</td><td className="px-2 py-2.5 text-center">{scoreInput("poging3")}</td></>) : null}
+                            <td className="px-2 py-2.5 text-center"><input type="checkbox" checked={draft.status === "geblesseerd"} onChange={(e) => updateDraft(leerling.id, "status", e.target.checked ? "geblesseerd" : "")} className="h-5 w-5 cursor-pointer accent-amber-500" /></td>
+                            <td className="px-2 py-2.5 text-center"><input type="checkbox" checked={draft.status === "afwezig"} onChange={(e) => updateDraft(leerling.id, "status", e.target.checked ? "afwezig" : "")} className="h-5 w-5 cursor-pointer accent-red-500" /></td>
+                            <td className="px-3 py-2.5 text-center">{draft.status ? <span className="text-xs font-bold text-white/55">{draft.status === "geblesseerd" ? "Geblesseerd" : "Afwezig"}</span> : rubric ? <span className={["inline-flex rounded-full border px-2.5 py-1 text-xs font-black", rubricBadgeClass(rubric.niveau)].join(" ")}>{rubric.niveau ?? rubric.label ?? "Rubric"}</span> : <span className="text-xs text-white/30">—</span>}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
             )}
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/10 p-4">
               <div className="text-xs text-white/50">
-                Lege rijen worden niet opgeslagen. Scores voor leerlingen zonder profiel worden voorlopig bewaard en na een gecontroleerde profielkoppeling overgezet.
+                P2 en P3 zijn optioneel. Met ↑ en ↓ spring je in dezelfde pogingkolom naar de vorige/volgende leerling. Geblesseerde of afwezige leerlingen worden daarbij overgeslagen. Lege rijen worden overgeslagen; leerlingen zonder profiel worden voorlopig bewaard en later gekoppeld.
               </div>
               <button
                 onClick={() => void saveClassScores()}
