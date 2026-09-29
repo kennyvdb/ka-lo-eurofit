@@ -3,311 +3,289 @@
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import { BaseTile } from "@/components/tiles/BaseTile";
-import { createClient } from "@/lib/supabase/client";
+import { TileGrid } from "@/components/tiles/TileGrid";
 import Link from "next/link";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 const supabase = createClient();
 
+/* =========================================================
+   TYPES
+========================================================= */
+
 type Profiel = {
-  id: string;
   volledige_naam: string | null;
-  role: string | null;
   rol: string | null;
-  klas_naam: string | null;
 };
+
+/* =========================================================
+   UI
+========================================================= */
 
 const ui = {
   text: "rgba(234,240,255,0.92)",
-  muted: "rgba(234,240,255,0.72)",
-  panel: "rgba(255,255,255,0.06)",
-  border: "rgba(148,163,184,0.18)",
-  borderStrong: "rgba(148,163,184,0.28)",
-  errorBg: "rgba(255,85,112,0.15)",
-  errorBorder: "rgba(255,85,112,0.28)",
+  muted: "rgba(234,240,255,0.74)",
+  border: "rgba(255,255,255,0.12)",
+  panel:
+    "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
 };
+
+/* =========================================================
+   MODULES
+========================================================= */
+
+const modules = [
+  {
+    href: "/leerkrachten-lo/extramurale-sportactiviteiten/sportdagen",
+    icon: "🏆",
+    title: "Sportdagen",
+    desc: "Praktische info & opvolging",
+  },
+  {
+    href: "/leerkrachten-lo/extramurale-sportactiviteiten/sneeuwstage",
+    icon: "❄️",
+    title: "Sneeuwstage",
+    desc: "Deelnemers & keuzes",
+  },
+  {
+    href: "/leerkrachten-lo/extramurale-sportactiviteiten/na-schoolse-sportactiviteiten",
+    icon: "🌙",
+    title: "Na-schoolse sportactiviteiten",
+    desc: "Inschrijvingen & opvolging",
+  },
+];
+
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function normalizeRole(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+}
+
+function isAllowedRole(rol: string) {
+  return (
+    rol === "leerkracht_lo" ||
+    rol === "lo_leerkracht" ||
+    rol === "administratief_personeel" ||
+    rol === "admin"
+  );
+}
+
+/* =========================================================
+   PAGE
+========================================================= */
 
 export default function ExtramuraleSportactiviteitenPage() {
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const [uid, setUid] = useState<string | null>(null);
+  const [allowed, setAllowed] = useState(false);
   const [profiel, setProfiel] = useState<Profiel | null>(null);
-  const [email, setEmail] = useState<string>("");
 
-  const tiles = useMemo(
-    () => [
-      {
-        href: "/extramurale-sportactiviteiten/sneeuwstage",
-        icon: "🏔️",
-        title: "Sneeuwstage",
-        desc: "Info, planning & documenten",
-      },
-      {
-        href: "/extramurale-sportactiviteiten/sportdagen",
-        icon: "🏅",
-        title: "Sportdagen",
-        desc: "Overzicht van sportdagen",
-      },
-      {
-        href: "/extramurale-sportactiviteiten/na-schoolse-sportactiviteiten",
-        icon: "⚽",
-        title: "Na-schoolse sportactiviteiten",
-        desc: "Sporten buiten de lesuren",
-      },
-    ],
-    []
-  );
-
-  const fetchProfile = async (userId: string) => {
-    const { data, error } = await supabase
-      .from("profielen")
-      .select("id, volledige_naam, role, rol, klas_naam")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (error) {
-      setError(error.message);
-      setProfiel(null);
-      return null;
-    }
-
-    const p = (data as Profiel) ?? null;
-    setProfiel(p);
-    return p;
-  };
+  /* =======================================================
+     PROFIEL EN TOEGANG LADEN
+  ======================================================= */
 
   useEffect(() => {
     const run = async () => {
-      setLoading(true);
-      setError(null);
+      try {
+        const { data: sessionData } =
+          await supabase.auth.getSession();
 
-      const { data, error } = await supabase.auth.getSession();
+        const uid = sessionData.session?.user?.id;
 
-      if (error) {
-        setError(error.message);
+        if (!uid) {
+          setLoading(false);
+          return;
+        }
+
+        const { data: profielData, error } = await supabase
+          .from("profielen")
+          .select("volledige_naam, rol")
+          .eq("id", uid)
+          .maybeSingle();
+
+        if (error) {
+          console.error(
+            "Profiel laden mislukt:",
+            error
+          );
+
+          setLoading(false);
+          return;
+        }
+
+        const rol = normalizeRole(profielData?.rol);
+
+        setProfiel(profielData as Profiel | null);
+        setAllowed(isAllowedRole(rol));
+      } catch (error) {
+        console.error(
+          "Fout bij laden extramurale sportactiviteiten:",
+          error
+        );
+      } finally {
         setLoading(false);
-        return;
       }
-
-      const user = data.session?.user ?? null;
-
-      if (!user?.id) {
-        window.location.replace("/login");
-        return;
-      }
-
-      setUid(user.id);
-      setEmail(user.email ?? "");
-
-      await fetchProfile(user.id);
-      setLoading(false);
     };
 
-    run();
+    void run();
   }, []);
+
+  /* =======================================================
+     LOADING
+  ======================================================= */
 
   if (loading) {
     return (
-      <main className="grid min-h-dvh place-items-center px-6">
-        <div style={{ color: ui.text }}>Extramurale sportactiviteiten laden…</div>
-      </main>
+      <AppShell
+        title="LO App"
+        subtitle="Extramurale sportactiviteiten"
+      >
+        <section style={styles.panel}>
+          <p
+            style={{
+              margin: 0,
+              color: ui.text,
+            }}
+          >
+            Laden...
+          </p>
+        </section>
+      </AppShell>
     );
   }
 
-  const shownRoleRaw = (profiel?.role ?? profiel?.rol ?? "").toLowerCase();
-  const shownRoleLabel =
-    shownRoleRaw === "teacher" || shownRoleRaw === "leerkracht" ? "Leerkracht" : "Leerling";
+  /* =======================================================
+     GEEN TOEGANG
+  ======================================================= */
 
-  const greetingName = profiel?.volledige_naam?.split(" ")?.[0] ?? "Welkom";
+  if (!allowed) {
+    return (
+      <AppShell
+        title="LO App"
+        subtitle="Geen toegang"
+        userName={profiel?.volledige_naam ?? null}
+      >
+        <section style={styles.panel}>
+          <h1
+            style={{
+              margin: 0,
+              color: ui.text,
+              fontSize: 22,
+            }}
+          >
+            Geen toegang
+          </h1>
+
+          <p
+            style={{
+              color: ui.muted,
+              lineHeight: 1.6,
+            }}
+          >
+            Deze pagina is alleen toegankelijk voor
+            LO-leerkrachten en admins.
+          </p>
+
+          <Link
+            href="/dashboard"
+            style={{
+              color: ui.text,
+              fontWeight: 900,
+            }}
+          >
+            Terug naar dashboard →
+          </Link>
+        </section>
+      </AppShell>
+    );
+  }
+
+  /* =======================================================
+     PAGINA
+  ======================================================= */
 
   return (
     <AppShell
       title="LO App"
-      subtitle="GO! Atheneum Avelgem"
+      subtitle="Extramurale sportactiviteiten"
       userName={profiel?.volledige_naam ?? null}
     >
-      <ExtramuraleHero
-        greetingName={greetingName}
-        shownRoleLabel={shownRoleLabel}
-        klasNaam={profiel?.klas_naam}
+      {/* ===================================================
+          HERO
+      =================================================== */}
+
+      <BaseHero
+        label="LEERKRACHTEN LO"
+        title={
+          <>
+            Extramurale{" "}
+            <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
+              sportactiviteiten
+            </span>
+          </>
+        }
+        description="Beheer en opvolging van sportdagen, sneeuwstage, sportuitstappen en andere activiteiten buiten de school."
+        imageSrc="/lo/LO.png"
+        imageAlt="Extramurale sportactiviteiten"
+        quoteTitle="Buiten de school"
+        quote="Alle praktische informatie en opvolging van extramurale sportactiviteiten op één plaats."
+        quoteAuthor="LO team"
+        actions={
+          <Link
+            href="/leerkrachten-lo"
+            className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
+          >
+            ← Terug naar Leerkrachten LO
+          </Link>
+        }
       />
 
-      <div style={{ ...styles.headerRow, marginTop: 14 }}>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ marginTop: 0, fontSize: 13, color: ui.muted }}>
-            Kies een categorie •{" "}
-            {email ? (
-              <>
-                ingelogd als <b style={{ color: ui.text }}>{email}</b> • {shownRoleLabel}
-                {profiel?.klas_naam ? (
-                  <span style={{ color: ui.muted }}> • {profiel.klas_naam}</span>
-                ) : null}
-              </>
-            ) : (
-              <span style={{ color: ui.muted }}>…</span>
-            )}
-          </div>
+      {/* ===================================================
+          ACTIVITEITEN
+      =================================================== */}
+
+      <section className="mt-[18px]">
+        {/* Zelfde titelstijl als dashboard */}
+
+        <div className="mb-3 text-[13px] font-black text-white/85">
+          Activiteiten
         </div>
 
-        <div style={styles.rolePill} title={uid ?? ""}>
-          <span style={styles.pillDot} />
-          <span style={{ color: ui.muted, fontWeight: 950 }}>{shownRoleLabel}</span>
-        </div>
-      </div>
+        {/* Exact hetzelfde tegelprincipe als dashboard */}
 
-      {error && (
-        <div style={styles.errorBox}>
-          <b>Oeps:</b> {error}
-        </div>
-      )}
-
-      <section style={{ marginTop: 18 }}>
-        <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 950, color: ui.text }}>
-          Extramurale sportactiviteiten
-        </div>
-
-        <div className="hub-grid-wrap">
-          <div className="hub-grid">
-            {tiles.map((t) => (
-              <BaseTile
-                key={t.href}
-                href={t.href}
-                icon={t.icon}
-                title={t.title}
-                desc={t.desc}
-              />
-            ))}
-          </div>
-        </div>
-
-        <div style={{ marginTop: 12, color: "rgba(234,240,255,0.55)", fontSize: 13 }}>
-          Tip: tik op een tegel om meteen verder te gaan.
-        </div>
-
-        <style jsx>{`
-          .hub-grid-wrap {
-            width: 100%;
-          }
-
-          .hub-grid {
-            display: grid;
-            grid-template-columns: repeat(1, minmax(0, 1fr));
-            gap: 16px;
-            width: 100%;
-          }
-
-          @media (min-width: 700px) {
-            .hub-grid {
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-            }
-          }
-
-          @media (min-width: 1100px) {
-            .hub-grid {
-              grid-template-columns: repeat(4, minmax(0, 1fr));
-              max-width: 1120px;
-            }
-          }
-        `}</style>
+        <TileGrid>
+          {modules.map((module) => (
+            <BaseTile
+              key={module.title}
+              href={module.href}
+              icon={module.icon}
+              title={module.title}
+              desc={module.desc}
+            />
+          ))}
+        </TileGrid>
       </section>
     </AppShell>
   );
 }
 
-function ExtramuraleHero({
-  greetingName,
-  shownRoleLabel,
-  klasNaam,
-}: {
-  greetingName: string;
-  shownRoleLabel: string;
-  klasNaam?: string | null;
-}) {
-  return (
-    <BaseHero
-      label="EXTRAMURALE SPORTACTIVITEITEN"
-      title={
-        <>
-          Klaar voor actie,
-          <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
-            {" "}
-            {greetingName}
-          </span>
-          ? 🏃
-        </>
-      }
-      description={
-        <>
-          {shownRoleLabel}
-          {klasNaam ? <span className="opacity-85"> • {klasNaam}</span> : null}
-          <span className="opacity-85"> •</span> Ontdek alle extramurale sportactiviteiten.
-        </>
-      }
-      imageSrc="/extramuraleactiviteiten/extramuraleactiviteiten.png"
-      imageAlt="Extramurale sportactiviteiten illustratie"
-      quoteTitle="Sport quote"
-      quote="Bewegen brengt energie, teamwork brengt je verder."
-      quoteAuthor="LO Team"
-      imageClassName="scale-110 md:scale-[1.14] transition-transform duration-500"
-      actions={
-        <>
-          <Link
-            href="/dashboard"
-            className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
-          >
-            Terug naar dashboard
-          </Link>
-
-          <Link
-            href="/kalender"
-            className="inline-flex h-11 items-center rounded-2xl border border-slate-300/25 bg-[linear-gradient(180deg,rgba(12,18,24,0.72),rgba(0,0,0,0.58))] px-4 font-black text-[rgba(234,240,255,0.92)] shadow-[0_12px_30px_rgba(0,0,0,0.28)] transition duration-200 hover:-translate-y-0.5 hover:border-teal-200/25 hover:shadow-[0_16px_34px_rgba(0,0,0,0.32),0_0_0_1px_rgba(75,142,141,0.10)]"
-          >
-            Bekijk kalender →
-          </Link>
-        </>
-      }
-    />
-  );
-}
+/* =========================================================
+   STYLES
+========================================================= */
 
 const styles: Record<string, React.CSSProperties> = {
-  headerRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12,
-    padding: 16,
-    borderRadius: 20,
+  panel: {
+    padding: 18,
+    borderRadius: 24,
     background: ui.panel,
     border: `1px solid ${ui.border}`,
-    boxShadow: "0 8px 24px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.02)",
-  },
-  rolePill: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 8,
-    padding: "10px 12px",
-    borderRadius: 999,
-    background: "rgba(0,0,0,0.30)",
-    border: `1px solid ${ui.borderStrong}`,
-    whiteSpace: "nowrap",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.03)",
-  },
-  pillDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 99,
-    background:
-      "radial-gradient(circle at 30% 30%, rgba(255,255,255,0.85), rgba(137,194,170,0.85))",
-  },
-  errorBox: {
-    marginTop: 12,
-    padding: 12,
-    borderRadius: 18,
-    background: ui.errorBg,
-    border: `1px solid ${ui.errorBorder}`,
-    color: ui.text,
-    fontSize: 14,
+    boxShadow: "0 14px 34px rgba(0,0,0,0.18)",
+    backdropFilter: "blur(10px)",
   },
 };
