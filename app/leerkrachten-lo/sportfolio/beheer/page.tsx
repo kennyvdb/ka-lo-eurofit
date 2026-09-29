@@ -1975,6 +1975,10 @@ export default function SportfolioBeheerPage() {
                                 aria-label={`${leerling.naam} ${fields.length === 1 ? "score" : `poging ${fieldIndex + 1}`}`}
                                 inputMode="decimal"
                                 enterKeyHint="next"
+                                // iPhone/Safari gebruikt de focusvolgorde voor de ↑/↓-knoppen
+                                // boven het numerieke toetsenbord. Orden daarom per pogingkolom:
+                                // alle P1-velden, daarna alle P2-velden, daarna alle P3-velden.
+                                tabIndex={fieldIndex * targetLeerlingen.length + leerlingIndex + 1}
                                 value={draft[field]}
                                 disabled={disabled}
                                 onChange={(e) => updateDraft(leerling.id, field, e.target.value)}
@@ -1996,6 +2000,7 @@ export default function SportfolioBeheerPage() {
                         <div className="mt-3 grid grid-cols-2 gap-2">
                           <button
                             type="button"
+                            tabIndex={-1}
                             onClick={() => updateDraft(leerling.id, "status", draft.status === "geblesseerd" ? "" : "geblesseerd")}
                             className={[
                               "min-h-11 rounded-xl border px-2 text-xs font-black transition",
@@ -2008,6 +2013,7 @@ export default function SportfolioBeheerPage() {
                           </button>
                           <button
                             type="button"
+                            tabIndex={-1}
                             onClick={() => updateDraft(leerling.id, "status", draft.status === "afwezig" ? "" : "afwezig")}
                             className={[
                               "min-h-11 rounded-xl border px-2 text-xs font-black transition",
