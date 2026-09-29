@@ -62,9 +62,6 @@ const tabs: {
 
 /* =========================================================
    CHECKLIST
-
-   Eerste basis = bestaande checklist van school.
-   Aangevuld met praktische ski-/reisbenodigdheden.
 ========================================================= */
 
 const checklistGroups: ChecklistGroup[] = [
@@ -478,11 +475,18 @@ export default function SneeuwstagePage() {
       />
 
       {/* ===================================================
-          TABS
+          NAVIGATIE
+          GSM: 2 kolommen
+          TABLET: 3 kolommen
+          DESKTOP: 6 kolommen
       =================================================== */}
 
-      <div className="mt-5 overflow-x-auto pb-1">
-        <div className="flex min-w-max gap-2">
+      <div className="mt-5">
+        <div className="mb-2 text-[12px] font-black uppercase tracking-[0.12em] text-white/45">
+          Sneeuwstage
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           {tabs.map((tab) => {
             const active = activeTab === tab.id;
 
@@ -491,15 +495,47 @@ export default function SneeuwstagePage() {
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
+                aria-pressed={active}
                 className={[
-                  "inline-flex h-11 items-center gap-2 rounded-2xl border px-4 text-sm font-black transition",
+                  "relative flex min-h-[76px] w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-all duration-200",
                   active
-                    ? "border-white/25 bg-white/15 text-white shadow-lg"
-                    : "border-white/10 bg-white/[0.05] text-white/70 hover:bg-white/[0.09]",
+                    ? "border-[#89C2AA]/60 bg-[#4B8E8D]/20 shadow-[0_8px_24px_rgba(0,0,0,0.20)]"
+                    : "border-white/10 bg-white/[0.05] hover:border-white/20 hover:bg-white/[0.08]",
                 ].join(" ")}
               >
-                <span>{tab.icon}</span>
-                <span>{tab.label}</span>
+                <span
+                  className={[
+                    "grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl transition",
+                    active
+                      ? "bg-[#89C2AA]/20"
+                      : "bg-black/20",
+                  ].join(" ")}
+                >
+                  {tab.icon}
+                </span>
+
+                <span className="min-w-0">
+                  <span
+                    className={[
+                      "block text-[13px] font-black leading-tight",
+                      active
+                        ? "text-white"
+                        : "text-white/75",
+                    ].join(" ")}
+                  >
+                    {tab.label}
+                  </span>
+
+                  {active && (
+                    <span className="mt-1 block text-[10px] font-bold uppercase tracking-wide text-[#89C2AA]">
+                      Geopend
+                    </span>
+                  )}
+                </span>
+
+                {active && (
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#89C2AA] shadow-[0_0_10px_rgba(137,194,170,0.75)]" />
+                )}
               </button>
             );
           })}
@@ -595,8 +631,6 @@ export default function SneeuwstagePage() {
             description="Vink af wat je al hebt klaargelegd. Je voortgang wordt automatisch op dit toestel bewaard."
           />
 
-          {/* PROGRESS */}
-
           <div style={styles.panel}>
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -624,11 +658,7 @@ export default function SneeuwstagePage() {
             </div>
           </div>
 
-          {/* BELANGRIJK */}
-
-          <div
-            className="mt-3 rounded-3xl border border-amber-300/20 bg-amber-300/[0.08] p-4"
-          >
+          <div className="mt-3 rounded-3xl border border-amber-300/20 bg-amber-300/[0.08] p-4">
             <div className="font-black text-white">
               ⚠️ Vergeet je handbagage niet
             </div>
@@ -641,8 +671,6 @@ export default function SneeuwstagePage() {
               in je handbagage.
             </p>
           </div>
-
-          {/* GROEPEN */}
 
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {checklistGroups.map((group) => (
