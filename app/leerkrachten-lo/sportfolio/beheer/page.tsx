@@ -162,12 +162,22 @@ function toNullableNumber(value: string) {
 }
 
 function heeftDriePogingen(discipline?: Discipline | null) {
-  const key = `${discipline?.slug ?? ""} ${discipline?.naam ?? ""}`.toLowerCase();
-  return (
-    key.includes("verspring") ||
-    key.includes("kogel") ||
-    key.includes("sprint")
-  );
+  const key = `${discipline?.slug ?? ""} ${discipline?.naam ?? ""}`
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .replace(/\\s+/g, " ")
+    .trim();
+
+  // Disciplines waarbij de leerkracht maximaal 3 pogingen kan ingeven.
+  // Sprint wordt bewust ruim herkend, omdat de discipline bv. "100 m",
+  // "100m sprint" of een slug zoals "100-m" kan hebben.
+  const isVerspringen = key.includes("verspring");
+  const isKogelstoten = key.includes("kogel");
+  const isSprint =
+    key.includes("sprint") ||
+    /(^|\\s)(50|60|80|100|200)\\s*m($|\\s)/.test(key);
+
+  return isVerspringen || isKogelstoten || isSprint;
 }
 
 function bestePoging(draft: ScoreDraft, discipline?: Discipline | null) {
