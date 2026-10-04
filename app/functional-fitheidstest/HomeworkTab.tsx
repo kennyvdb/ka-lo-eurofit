@@ -1016,6 +1016,9 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
   const [saving, setSaving] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [submissionLoading, setSubmissionLoading] = useState(!teacherMode);
+  const [submitted, setSubmitted] = useState(false);
+  const [reopened, setReopened] = useState(false);
 
   const initialGender =
     normalizeGender(profiel?.geslacht ?? profiel?.gender) ||
@@ -1111,10 +1114,52 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
     if (!teacherMode) setMode(studentMode);
   }, [teacherMode, studentMode]);
 
+  useEffect(() => {
+    if (teacherMode || !uid) {
+      setSubmissionLoading(false);
+      return;
+    }
+    let cancelled = false;
+    async function loadExistingSubmission() {
+      setSubmissionLoading(true);
+      const { data, error } = await supabase
+        .from("eurofit_huiswerk_submissions")
+        .select("id, payload, created_at")
+        .eq("user_id", uid)
+        .eq("grade", studentMode)
+        .eq("schooljaar", profiel?.schooljaar ?? "")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        setError(error.message);
+        setSubmissionLoading(false);
+        return;
+      }
+      if (!data) {
+        setSubmitted(false);
+        setReopened(false);
+        setSubmissionLoading(false);
+        return;
+      }
+      const form = (data as any).payload?.form;
+      if (studentMode === "2e" && form) setF2((prev) => ({ ...prev, ...form, gender: form.gender || prev.gender }));
+      if (studentMode === "3e" && form) setF3((prev) => ({ ...prev, ...form }));
+      setSubmitted(true);
+      setReopened((data as any).payload?.reopen_allowed === true);
+      setSubmissionLoading(false);
+    }
+    loadExistingSubmission();
+    return () => { cancelled = true; };
+  }, [teacherMode, uid, studentMode, profiel?.schooljaar]);
+
+  const locked = !teacherMode && submitted && !reopened;
   const rub2 = useMemo(() => rubricsSecond(f2), [f2]);
   const rub3 = useMemo(() => rubricsThird(f3), [f3]);
 
   const reset = () => {
+    if (locked) return;
     setInfo(null);
     setError(null);
     if (mode === "2e") setF2(initSecond(defaultMas ?? null, detectedGender));
@@ -1122,6 +1167,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
   };
 
   const handleSave = async () => {
+    if (locked || submissionLoading) return;
     setSaving(true);
     setInfo(null);
     setError(null);
@@ -1181,6 +1227,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
               form: f2,
               rubrics: rub2,
               aiAssessment,
+              reopen_allowed: false,
             }
           : {
               grade: "3e",
@@ -1189,6 +1236,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
               totals: rub3.totals,
               flags: rub3.flags,
               aiAssessment,
+              reopen_allowed: false,
             };
 
       const row = {
@@ -1206,7 +1254,9 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
         .insert(row);
       if (error) throw new Error(error.message);
 
-      setInfo("✅ Huiswerk opgeslagen!");
+      setSubmitted(true);
+      setReopened(false);
+      setInfo("✅ Huiswerk opgeslagen — je huistaak is ingediend en kan niet meer aangepast worden.");
     } catch (e: any) {
       setError(e?.message ?? "Opslaan mislukt.");
     } finally {
@@ -1395,6 +1445,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
         </div>
       )}
 
+      <fieldset disabled={locked || submissionLoading || saving} style={{ border: 0, padding: 0, margin: 0, minWidth: 0, display: "grid", gap: 12, opacity: submissionLoading ? 0.65 : 1 }}>
       {mode === "2e" ? (
         <>
           <SecondGradePanel value={f2} onChange={setF2} />
@@ -1419,19 +1470,33 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
           /> : null}
         </>
       )}
+      </fieldset>
 
       <div style={styles.actionRow}>
-        <button onClick={reset} style={styles.ghostBtn}>
-          Alles leegmaken
-        </button>
+        {!locked ? (
+          <button onClick={reset} disabled={saving || submissionLoading} style={{ ...styles.ghostBtn, opacity: saving || submissionLoading ? 0.6 : 1 }}>
+            Alles leegmaken
+          </button>
+        ) : null}
         <button
           onClick={handleSave}
-          disabled={saving}
-          style={{ ...styles.primaryBtn, opacity: saving ? 0.7 : 1 }}
+          disabled={saving || submissionLoading || locked}
+          style={{ ...styles.primaryBtn, opacity: saving || submissionLoading || locked ? 0.55 : 1 }}
         >
-          {saving ? "Opslaan..." : "Opslaan"}
+          {saving ? "Opslaan..." : reopened ? "Opnieuw indienen" : "Opslaan"}
         </button>
       </div>
+
+      {!teacherMode && submitted ? (
+        <div style={reopened ? styles.warnBox : styles.okBox}>
+          <b>{reopened ? "🔓 Huistaak éénmalig opnieuw opengesteld" : "✅ Huiswerk opgeslagen"}</b>
+          <div style={{ ...styles.small, marginTop: 6, color: ui.text }}>
+            {reopened
+              ? "Een LO-leerkracht heeft je huistaak opnieuw opengesteld. Pas aan wat nodig is en klik daarna op ‘Opnieuw indienen’. Daarna wordt je huistaak automatisch opnieuw vergrendeld."
+              : "Je huistaak is ingediend en kan niet meer aangepast worden. Als er iets fout liep, neem contact op met je LO-leerkracht."}
+          </div>
+        </div>
+      ) : null}
 
       <style jsx>{`
         @media (min-width: 900px) {
@@ -1860,8 +1925,12 @@ function SecondGradePanel({
             />
           </div>
 
+          <div style={styles.infoBox}>
+            <div style={{ fontWeight: 980, color: ui.text }}>Wat verwachten we in je reflectie?</div>
+            <div style={{ ...styles.small, marginTop: 8 }}>Vergelijk wat je vooraf verwachtte met wat je werkelijk ervaarde. Gebruik minstens twee van je eigen gegevens: MAS/tempo, hartslag, praattest of RPE. Leg uit wat die gegevens volgens jou betekenen en wat je bij een volgende training eventueel anders zou doen.</div>
+          </div>
           <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Reflectie (min. 2 zinnen)</div>
+            <div style={styles.label}>Reflectie (min. 2 duidelijke zinnen)</div>
             <textarea
               value={value.reflection}
               onChange={(e) => set({ reflection: e.target.value })}
@@ -2056,7 +2125,8 @@ function ThirdGradePanel({
             <div style={{ ...styles.small, marginTop: 10 }}>Er bestaat niet één perfecte macroverdeling voor iedereen. Beoordeel je macro&apos;s daarom in functie van <b style={{ color: ui.text }}>jouw gekozen doel in Virtuafood</b>, niet alleen op basis van welk percentage het grootst is.</div>
           </div>
           <div style={{ marginTop: 12 }}><div style={styles.label}>Bespreek je macro&apos;s in functie van je gekozen doel in Virtuafood</div><textarea value={value.macroExplain} onChange={(e) => set({ macroExplain: e.target.value })} style={styles.textarea} placeholder="Welk doel koos je in Virtuafood? Hoe verhouden je eiwitten, koolhydraten en vetten zich tot dat doel? Wat valt je op?" /></div>
-          <div style={{ marginTop: 12 }}><div style={styles.label}>Persoonlijke reflectie</div><textarea value={value.reflection} onChange={(e) => set({ reflection: e.target.value })} style={styles.textarea} placeholder="Is deze dag typisch voor jou? Noem één positief punt en één realistische aanpassing die je eventueel zou kunnen maken." /></div>
+          <div style={{ ...styles.infoBox, marginTop: 12 }}><div style={{ fontWeight: 980, color: ui.text }}>Wat verwachten we in je reflectie?</div><div style={{ ...styles.small, marginTop: 8 }}>Kijk kritisch naar je eigen geregistreerde dag. Leg uit of deze dag typisch is voor jou, wat volgens jou goed zit en wat beter kan. Gebruik je eigen gegevens uit Virtuafood en de TDEE Calculator en geef minstens één concrete, realistische aanpassing die past bij jouw gekozen doel.</div></div>
+          <div style={{ marginTop: 12 }}><div style={styles.label}>Persoonlijke reflectie</div><textarea value={value.reflection} onChange={(e) => set({ reflection: e.target.value })} style={styles.textarea} placeholder="Is deze dag typisch voor jou? Wat zit goed? Wat kan beter? Onderbouw met je eigen gegevens en geef één concrete aanpassing die past bij je doel." /></div>
         </div>
       </div>
     </>

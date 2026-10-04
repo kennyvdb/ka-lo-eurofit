@@ -293,6 +293,7 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
   const [submissions, setSubmissions] = useState<HomeworkSubmission[]>([]);
   const [loadingOverview, setLoadingOverview] = useState(false);
   const [detail, setDetail] = useState<{ leerling: Leerling; submission: HomeworkSubmission } | null>(null);
+  const [reopeningId, setReopeningId] = useState<string | null>(null);
   const klassen = useMemo(() => {
     const wantedYears = grade === "2e" ? [3, 4] : [5, 6];
     return [...new Set(
@@ -398,6 +399,21 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
     }
     return result;
   }
+  async function reopenHomework(submission: HomeworkSubmission, leerling: Leerling) {
+    if (!window.confirm(`Huistaak van ${leerling.naam} éénmalig opnieuw openstellen? De leerling kan de bestaande antwoorden aanpassen en één keer opnieuw indienen.`)) return;
+    setReopeningId(submission.id);
+    setError(null);
+    try {
+      const { error } = await supabase.rpc("lo_reopen_homework_once", { p_submission_id: submission.id });
+      if (error) throw new Error(readableError(error, "Kon huistaak niet opnieuw openstellen."));
+      setSubmissions((prev) => prev.map((row) => row.id === submission.id ? { ...row, payload: { ...(row.payload ?? {}), reopen_allowed: true } } : row));
+    } catch (e: any) {
+      setError(e?.message ?? "Kon huistaak niet opnieuw openstellen.");
+    } finally {
+      setReopeningId(null);
+    }
+  }
+
   async function loadOverview() {
     setLoadingOverview(true);
     setError(null);
@@ -716,6 +732,7 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
                 const rubric = mainRubric(submission);
                 const ai = aiAssessment(submission);
                 const ingediend = Boolean(submission);
+                const isReopened = submission?.payload?.reopen_allowed === true;
                 return (
                   <div
                     key={leerling.id}
@@ -754,7 +771,24 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
                         {ingediend ? "JA" : "NEE"}
                       </div>
                       {submission ? (
-                        <div className="mt-1 text-[10px] text-white/40">{submission.date}</div>
+                        <>
+                          <div className="mt-1 text-[10px] text-white/40">{submission.date}</div>
+                          <button
+                            type="button"
+                            onClick={() => reopenHomework(submission, leerling)}
+                            disabled={isReopened || reopeningId === submission.id}
+                            className={[
+                              "mt-2 w-full rounded-xl border px-2 py-2 text-[10px] font-black transition",
+                              isReopened
+                                ? "border-amber-400/25 bg-amber-400/10 text-amber-100"
+                                : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10",
+                              reopeningId === submission.id ? "opacity-60" : "",
+                            ].join(" ")}
+                            title="Geef deze leerling één nieuwe indienmogelijkheid"
+                          >
+                            {reopeningId === submission.id ? "Openstellen…" : isReopened ? "🔓 Opnieuw opengesteld" : "🔓 Eénmalig opnieuw openstellen"}
+                          </button>
+                        </>
                       ) : null}
                     </div>
                     <div className="p-3">
