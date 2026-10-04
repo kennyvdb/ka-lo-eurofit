@@ -1,39 +1,34 @@
 "use client";
-
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
 import React, { useEffect, useMemo, useState } from "react";
-
 /* =========================================================
    TYPES
 ========================================================= */
-
 type Tab =
+  | "materiaal"
   | "info"
   | "checklist"
   | "annulering"
   | "kamers"
   | "groepen"
   | "faq";
-
 type ChecklistItem = {
   id: string;
   label: string;
   note?: string;
   important?: boolean;
 };
-
 type ChecklistGroup = {
   title: string;
   icon: string;
   items: ChecklistItem[];
 };
-
 /* =========================================================
    UI
 ========================================================= */
-
 const ui = {
   text: "rgba(234,240,255,0.94)",
   muted: "rgba(234,240,255,0.70)",
@@ -42,28 +37,25 @@ const ui = {
   panel:
     "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
 };
-
 /* =========================================================
    TABS
 ========================================================= */
-
 const tabs: {
   id: Tab;
   icon: string;
   label: string;
 }[] = [
   { id: "info", icon: "🏔️", label: "Info" },
+  { id: "materiaal", icon: "🎿", label: "Eigen materiaal" },
   { id: "checklist", icon: "🎒", label: "Checklist" },
   { id: "annulering", icon: "🛡️", label: "Annulering" },
   { id: "kamers", icon: "🛏️", label: "Kamers" },
   { id: "groepen", icon: "⛷️", label: "Groepen" },
   { id: "faq", icon: "❓", label: "FAQ" },
 ];
-
 /* =========================================================
    CHECKLIST
 ========================================================= */
-
 const checklistGroups: ChecklistGroup[] = [
   {
     title: "Documenten & geld",
@@ -94,7 +86,6 @@ const checklistGroups: ChecklistGroup[] = [
       },
     ],
   },
-
   {
     title: "Handbagage voor de bus",
     icon: "🎒",
@@ -133,7 +124,6 @@ const checklistGroups: ChecklistGroup[] = [
       },
     ],
   },
-
   {
     title: "Ski- of snowboardkledij",
     icon: "⛷️",
@@ -188,7 +178,6 @@ const checklistGroups: ChecklistGroup[] = [
       },
     ],
   },
-
   {
     title: "Bescherming tegen zon & koude",
     icon: "☀️",
@@ -208,7 +197,6 @@ const checklistGroups: ChecklistGroup[] = [
       },
     ],
   },
-
   {
     title: "Gewone kledij",
     icon: "👕",
@@ -248,7 +236,6 @@ const checklistGroups: ChecklistGroup[] = [
       },
     ],
   },
-
   {
     title: "Toilet & verzorging",
     icon: "🧴",
@@ -289,7 +276,6 @@ const checklistGroups: ChecklistGroup[] = [
       },
     ],
   },
-
   {
     title: "Medicatie",
     icon: "💊",
@@ -301,7 +287,6 @@ const checklistGroups: ChecklistGroup[] = [
       },
     ],
   },
-
   {
     title: "Elektronica",
     icon: "🔌",
@@ -323,7 +308,6 @@ const checklistGroups: ChecklistGroup[] = [
       },
     ],
   },
-
   {
     title: "Vrije tijd",
     icon: "🎲",
@@ -341,30 +325,23 @@ const checklistGroups: ChecklistGroup[] = [
     ],
   },
 ];
-
 /* =========================================================
    PAGE
 ========================================================= */
-
 export default function SneeuwstagePage() {
   const [activeTab, setActiveTab] = useState<Tab>("info");
-
   const [checked, setChecked] = useState<Record<string, boolean>>(
     {}
   );
-
   const [checklistLoaded, setChecklistLoaded] = useState(false);
-
   /* =======================================================
      CHECKLIST LADEN
   ======================================================= */
-
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(
         "sneeuwstage-2026-checklist"
       );
-
       if (saved) {
         setChecked(JSON.parse(saved));
       }
@@ -377,14 +354,11 @@ export default function SneeuwstagePage() {
       setChecklistLoaded(true);
     }
   }, []);
-
   /* =======================================================
      CHECKLIST OPSLAAN
   ======================================================= */
-
   useEffect(() => {
     if (!checklistLoaded) return;
-
     try {
       window.localStorage.setItem(
         "sneeuwstage-2026-checklist",
@@ -397,48 +371,37 @@ export default function SneeuwstagePage() {
       );
     }
   }, [checked, checklistLoaded]);
-
   /* =======================================================
      CHECKLIST STATISTIEKEN
   ======================================================= */
-
   const allItems = useMemo(
     () => checklistGroups.flatMap((group) => group.items),
     []
   );
-
   const checkedCount = allItems.filter(
     (item) => checked[item.id]
   ).length;
-
   const totalCount = allItems.length;
-
   const percentage =
     totalCount > 0
       ? Math.round((checkedCount / totalCount) * 100)
       : 0;
-
   function toggleItem(id: string) {
     setChecked((prev) => ({
       ...prev,
       [id]: !prev[id],
     }));
   }
-
   function resetChecklist() {
     const ok = window.confirm(
       "Wil je alle vinkjes van de checklist verwijderen?"
     );
-
     if (!ok) return;
-
     setChecked({});
   }
-
   /* =======================================================
      RENDER
   ======================================================= */
-
   return (
     <AppShell
       title="LO App"
@@ -447,7 +410,6 @@ export default function SneeuwstagePage() {
       {/* ===================================================
           HERO
       =================================================== */}
-
       <BaseHero
         label="EXTRAMURALE ACTIVITEIT"
         title={
@@ -473,23 +435,19 @@ export default function SneeuwstagePage() {
           </Link>
         }
       />
-
       {/* ===================================================
           NAVIGATIE
           GSM: 2 kolommen
           TABLET: 3 kolommen
           DESKTOP: 6 kolommen
       =================================================== */}
-
       <div className="mt-5">
         <div className="mb-2 text-[12px] font-black uppercase tracking-[0.12em] text-white/45">
           Sneeuwstage
         </div>
-
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           {tabs.map((tab) => {
             const active = activeTab === tab.id;
-
             return (
               <button
                 key={tab.id}
@@ -513,7 +471,6 @@ export default function SneeuwstagePage() {
                 >
                   {tab.icon}
                 </span>
-
                 <span className="min-w-0">
                   <span
                     className={[
@@ -525,14 +482,12 @@ export default function SneeuwstagePage() {
                   >
                     {tab.label}
                   </span>
-
                   {active && (
                     <span className="mt-1 block text-[10px] font-bold uppercase tracking-wide text-[#89C2AA]">
                       Geopend
                     </span>
                   )}
                 </span>
-
                 {active && (
                   <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#89C2AA] shadow-[0_0_10px_rgba(137,194,170,0.75)]" />
                 )}
@@ -541,61 +496,52 @@ export default function SneeuwstagePage() {
           })}
         </div>
       </div>
-
       {/* ===================================================
           ALGEMENE INFO
       =================================================== */}
-
+      {activeTab === "materiaal" && <EigenMateriaal />}
       {activeTab === "info" && (
         <section className="mt-4">
           <SectionTitle
             title="Algemene informatie"
             description="De belangrijkste informatie over de sneeuwstage."
           />
-
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <InfoCard
               icon="📅"
               label="Vertrek"
               value="18 december 2026"
             />
-
             <InfoCard
               icon="🏠"
               label="Terug"
               value="24 december 2026"
             />
-
             <InfoCard
               icon="📍"
               label="Bestemming"
               value="Ahrntal, Oostenrijk"
             />
-
             <InfoCard
               icon="💶"
               label="Prijs"
               value="€ 775"
             />
-
             <InfoCard
               icon="⛷️"
               label="Activiteit"
               value="Ski of snowboard"
             />
-
             <InfoCard
               icon="🚌"
               label="Vervoer"
               value="Autocar"
             />
           </div>
-
           <div style={styles.panel} className="mt-4">
             <div className="text-lg font-black text-white">
               🏔️ Sneeuwstage
             </div>
-
             <p className="mt-2 mb-0 text-sm leading-6 text-white/70">
               Op deze pagina vind je alle praktische
               informatie voor de sneeuwstage. Controleer voor
@@ -603,7 +549,6 @@ export default function SneeuwstagePage() {
               informatie over annulering en verzekering.
             </p>
           </div>
-
           <div
             style={styles.notice}
             className="mt-3"
@@ -611,7 +556,6 @@ export default function SneeuwstagePage() {
             <div className="font-black text-white">
               ℹ️ Meer praktische informatie volgt
             </div>
-
             <div className="mt-1 text-sm leading-6 text-white/70">
               Exact vertrekuur, vertrekplaats en eventuele
               laatste afspraken worden later meegedeeld.
@@ -619,35 +563,29 @@ export default function SneeuwstagePage() {
           </div>
         </section>
       )}
-
       {/* ===================================================
           CHECKLIST
       =================================================== */}
-
       {activeTab === "checklist" && (
         <section className="mt-4">
           <SectionTitle
             title="Checklist"
             description="Vink af wat je al hebt klaargelegd. Je voortgang wordt automatisch op dit toestel bewaard."
           />
-
           <div style={styles.panel}>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <div className="text-sm font-black text-white">
                   🎒 Mijn bagage
                 </div>
-
                 <div className="mt-1 text-xs text-white/60">
                   {checkedCount} van {totalCount} afgevinkt
                 </div>
               </div>
-
               <div className="text-2xl font-black text-white">
                 {percentage}%
               </div>
             </div>
-
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/30">
               <div
                 className="h-full rounded-full bg-white/70 transition-all duration-300"
@@ -657,12 +595,10 @@ export default function SneeuwstagePage() {
               />
             </div>
           </div>
-
           <div className="mt-3 rounded-3xl border border-amber-300/20 bg-amber-300/[0.08] p-4">
             <div className="font-black text-white">
               ⚠️ Vergeet je handbagage niet
             </div>
-
             <p className="mt-1 mb-0 text-sm leading-6 text-white/70">
               Steek bij vertrek minstens{" "}
               <strong className="text-white">
@@ -671,7 +607,6 @@ export default function SneeuwstagePage() {
               in je handbagage.
             </p>
           </div>
-
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             {checklistGroups.map((group) => (
               <div
@@ -682,16 +617,13 @@ export default function SneeuwstagePage() {
                   <span className="text-xl">
                     {group.icon}
                   </span>
-
                   <h3 className="m-0 text-base font-black text-white">
                     {group.title}
                   </h3>
                 </div>
-
                 <div className="space-y-2">
                   {group.items.map((item) => {
                     const done = !!checked[item.id];
-
                     return (
                       <button
                         key={item.id}
@@ -716,7 +648,6 @@ export default function SneeuwstagePage() {
                         >
                           ✓
                         </span>
-
                         <span className="min-w-0">
                           <span
                             className={[
@@ -727,14 +658,12 @@ export default function SneeuwstagePage() {
                             ].join(" ")}
                           >
                             {item.label}
-
                             {item.important && !done && (
                               <span className="ml-2 text-[10px] font-black uppercase tracking-wide text-amber-200">
                                 belangrijk
                               </span>
                             )}
                           </span>
-
                           {item.note && (
                             <span className="mt-1 block text-xs leading-5 text-white/55">
                               {item.note}
@@ -748,7 +677,6 @@ export default function SneeuwstagePage() {
               </div>
             ))}
           </div>
-
           <div className="mt-4 flex justify-end">
             <button
               type="button"
@@ -760,37 +688,31 @@ export default function SneeuwstagePage() {
           </div>
         </section>
       )}
-
       {/* ===================================================
           ANNULERING
       =================================================== */}
-
       {activeTab === "annulering" && (
         <section className="mt-4">
           <SectionTitle
             title="Annulering & verzekering"
             description="De belangrijkste JOSK-annuleringsvoorwaarden voor de sneeuwstage."
           />
-
           <div className="grid gap-3 md:grid-cols-3">
             <PenaltyCard
               period="Tot en met 29 dagen voor vertrek"
               cost="€ 250 p.p."
             />
-
             <PenaltyCard
               period="Van 28 t.e.m. 8 dagen voor vertrek"
               cost="50%"
               sub="van de totale reissom p.p."
             />
-
             <PenaltyCard
               period="Vanaf 7 dagen voor vertrek"
               cost="100%"
               sub="van de totale reissom p.p."
             />
           </div>
-
           <div
             style={styles.panel}
             className="mt-4"
@@ -798,43 +720,36 @@ export default function SneeuwstagePage() {
             <div className="text-lg font-black text-white">
               🛡️ PROTECTIONS annuleringsverzekering
             </div>
-
             <p className="mt-2 text-sm leading-6 text-white/70">
               JOSK adviseert om bij boeking een
               annuleringsverzekering PROTECTIONS af te
               sluiten. Deze verzekering voor schoolreizen
               kost <strong className="text-white">€25 p.p.</strong>
             </p>
-
             <div className="mt-3 grid gap-2 sm:grid-cols-3">
               <SmallStat
                 label="Poliskost"
                 value="€25"
               />
-
               <SmallStat
                 label="Eigen risico"
                 value="€50"
               />
-
               <SmallStat
                 label="Totale kost*"
                 value="€75"
               />
             </div>
-
             <p className="mt-3 mb-0 text-xs leading-5 text-white/50">
               * Volgens de JOSK-voorwaarden bij een geldige
               reden en na voorlegging van de nodige geldige
               bewijsstukken.
             </p>
           </div>
-
           <div className="mt-3 rounded-3xl border border-red-300/20 bg-red-300/[0.07] p-4">
             <div className="font-black text-white">
               ⚠️ Annuleren moet schriftelijk
             </div>
-
             <p className="mt-2 mb-0 text-sm leading-6 text-white/70">
               Volgens de JOSK-voorwaarden moet een annulering
               onmiddellijk en schriftelijk aan JOSK worden
@@ -842,12 +757,10 @@ export default function SneeuwstagePage() {
               annuleringen worden niet aanvaard.
             </p>
           </div>
-
           <div className="mt-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
             <div className="font-black text-white">
               🚫 No-show
             </div>
-
             <p className="mt-2 mb-0 text-sm leading-6 text-white/70">
               Niet komen opdagen zonder schriftelijke
               verwittiging resulteert volgens JOSK
@@ -855,7 +768,6 @@ export default function SneeuwstagePage() {
               reissom.
             </p>
           </div>
-
           <div className="mt-4 text-xs leading-5 text-white/45">
             Dit is een vereenvoudigd overzicht. De officiële
             JOSK-reis- en annuleringsvoorwaarden blijven
@@ -863,11 +775,9 @@ export default function SneeuwstagePage() {
           </div>
         </section>
       )}
-
       {/* ===================================================
           KAMERS
       =================================================== */}
-
       {activeTab === "kamers" && (
         <ComingSoon
           icon="🛏️"
@@ -875,11 +785,9 @@ export default function SneeuwstagePage() {
           description="De kamerverdeling wordt later door het LO-team gepubliceerd."
         />
       )}
-
       {/* ===================================================
           GROEPEN
       =================================================== */}
-
       {activeTab === "groepen" && (
         <ComingSoon
           icon="⛷️"
@@ -887,54 +795,44 @@ export default function SneeuwstagePage() {
           description="De groepsverdeling wordt later door het LO-team gepubliceerd."
         />
       )}
-
       {/* ===================================================
           FAQ
       =================================================== */}
-
       {activeTab === "faq" && (
         <section className="mt-4">
           <SectionTitle
             title="Veelgestelde vragen"
             description="Praktische antwoorden voor de sneeuwstage."
           />
-
           <div className="space-y-3">
             <Faq
               question="Moet ik zelf handdoeken meenemen?"
               answer="Ja. Neem zelf handdoeken mee. Het beddengoed wordt door het pension voorzien."
             />
-
             <Faq
               question="Waar krijg ik mijn Eurocross-kaart?"
               answer="Je ontvangt de Eurocross-kaart op de bus bij vertrek."
             />
-
             <Faq
               question="Wat moet zeker in mijn handbagage?"
               answer="Voorzie bij vertrek minstens één paar skisokken in je handbagage."
             />
-
             <Faq
               question="Wat als ik last heb van wagenziekte?"
               answer="Wie last heeft van wagenziekte voorziet zelf een geschikt middel tegen wagenziekte."
             />
-
             <Faq
               question="Moet ik een extra gewone jas meenemen?"
               answer="De school raadt aan om je skivest ook als gewone jas te gebruiken. Zo bespaar je plaats in je valies."
             />
-
             <Faq
               question="Moet iedereen een gezelschapsspel meenemen?"
               answer="Nee. Voorzie ongeveer één gezelschapsspel per vier vrienden en spreek onderling af wie welk spel meeneemt."
             />
-
             <Faq
               question="Wanneer wordt de kamerverdeling bekendgemaakt?"
               answer="De kamerverdeling wordt later door het LO-team op deze pagina gepubliceerd."
             />
-
             <Faq
               question="Wanneer wordt mijn ski- of snowboardgroep bekendgemaakt?"
               answer="De groepsverdeling wordt later door het LO-team op deze pagina gepubliceerd."
@@ -945,11 +843,9 @@ export default function SneeuwstagePage() {
     </AppShell>
   );
 }
-
 /* =========================================================
    COMPONENTS
 ========================================================= */
-
 function SectionTitle({
   title,
   description,
@@ -962,7 +858,6 @@ function SectionTitle({
       <h2 className="m-0 text-lg font-black text-white">
         {title}
       </h2>
-
       {description && (
         <p className="mt-1 mb-0 text-sm leading-6 text-white/60">
           {description}
@@ -971,7 +866,6 @@ function SectionTitle({
     </div>
   );
 }
-
 function InfoCard({
   icon,
   label,
@@ -985,12 +879,10 @@ function InfoCard({
     <div style={styles.panel}>
       <div className="flex items-start gap-3">
         <div className="text-2xl">{icon}</div>
-
         <div>
           <div className="text-xs font-bold uppercase tracking-wide text-white/45">
             {label}
           </div>
-
           <div className="mt-1 font-black text-white">
             {value}
           </div>
@@ -999,7 +891,6 @@ function InfoCard({
     </div>
   );
 }
-
 function PenaltyCard({
   period,
   cost,
@@ -1014,11 +905,9 @@ function PenaltyCard({
       <div className="text-xs font-bold leading-5 text-white/55">
         {period}
       </div>
-
       <div className="mt-3 text-3xl font-black text-white">
         {cost}
       </div>
-
       {sub && (
         <div className="mt-1 text-xs text-white/50">
           {sub}
@@ -1027,7 +916,6 @@ function PenaltyCard({
     </div>
   );
 }
-
 function SmallStat({
   label,
   value,
@@ -1040,14 +928,12 @@ function SmallStat({
       <div className="text-xs text-white/50">
         {label}
       </div>
-
       <div className="mt-1 text-lg font-black text-white">
         {value}
       </div>
     </div>
   );
 }
-
 function ComingSoon({
   icon,
   title,
@@ -1066,15 +952,12 @@ function ComingSoon({
         <div className="text-5xl">
           {icon}
         </div>
-
         <div className="mt-4 inline-flex rounded-full border border-amber-300/20 bg-amber-300/[0.08] px-3 py-1 text-[11px] font-black uppercase tracking-wider text-amber-100">
           🚧 Binnenkort
         </div>
-
         <h2 className="mt-4 mb-0 text-xl font-black text-white">
           {title}
         </h2>
-
         <p className="mx-auto mt-2 mb-0 max-w-lg text-sm leading-6 text-white/60">
           {description}
         </p>
@@ -1082,7 +965,6 @@ function ComingSoon({
     </section>
   );
 }
-
 function Faq({
   question,
   answer,
@@ -1097,23 +979,19 @@ function Faq({
     >
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-black text-white">
         <span>{question}</span>
-
         <span className="text-lg text-white/45 transition group-open:rotate-45">
           +
         </span>
       </summary>
-
       <p className="mt-3 mb-0 border-t border-white/10 pt-3 text-sm leading-6 text-white/65">
         {answer}
       </p>
     </details>
   );
 }
-
 /* =========================================================
    STYLES
 ========================================================= */
-
 const styles: Record<string, React.CSSProperties> = {
   panel: {
     padding: 16,
@@ -1123,7 +1001,6 @@ const styles: Record<string, React.CSSProperties> = {
     boxShadow: "0 12px 28px rgba(0,0,0,0.14)",
     backdropFilter: "blur(10px)",
   },
-
   notice: {
     padding: 16,
     borderRadius: 22,
@@ -1131,3 +1008,92 @@ const styles: Record<string, React.CSSProperties> = {
     border: "1px solid rgba(137,194,170,0.20)",
   },
 };
+const materiaalVelden = [
+  ["ski_schoenen", "Skischoenen"], ["ski_latten", "Skilatten"],
+  ["ski_helm", "Skihelm"], ["ski_stokken", "Skistokken"],
+  ["snowboard_schoenen", "Snowboardschoenen"], ["snowboard_board", "Snowboard"],
+  ["snowboard_helm", "Snowboardhelm"],
+] as const;
+type MateriaalKey = typeof materiaalVelden[number][0];
+function EigenMateriaal() {
+  const [client] = useState(() => createClient());
+  const [stageId, setStageId] = useState("");
+  const [values, setValues] = useState<Partial<Record<MateriaalKey, boolean>>>({});
+  const [opmerking, setOpmerking] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [allowed, setAllowed] = useState(false);
+  const [readOnly, setReadOnly] = useState(false);
+  const [message, setMessage] = useState("");
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const { data: { user }, error: authError } = await client.auth.getUser();
+        if (authError) throw authError;
+        if (!user) throw new Error("Log in om je materiaal door te geven.");
+        const { data: isLo, error: roleError } = await client.rpc("sneeuwstage_materiaal_lo");
+        if (roleError) throw roleError;
+        if (isLo) {
+          if (active) { setReadOnly(true); setAllowed(true); }
+          return;
+        }
+        const { data: stage, error } = await client.from("sneeuwstages").select("id").eq("slug", "sneeuwstage-2026").single();
+        if (error) throw error;
+        const { data: eligible, error: checkError } = await client.rpc("sneeuwstage_materiaal_deelnemer", { stage_id: stage.id });
+        if (checkError) throw checkError;
+        if (!eligible) throw new Error("Dit formulier is alleen voor actieve deelnemers aan de sneeuwstage.");
+        const { data: answer, error: answerError } = await client.from("sneeuwstage_materiaal").select("*").eq("sneeuwstage_id", stage.id).eq("leerling_id", user.id).maybeSingle();
+        if (answerError) throw answerError;
+        if (active) {
+          setStageId(stage.id); setAllowed(true);
+          if (answer) {
+            setValues(Object.fromEntries(materiaalVelden.map(([key]) => [key, answer[key] === true])));
+            setOpmerking(answer.opmerking ?? "");
+          }
+        }
+      } catch (error) {
+        if (active) setMessage(error instanceof Error ? error.message : String((error as { message?: string }).message ?? "Kon het formulier niet laden."));
+      } finally { if (active) setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [client]);
+  async function save() {
+    if (readOnly || !allowed || !stageId) return;
+    setSaving(true); setMessage("");
+    try {
+      const { data: { user }, error: authError } = await client.auth.getUser();
+      if (authError) throw authError;
+      if (!user) throw new Error("Log opnieuw in.");
+      const { error } = await client.from("sneeuwstage_materiaal").upsert({
+        sneeuwstage_id: stageId, leerling_id: user.id,
+        ...Object.fromEntries(materiaalVelden.map(([key]) => [key, !!values[key]])),
+        opmerking: opmerking.trim(),
+      }, { onConflict: "sneeuwstage_id,leerling_id" });
+      if (error) throw error;
+      setMessage("Opgeslagen. De LO-leerkrachten kunnen je antwoord bekijken.");
+    } catch (error) { setMessage(error instanceof Error ? error.message : String((error as { message?: string }).message ?? "Opslaan mislukt.")); }
+    finally { setSaving(false); }
+  }
+  return <section className="mt-4" style={styles.panel}>
+    <SectionTitle title="Eigen materiaal" />
+    <p className="text-sm leading-6 text-white"><strong>Beste leerlingen, dit bericht dient enkel ingevuld te worden door leerlingen die eigen materiaal willen meenemen of kunnen voorzien.</strong></p>
+    <p className="text-sm text-white/70">Vink alleen de onderdelen aan die je zelf meeneemt. Je kan je antwoord later aanpassen. Neem je niets meer mee? Vink alles uit en sla opnieuw op.</p>
+    {readOnly && <p className="rounded-xl border border-white/20 bg-white/5 p-3 text-sm text-white/80">Je bekijkt als LO-leerkracht het leerlingformulier. Invullen en opslaan zijn uitgeschakeld. De antwoorden vind je onder Leerkrachten LO → Extramurale sportactiviteiten → Sneeuwstage.</p>}
+    {loading ? <p>Formulier laden…</p> : allowed && <>
+      <div className="grid gap-4 sm:grid-cols-2">
+        {["ski", "snowboard"].map(group => <fieldset key={group} disabled={saving || readOnly} className="rounded-2xl border border-white/20 p-4">
+          <legend className="px-2 font-bold">{group === "ski" ? "Ski" : "Snowboard"}</legend>
+          {materiaalVelden.filter(([key]) => key.startsWith(group + "_")).map(([key, label]) => <label key={key} className="my-3 flex cursor-pointer items-center gap-3">
+            <input type="checkbox" className="h-5 w-5" checked={!!values[key]} onChange={e => { setValues(old => ({ ...old, [key]: e.target.checked })); setMessage(""); }} />{label}
+          </label>)}
+        </fieldset>)}
+      </div>
+      <label className="mt-4 block text-sm">Opmerking (optioneel)
+        <textarea maxLength={1000} disabled={saving || readOnly} value={opmerking} onChange={e => { setOpmerking(e.target.value); setMessage(""); }} className="mt-2 w-full rounded-xl border border-white/20 bg-black/20 p-3 text-white" rows={3} />
+      </label>
+      {!readOnly && <button type="button" onClick={save} disabled={saving || readOnly} className="mt-4 rounded-xl border border-white/30 bg-white/10 px-5 py-3 font-bold disabled:opacity-50">{saving ? "Opslaan…" : "Mijn materiaal opslaan"}</button>}
+    </>}
+    {message && <p role="status" className="mt-4 text-sm text-white">{message}</p>}
+  </section>;
+}

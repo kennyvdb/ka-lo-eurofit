@@ -737,14 +737,13 @@ function rubricsSecond(f: SecondGradeForm): RubricItem[] {
 ========================= */
 
 type MealChoice = "Ontbijt" | "Lunch" | "Avondeten" | "Tussendoortje" | "Drank" | "";
-type IntakeAppChoice = "iFood" | "MyFitnessPal" | "Yazio" | "Andere app" | "";
+type IntakeAppChoice = "Virtuafood";
 
 type ThirdGradeForm = {
   date: string;
   weightKg: string;
 
   intakeApp: IntakeAppChoice;
-  intakeAppOther: string;
   kcalIntake: string;
   proteinG: string;
   carbsG: string;
@@ -753,7 +752,7 @@ type ThirdGradeForm = {
   highestKcalMeal: MealChoice;
 
   kcalTotalBurn: string;
-  burnSource: "TDEE Calculator" | "Smartwatch / gezondheidsapp" | "Andere calculator" | "";
+  burnSource: "TDEE Calculator";
 
   balanceExplain: string;
   longTermExplain: string;
@@ -765,8 +764,7 @@ function initThird(): ThirdGradeForm {
   return {
     date: toYMD(),
     weightKg: "",
-    intakeApp: "iFood",
-    intakeAppOther: "",
+    intakeApp: "Virtuafood",
     kcalIntake: "",
     proteinG: "",
     carbsG: "",
@@ -834,7 +832,7 @@ function rubricsThird(f: ThirdGradeForm): {
   const hasCarbs = Number.isFinite(carbs) && carbs >= 0;
   const hasFat = Number.isFinite(fat) && fat >= 0;
   const hasMeals = Number.isFinite(meals) && meals > 0;
-  const hasApp = Boolean(f.intakeApp && (f.intakeApp !== "Andere app" || f.intakeAppOther.trim()));
+  const hasApp = f.intakeApp === "Virtuafood";
   const hasBurnSource = Boolean(f.burnSource);
   const hasHighestMeal = Boolean(f.highestKcalMeal);
 
@@ -847,7 +845,7 @@ function rubricsThird(f: ThirdGradeForm): {
 
   const flags: string[] = [];
   if (hasIntake && (intake < 1000 || intake > 6000)) {
-    flags.push("Je kcal-inname lijkt weinig realistisch. Controleer of je de waarde correct uit iFood hebt overgenomen.");
+    flags.push("Je kcal-inname lijkt weinig realistisch. Controleer of je de waarde correct uit Virtuafood hebt overgenomen.");
   }
   if (hasBurn && (burn < 1000 || burn > 6000)) {
     flags.push("Je kcal-verbruik lijkt weinig realistisch. Controleer of je de TDEE Calculator correct hebt ingevuld.");
@@ -922,7 +920,7 @@ function rubricsThird(f: ThirdGradeForm): {
           ? "Goed gewerkt: je gegevens zijn volledig en je conclusie toont dat je energiebalans begrijpt."
           : level === "+/-"
             ? "Je bent goed gestart. Controleer je gegevens en werk je analyse/conclusie concreter uit."
-            : "Vul alle verplichte gegevens in: kcal-inname, kcal-verbruik, macro's, app, maaltijdinfo en reflectie.",
+            : "Vul alle verplichte gegevens in: kcal-inname uit Virtuafood, kcal-verbruik uit de TDEE Calculator, macro's, maaltijdinfo en reflectie.",
   };
 
   return {
@@ -994,11 +992,11 @@ const RUBRIC_EXPLANATION = {
     "Reflectie koppelt minstens twee gegevens aan elkaar: MAS/tempo, hartslag, praattest of RPE.",
   ],
   "3e": [
-    "Volledige dagregistratie van energie-inname.",
-    "Kcal-inname en geschat kcal-verbruik ingevuld.",
+    "Volledige dagregistratie van eten en drinken in Virtuafood.",
+    "Kcal-inname uit Virtuafood en geschat kcal-verbruik uit de TDEE Calculator ingevuld.",
     "Eiwitten, koolhydraten en vetten geregistreerd.",
     "Energiebalans correct geïnterpreteerd.",
-    "Macroverdeling besproken.",
+    "Macroverdeling besproken in functie van het gekozen doel in Virtuafood.",
     "Persoonlijke conclusie en realistisch verbeterpunt geformuleerd.",
   ],
 } satisfies Record<GradeMode, string[]>;
@@ -1129,12 +1127,60 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
     setError(null);
 
     try {
+      // De gewone rubric blijft exact behouden, maar wordt niet aan leerlingen getoond.
+      // Daarnaast vragen we onafhankelijk een AI-beoordeling op. De AI krijgt bewust
+      // de gewone rubric NIET mee, zodat beide beoordelingen eerlijk vergeleken kunnen worden.
+      let aiAssessment: any = {
+        status: "unavailable",
+        level: null,
+        summary: "AI-beoordeling kon niet worden uitgevoerd.",
+        criteria: [],
+      };
+
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+
+        if (!accessToken) throw new Error("Geen geldige sessie voor AI-beoordeling.");
+
+        const aiResponse = await fetch("/api/huiswerk/ai-beoordeling", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`,
+          },
+          body: JSON.stringify({
+            grade: mode,
+            form: mode === "2e" ? f2 : f3,
+          }),
+        });
+
+        const aiJson = await aiResponse.json().catch(() => null);
+        if (!aiResponse.ok) {
+          throw new Error(aiJson?.error || "AI-beoordeling mislukt.");
+        }
+
+        aiAssessment = {
+          status: "completed",
+          ...aiJson,
+        };
+      } catch (aiError: any) {
+        // Een tijdelijke AI-fout mag nooit verhinderen dat een leerling zijn huiswerk indient.
+        aiAssessment = {
+          status: "unavailable",
+          level: null,
+          summary: aiError?.message || "AI-beoordeling kon niet worden uitgevoerd.",
+          criteria: [],
+        };
+      }
+
       const payload =
         mode === "2e"
           ? {
               grade: "2e",
               form: f2,
               rubrics: rub2,
+              aiAssessment,
             }
           : {
               grade: "3e",
@@ -1142,6 +1188,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
               rubrics: rub3.items,
               totals: rub3.totals,
               flags: rub3.flags,
+              aiAssessment,
             };
 
       const row = {
@@ -1921,353 +1968,95 @@ function ThirdGradePanel({
   };
   flags: string[];
 }) {
-  const set = (patch: Partial<ThirdGradeForm>) =>
-    onChange({ ...value, ...patch });
-
+  const set = (patch: Partial<ThirdGradeForm>) => onChange({ ...value, ...patch });
   const balanceLabel = energyBalanceLabel(derived.kcalBalance);
   const proteinAdvice = proteinAdviceText(derived.proteinPerKg);
-
   return (
     <>
       <div style={styles.panel}>
         <div style={styles.sectionTitle}>🥗 Huiswerk 3e graad — energiebalans en voeding</div>
         <div style={{ ...styles.small, marginTop: 8 }}>
-          Registreer <b style={{ color: ui.text }}>één volledige dag</b>. Gebruik voor je
-          energie-inname bij voorkeur <b style={{ color: ui.text }}>iFood</b>. Gebruik voor je
-          energieverbruik de <b style={{ color: ui.text }}>TDEE Calculator</b>. Vul daarna je
-          kcal-inname, kcal-verbruik en macro's in en trek zelf je conclusie.
+          Registreer <b style={{ color: ui.text }}>één volledige dag</b> al je eten en drinken in <b style={{ color: ui.text }}>Virtuafood</b>. Neem daarna je totale energie-inname en macro&apos;s over uit Virtuafood. Bereken je energieverbruik uitsluitend met de <b style={{ color: ui.text }}>TDEE Calculator</b> en vergelijk beide waarden.
         </div>
       </div>
-
       <div className="row2" style={styles.row2}>
         <div style={styles.infoBox}>
           <div style={{ fontWeight: 980, color: ui.text }}>Wat moet je doen?</div>
           <div style={{ ...styles.small, marginTop: 8, display: "grid", gap: 6 }}>
             <div>1. Kies één gewone dag.</div>
-            <div>2. Registreer alles wat je eet en drinkt in iFood of een gelijkaardige app.</div>
-            <div>3. Noteer je kcal-inname, eiwitten, koolhydraten en vetten.</div>
-            <div>4. Bereken je kcal-verbruik met de TDEE Calculator.</div>
-            <div>5. Vergelijk inname en verbruik en schrijf je eigen conclusie.</div>
+            <div>2. Registreer in Virtuafood alles wat je die dag eet én drinkt. Vergeet tussendoortjes, dranken, sauzen en kleine snacks niet.</div>
+            <div>3. Neem uit Virtuafood je totale kcal-inname en je eiwitten, koolhydraten en vetten over.</div>
+            <div>4. Bereken je energieverbruik met de TDEE Calculator.</div>
+            <div>5. Vergelijk je energie-inname met je energieverbruik en schrijf je eigen conclusie.</div>
+            <div>6. Bekijk in Virtuafood je macro&apos;s in functie van het doel dat je in de app koos en bespreek wat je opvalt.</div>
           </div>
         </div>
-
         <div style={styles.panel}>
           <div style={styles.sectionTitle}>Korte theorie</div>
-          <div style={{ ...styles.small, marginTop: 10 }}>
-            <b style={{ color: ui.text }}>Energie-inname</b> is de energie die je binnenkrijgt via eten en drinken.
-          </div>
-          <div style={{ ...styles.small, marginTop: 10 }}>
-            <b style={{ color: ui.text }}>Energieverbruik</b> is de energie die je lichaam gebruikt om te leven en te bewegen.
-          </div>
-          <div style={{ ...styles.small, marginTop: 10 }}>
-            <b style={{ color: ui.text }}>Energiebalans</b> is het verschil tussen je inname en je verbruik.
-            Als hetzelfde patroon weken of maanden blijft terugkomen, kan dat invloed hebben op je lichaamsgewicht.
-          </div>
-          <div style={{ ...styles.small, marginTop: 10 }}>
-            <b style={{ color: ui.text }}>Macro's</b> zijn eiwitten, koolhydraten en vetten.
-            Eiwitten ondersteunen spierherstel, koolhydraten leveren veel trainingsenergie en vetten zijn nodig voor onder andere hormonen en opname van vitamines.
-          </div>
-          <div style={{ ...styles.small, marginTop: 10 }}>
-            <b style={{ color: ui.text }}>MET en PAL</b> worden soms gebruikt om energieverbruik te schatten,
-            maar voor deze huistaak hoef je ze niet zelf te berekenen.
-          </div>
+          <div style={{ ...styles.small, marginTop: 10 }}><b style={{ color: ui.text }}>Energie-inname</b> is de energie die je binnenkrijgt via eten en drinken. Voor deze opdracht haal je die waarde uit Virtuafood.</div>
+          <div style={{ ...styles.small, marginTop: 10 }}><b style={{ color: ui.text }}>Energieverbruik</b> is de energie die je lichaam gebruikt om te leven en te bewegen. Voor deze opdracht bereken je dit met de TDEE Calculator.</div>
+          <div style={{ ...styles.small, marginTop: 10 }}><b style={{ color: ui.text }}>Energiebalans</b> is het verschil tussen je inname en je verbruik. Als hetzelfde patroon weken of maanden blijft terugkomen, kan dat invloed hebben op je lichaamsgewicht.</div>
+          <div style={{ ...styles.small, marginTop: 10 }}><b style={{ color: ui.text }}>Macro&apos;s</b> zijn eiwitten, koolhydraten en vetten. Hoe je verdeling eruitziet, hangt mee af van je doel. Kijk daarom naar het doel dat je in Virtuafood gekozen hebt en vergelijk de voorgestelde verdeling met wat je die dag werkelijk registreerde.</div>
         </div>
       </div>
-
-      <div style={styles.panel}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            gap: 12,
-            alignItems: "center",
-            flexWrap: "wrap",
-          }}
-        >
-          <div>
-            <div style={styles.sectionTitle}>TDEE Calculator voor kcal-verbruik</div>
-            <div style={{ ...styles.small, marginTop: 6 }}>
-              Gebruik deze calculator om je totaal energieverbruik per dag te schatten.
-            </div>
-          </div>
-
-          <a
-            href="https://www.calculator.net/tdee-calculator.html"
-            target="_blank"
-            rel="noreferrer"
-            style={styles.linkBtn}
-          >
-            Open TDEE Calculator
-          </a>
-        </div>
-      </div>
-
       {flags.length > 0 && (
         <div style={styles.warnBox}>
           <b>Controlepunten:</b>
-          <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
-            {flags.map((f, i) => (
-              <div key={i}>• {f}</div>
-            ))}
-          </div>
+          <div style={{ marginTop: 8, display: "grid", gap: 6 }}>{flags.map((f, i) => <div key={i}>• {f}</div>)}</div>
         </div>
       )}
-
       <div className="row2" style={styles.row2}>
         <div style={styles.panel}>
           <div style={styles.sectionTitle}>1) Basis</div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Datum van de dag die je registreerde</div>
-            <input
-              value={value.date}
-              onChange={(e) => set({ date: e.target.value })}
-              style={styles.input}
-              placeholder="YYYY-MM-DD"
-            />
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Gewicht (kg) — optioneel</div>
-            <input
-              value={value.weightKg}
-              onChange={(e) => set({ weightKg: e.target.value })}
-              style={styles.input}
-              inputMode="decimal"
-              placeholder="bv. 68"
-            />
-            <div style={{ ...styles.small, marginTop: 8 }}>
-              Optioneel: vul dit alleen in als je een automatische inschatting van je eiwitten per kg lichaamsgewicht wilt zien.
-            </div>
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Welke app gebruikte je voor je voeding?</div>
-            <select
-              value={value.intakeApp}
-              onChange={(e) => set({ intakeApp: e.target.value as IntakeAppChoice })}
-              style={{ ...styles.input, marginTop: 10 }}
-            >
-              <option value="">Kies…</option>
-              <option value="iFood">iFood</option>
-              <option value="MyFitnessPal">MyFitnessPal</option>
-              <option value="Yazio">Yazio</option>
-              <option value="Andere app">Andere app</option>
-            </select>
-          </div>
-
-          {value.intakeApp === "Andere app" ? (
-            <div style={{ marginTop: 12 }}>
-              <div style={styles.label}>Naam andere app</div>
-              <input
-                value={value.intakeAppOther}
-                onChange={(e) => set({ intakeAppOther: e.target.value })}
-                style={styles.input}
-                placeholder="bv. Lifesum"
-              />
-            </div>
-          ) : null}
+          <div style={{ marginTop: 12 }}><div style={styles.label}>Datum van de dag die je registreerde</div><input value={value.date} onChange={(e) => set({ date: e.target.value })} style={styles.input} placeholder="YYYY-MM-DD" /></div>
+          <div style={{ marginTop: 12 }}><div style={styles.label}>Gewicht (kg) — optioneel</div><input value={value.weightKg} onChange={(e) => set({ weightKg: e.target.value })} style={styles.input} inputMode="decimal" placeholder="bv. 68" /><div style={{ ...styles.small, marginTop: 8 }}>Optioneel: vul dit alleen in als je een automatische inschatting van je eiwitten per kg lichaamsgewicht wilt zien.</div></div>
+          <div style={{ ...styles.infoBox, marginTop: 12 }}><b style={{ color: ui.text }}>Voedingsapp: Virtuafood</b><div style={{ ...styles.small, marginTop: 6 }}>Gebruik voor deze volledige opdracht enkel Virtuafood om je voeding te registreren.</div></div>
         </div>
-
         <div style={styles.panel}>
-          <div style={styles.sectionTitle}>2) Extra gegevens uit iFood</div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Aantal maaltijden / eetmomenten geregistreerd</div>
-            <input
-              value={value.mealsCount}
-              onChange={(e) => set({ mealsCount: e.target.value })}
-              style={styles.input}
-              inputMode="numeric"
-              placeholder="bv. 4"
-            />
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Welke maaltijd leverde volgens de app de meeste kcal?</div>
-            <select
-              value={value.highestKcalMeal}
-              onChange={(e) => set({ highestKcalMeal: e.target.value as MealChoice })}
-              style={{ ...styles.input, marginTop: 10 }}
-            >
-              <option value="">Kies…</option>
-              <option value="Ontbijt">Ontbijt</option>
-              <option value="Lunch">Lunch</option>
-              <option value="Avondeten">Avondeten</option>
-              <option value="Tussendoortje">Tussendoortje</option>
-              <option value="Drank">Drank</option>
-            </select>
-          </div>
+          <div style={styles.sectionTitle}>2) Gegevens uit Virtuafood</div>
+          <div style={{ ...styles.small, marginTop: 8 }}>Registreer eerst de volledige dag in Virtuafood. Vul pas daarna onderstaande gegevens in.</div>
+          <div style={{ marginTop: 12 }}><div style={styles.label}>Aantal maaltijden / eetmomenten geregistreerd</div><input value={value.mealsCount} onChange={(e) => set({ mealsCount: e.target.value })} style={styles.input} inputMode="numeric" placeholder="bv. 4" /></div>
+          <div style={{ marginTop: 12 }}><div style={styles.label}>Welke maaltijd leverde volgens Virtuafood de meeste kcal?</div><select value={value.highestKcalMeal} onChange={(e) => set({ highestKcalMeal: e.target.value as MealChoice })} style={{ ...styles.input, marginTop: 10 }}><option value="">Kies…</option><option value="Ontbijt">Ontbijt</option><option value="Lunch">Lunch</option><option value="Avondeten">Avondeten</option><option value="Tussendoortje">Tussendoortje</option><option value="Drank">Drank</option></select></div>
         </div>
       </div>
-
       <div className="row2" style={styles.row2}>
         <div style={styles.panel}>
-          <div style={styles.sectionTitle}>3) Energie-inname via iFood</div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Totale kcal-inname</div>
-            <input
-              value={value.kcalIntake}
-              onChange={(e) => set({ kcalIntake: e.target.value })}
-              style={styles.input}
-              inputMode="numeric"
-              placeholder="bv. 2250"
-            />
-          </div>
-
+          <div style={styles.sectionTitle}>3) Energie-inname via Virtuafood</div>
+          <div style={{ ...styles.infoBox, marginTop: 10 }}><b style={{ color: ui.text }}>Alles registreren</b><div style={{ ...styles.small, marginTop: 6 }}>Voer in Virtuafood alles in wat je eet en drinkt gedurende de volledige dag. Ook tussendoortjes, frisdrank, melk, sportdrank, sauzen en kleine hapjes tellen mee. Zo krijg je een zo volledig mogelijke inschatting van je energie-inname en macro&apos;s.</div></div>
+          <div style={{ marginTop: 12 }}><div style={styles.label}>Totale kcal-inname uit Virtuafood</div><input value={value.kcalIntake} onChange={(e) => set({ kcalIntake: e.target.value })} style={styles.input} inputMode="numeric" placeholder="bv. 2250" /></div>
           <div className="row3" style={{ ...styles.row3, marginTop: 12 }}>
-            <div>
-              <div style={styles.label}>Eiwitten (g)</div>
-              <input
-                value={value.proteinG}
-                onChange={(e) => set({ proteinG: e.target.value })}
-                style={styles.input}
-                inputMode="decimal"
-                placeholder="bv. 95"
-              />
-            </div>
-            <div>
-              <div style={styles.label}>Koolhydraten (g)</div>
-              <input
-                value={value.carbsG}
-                onChange={(e) => set({ carbsG: e.target.value })}
-                style={styles.input}
-                inputMode="decimal"
-                placeholder="bv. 260"
-              />
-            </div>
-            <div>
-              <div style={styles.label}>Vetten (g)</div>
-              <input
-                value={value.fatG}
-                onChange={(e) => set({ fatG: e.target.value })}
-                style={styles.input}
-                inputMode="decimal"
-                placeholder="bv. 75"
-              />
-            </div>
+            <div><div style={styles.label}>Eiwitten (g)</div><input value={value.proteinG} onChange={(e) => set({ proteinG: e.target.value })} style={styles.input} inputMode="decimal" placeholder="bv. 95" /></div>
+            <div><div style={styles.label}>Koolhydraten (g)</div><input value={value.carbsG} onChange={(e) => set({ carbsG: e.target.value })} style={styles.input} inputMode="decimal" placeholder="bv. 260" /></div>
+            <div><div style={styles.label}>Vetten (g)</div><input value={value.fatG} onChange={(e) => set({ fatG: e.target.value })} style={styles.input} inputMode="decimal" placeholder="bv. 75" /></div>
           </div>
-
-          <div style={styles.infoBox}>
-            <div style={{ fontWeight: 980, color: ui.text }}>Macro-overzicht automatisch</div>
-            <div style={{ ...styles.small, marginTop: 8, display: "grid", gap: 6 }}>
-              <div>Eiwit per kg lichaamsgewicht: <b style={{ color: ui.text }}>{derived.proteinPerKg === null ? "—" : `${derived.proteinPerKg.toFixed(2)} g/kg`}</b></div>
-              <div>Verdeling op basis van macro-kcal: <b style={{ color: ui.text }}>Eiwit {derived.proteinPct ?? "—"}% | KH {derived.carbsPct ?? "—"}% | Vet {derived.fatPct ?? "—"}%</b></div>
-              <div>{proteinAdvice}</div>
-            </div>
-          </div>
+          <div style={styles.infoBox}><div style={{ fontWeight: 980, color: ui.text }}>Macro-overzicht automatisch</div><div style={{ ...styles.small, marginTop: 8, display: "grid", gap: 6 }}><div>Eiwit per kg lichaamsgewicht: <b style={{ color: ui.text }}>{derived.proteinPerKg === null ? "—" : `${derived.proteinPerKg.toFixed(2)} g/kg`}</b></div><div>Verdeling op basis van macro-kcal: <b style={{ color: ui.text }}>Eiwit {derived.proteinPct ?? "—"}% | KH {derived.carbsPct ?? "—"}% | Vet {derived.fatPct ?? "—"}%</b></div><div>{proteinAdvice}</div></div></div>
         </div>
-
         <div style={styles.panel}>
           <div style={styles.sectionTitle}>4) Energieverbruik via TDEE Calculator</div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Totaal kcal-verbruik van die dag</div>
-            <input
-              value={value.kcalTotalBurn}
-              onChange={(e) => set({ kcalTotalBurn: e.target.value })}
-              style={styles.input}
-              inputMode="numeric"
-              placeholder="bv. 2400"
-            />
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Bron voor verbruik</div>
-            <select
-              value={value.burnSource}
-              onChange={(e) => set({ burnSource: e.target.value as ThirdGradeForm["burnSource"] })}
-              style={{ ...styles.input, marginTop: 10 }}
-            >
-              <option value="">Kies…</option>
-              <option value="TDEE Calculator">TDEE Calculator</option>
-              <option value="Smartwatch / gezondheidsapp">Smartwatch / gezondheidsapp</option>
-              <option value="Andere calculator">Andere calculator</option>
-            </select>
-          </div>
-
-          <div style={styles.infoBox}>
-            <div style={{ fontWeight: 980, color: ui.text }}>Energiebalans automatisch</div>
-            <div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ ...styles.pill, height: 46, borderRadius: 16, padding: "0 14px" }}>
-                {derived.kcalBalance === null ? "—" : `${Math.round(derived.kcalBalance)} kcal`}
-              </span>
-              <span style={styles.pill}>{balanceLabel}</span>
-            </div>
-            <div style={{ ...styles.small, marginTop: 10 }}>
-              De app toont enkel het verschil. Jij legt zelf uit wat dit volgens jou betekent.
-            </div>
-          </div>
+          <div style={{ ...styles.small, marginTop: 8 }}>Bereken je totale dagelijkse energieverbruik met de TDEE Calculator. Voor deze opdracht gebruiken we geen andere methode.</div>
+          <a href="https://www.calculator.net/tdee-calculator.html" target="_blank" rel="noreferrer" style={{ ...styles.linkBtn, marginTop: 12 }}>Open TDEE Calculator</a>
+          <div style={{ marginTop: 12 }}><div style={styles.label}>Totaal kcal-verbruik volgens de TDEE Calculator</div><input value={value.kcalTotalBurn} onChange={(e) => set({ kcalTotalBurn: e.target.value, burnSource: "TDEE Calculator" })} style={styles.input} inputMode="numeric" placeholder="bv. 2400" /></div>
+          <div style={styles.infoBox}><div style={{ fontWeight: 980, color: ui.text }}>Energiebalans automatisch</div><div style={{ marginTop: 10, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}><span style={{ ...styles.pill, height: 46, borderRadius: 16, padding: "0 14px" }}>{derived.kcalBalance === null ? "—" : `${Math.round(derived.kcalBalance)} kcal`}</span><span style={styles.pill}>{balanceLabel}</span></div><div style={{ ...styles.small, marginTop: 10 }}>De app toont enkel het verschil. Jij legt zelf uit wat dit volgens jou betekent.</div></div>
         </div>
       </div>
-
       <div className="row2" style={styles.row2}>
         <div style={styles.panel}>
           <div style={styles.sectionTitle}>5) Conclusie energiebalans</div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Beschrijf jouw energiebalans in je eigen woorden</div>
-            <textarea
-              value={value.balanceExplain}
-              onChange={(e) => set({ balanceExplain: e.target.value })}
-              style={styles.textarea}
-              placeholder="Wat valt je op wanneer je jouw kcal-inname vergelijkt met je kcal-verbruik?"
-            />
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Wat kan dit op lange termijn betekenen?</div>
-            <textarea
-              value={value.longTermExplain}
-              onChange={(e) => set({ longTermExplain: e.target.value })}
-              style={styles.textarea}
-              placeholder="Stel dat dit patroon weken of maanden ongeveer hetzelfde blijft. Wat verwacht je dan? Leg uit waarom."
-            />
-          </div>
+          <div style={{ marginTop: 12 }}><div style={styles.label}>Beschrijf jouw energiebalans in je eigen woorden</div><textarea value={value.balanceExplain} onChange={(e) => set({ balanceExplain: e.target.value })} style={styles.textarea} placeholder="Wat valt je op wanneer je jouw kcal-inname uit Virtuafood vergelijkt met je kcal-verbruik uit de TDEE Calculator?" /></div>
+          <div style={{ marginTop: 12 }}><div style={styles.label}>Wat kan dit op lange termijn betekenen?</div><textarea value={value.longTermExplain} onChange={(e) => set({ longTermExplain: e.target.value })} style={styles.textarea} placeholder="Stel dat dit patroon weken of maanden ongeveer hetzelfde blijft. Wat verwacht je dan? Leg uit waarom." /></div>
         </div>
-
         <div style={styles.panel}>
-          <div style={styles.sectionTitle}>6) Conclusie macro's en reflectie</div>
-
+          <div style={styles.sectionTitle}>6) Macro&apos;s in functie van je doel + reflectie</div>
           <div style={styles.infoBox}>
-            <div style={{ fontWeight: 980, color: ui.text }}>Korte theorie over macro's</div>
-
-            <div style={{ ...styles.small, marginTop: 10 }}>
-              <b style={{ color: ui.text }}>Eiwitten</b> helpen bij spieropbouw, spierherstel en behoud van spiermassa.
-            </div>
-            <div style={{ ...styles.small, marginTop: 6 }}>
-              Richtwaarden: niet-sporter ongeveer <b style={{ color: ui.text }}>0,8 g/kg</b>, actieve jongeren ongeveer <b style={{ color: ui.text }}>1,2–1,6 g/kg</b> en bij veel sport ongeveer <b style={{ color: ui.text }}>1,6–2,0 g/kg</b> lichaamsgewicht per dag.
-            </div>
-
-            <div style={{ ...styles.small, marginTop: 10 }}>
-              <b style={{ color: ui.text }}>Koolhydraten</b> zijn een belangrijke energiebron. Te weinig koolhydraten kan zorgen voor sneller vermoeid zijn en minder trainingsenergie. Te veel koolhydraten kan, samen met de rest van je voeding, bijdragen aan een energieoverschot.
-            </div>
-
-            <div style={{ ...styles.small, marginTop: 10 }}>
-              <b style={{ color: ui.text }}>Vetten</b> zijn nodig voor hormonen, je hersenen en de opname van bepaalde vitamines. Je moet vetten dus niet vermijden, maar kies bij voorkeur voor gezonde vetten.
-            </div>
+            <div style={{ fontWeight: 980, color: ui.text }}>Macro&apos;s hangen samen met je doel</div>
+            <div style={{ ...styles.small, marginTop: 10 }}>Virtuafood laat je een doel kiezen. Bekijk de macroverdeling die bij jouw gekozen doel hoort en vergelijk die met je geregistreerde dag.</div>
+            <div style={{ ...styles.small, marginTop: 10 }}><b style={{ color: ui.text }}>Eiwitten</b> ondersteunen spieropbouw, spierherstel en het behoud van spiermassa. Bij een sportief doel kan voldoende eiwit extra belangrijk zijn.</div>
+            <div style={{ ...styles.small, marginTop: 6 }}><b style={{ color: ui.text }}>Koolhydraten</b> zijn een belangrijke energiebron, vooral bij bewegen en sporten. Bij een doel waarbij prestaties en trainingsenergie belangrijk zijn, spelen ze dus een grote rol.</div>
+            <div style={{ ...styles.small, marginTop: 6 }}><b style={{ color: ui.text }}>Vetten</b> leveren energie en zijn belangrijk voor onder andere hormonen en de opname van bepaalde vitamines. Ze blijven dus bij elk doel een noodzakelijk onderdeel van je voeding.</div>
+            <div style={{ ...styles.small, marginTop: 10 }}>Er bestaat niet één perfecte macroverdeling voor iedereen. Beoordeel je macro&apos;s daarom in functie van <b style={{ color: ui.text }}>jouw gekozen doel in Virtuafood</b>, niet alleen op basis van welk percentage het grootst is.</div>
           </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Bespreek je eiwitten, koolhydraten en vetten</div>
-            <textarea
-              value={value.macroExplain}
-              onChange={(e) => set({ macroExplain: e.target.value })}
-              style={styles.textarea}
-              placeholder="Welke macro kwam het meest voor? Was je eiwitinname volgens jou voldoende? Wat valt je op?"
-            />
-          </div>
-
-          <div style={{ marginTop: 12 }}>
-            <div style={styles.label}>Persoonlijke reflectie</div>
-            <textarea
-              value={value.reflection}
-              onChange={(e) => set({ reflection: e.target.value })}
-              style={styles.textarea}
-              placeholder="Is deze dag typisch voor jou? Noem één positief punt en één realistische aanpassing die je eventueel zou kunnen maken."
-            />
-          </div>
+          <div style={{ marginTop: 12 }}><div style={styles.label}>Bespreek je macro&apos;s in functie van je gekozen doel in Virtuafood</div><textarea value={value.macroExplain} onChange={(e) => set({ macroExplain: e.target.value })} style={styles.textarea} placeholder="Welk doel koos je in Virtuafood? Hoe verhouden je eiwitten, koolhydraten en vetten zich tot dat doel? Wat valt je op?" /></div>
+          <div style={{ marginTop: 12 }}><div style={styles.label}>Persoonlijke reflectie</div><textarea value={value.reflection} onChange={(e) => set({ reflection: e.target.value })} style={styles.textarea} placeholder="Is deze dag typisch voor jou? Noem één positief punt en één realistische aanpassing die je eventueel zou kunnen maken." /></div>
         </div>
       </div>
     </>

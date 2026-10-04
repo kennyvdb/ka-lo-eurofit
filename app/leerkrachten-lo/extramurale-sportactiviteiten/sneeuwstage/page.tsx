@@ -1,23 +1,18 @@
 "use client";
-
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
-
 const supabase = createClient();
-
 /* ============================================================
    TYPES
 ============================================================ */
-
 type Profiel = {
   id: string;
   volledige_naam: string | null;
   rol: string | null;
 };
-
 type Stage = {
   id: string;
   naam: string;
@@ -30,14 +25,12 @@ type Stage = {
   snowboard_toeslag: number | null;
   keuzes_open: boolean;
 };
-
 type DeelnemerRow = {
   id: string;
   leerling_id: string | null;
   email: string | null;
   actief: boolean;
 };
-
 type KeuzeRow = {
   id: string;
   leerling_id: string;
@@ -47,13 +40,12 @@ type KeuzeRow = {
   eigen_snowboardmateriaal_meenemen: boolean | null;
   bijgewerkt_op: string | null;
 };
-
 type LeerlingInfo = {
   email: string;
   naam: string;
   klas: string;
+  profielId?: string;
 };
-
 type OverzichtRow = {
   email: string;
   naam: string;
@@ -61,31 +53,25 @@ type OverzichtRow = {
   leerlingId: string | null;
   keuze: KeuzeRow | null;
 };
-
 /* ============================================================
    HELPERS
 ============================================================ */
-
 function normalizeText(value: unknown) {
   return String(value ?? "").trim();
 }
-
 function normalizeEmail(value: unknown) {
   return normalizeText(value).toLowerCase();
 }
-
 function normalizeRole(value: unknown) {
   return normalizeText(value)
     .toLowerCase()
     .replace(/\s+/g, "_")
     .replace(/-/g, "_");
 }
-
 function isLoRole(rol: unknown) {
   const value = normalizeRole(rol);
   return value === "lo_leerkracht" || value === "admin";
 }
-
 function readableSupabaseError(error: any, context: string) {
   return [
     context,
@@ -97,82 +83,65 @@ function readableSupabaseError(error: any, context: string) {
     .filter(Boolean)
     .join(" | ");
 }
-
 function formatDate(value: string | null) {
   if (!value) return "—";
-
   const [year, month, day] = value.split("-");
-
   return `${day}/${month}/${year}`;
 }
-
 function ervaringLabel(value: string | null) {
   switch (value) {
     case "0_weken":
       return "0 weken";
-
     case "1_2_weken":
       return "1–2 weken";
-
     case "3_4_weken":
       return "3–4 weken";
-
     case "5_plus_weken":
       return "5+ weken";
-
     default:
       return "—";
   }
 }
-
 /* ============================================================
    PAGE
 ============================================================ */
-
 export default function SneeuwstageLeerkrachtPage() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
-
   const [profiel, setProfiel] = useState<Profiel | null>(null);
   const [stage, setStage] = useState<Stage | null>(null);
-
   const [deelnemers, setDeelnemers] = useState<DeelnemerRow[]>([]);
   const [keuzes, setKeuzes] = useState<KeuzeRow[]>([]);
   const [leerlingenInfo, setLeerlingenInfo] = useState<
     Map<string, LeerlingInfo>
   >(new Map());
-
   const [filter, setFilter] = useState<
     "alle" | "ski" | "snowboard" | "ontbrekend"
   >("alle");
-
+  const [materiaal, setMateriaal] = useState<Record<string, MateriaalAntwoord>>({});
+  const [ervaringFilter, setErvaringFilter] = useState("");
+  const [materiaalFilter, setMateriaalFilter] = useState(false);
   const [zoekterm, setZoekterm] = useState("");
   const [klasFilter, setKlasFilter] = useState("Alle");
-
   const [error, setError] = useState<string | null>(null);
-
   /* ============================================================
      LOAD
   ============================================================ */
-
   useEffect(() => {
     void loadPage();
   }, []);
-
   async function loadPage() {
     setLoading(true);
     setError(null);
-
+    setAllowed(false);
     try {
       /* --------------------------------------------------------
          USER
       -------------------------------------------------------- */
-
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser();
-
       if (userError) {
         throw new Error(
           readableSupabaseError(
@@ -181,23 +150,19 @@ export default function SneeuwstageLeerkrachtPage() {
           )
         );
       }
-
       if (!user) {
         setAllowed(false);
         return;
       }
-
       /* --------------------------------------------------------
          PROFIEL
       -------------------------------------------------------- */
-
       const { data: profielData, error: profielError } =
         await supabase
           .from("profielen")
           .select("id, volledige_naam, rol")
           .eq("id", user.id)
           .maybeSingle();
-
       if (profielError) {
         throw new Error(
           readableSupabaseError(
@@ -206,23 +171,17 @@ export default function SneeuwstageLeerkrachtPage() {
           )
         );
       }
-
       const profielValue =
         (profielData ?? null) as Profiel | null;
-
       setProfiel(profielValue);
-
       if (!profielValue || !isLoRole(profielValue.rol)) {
         setAllowed(false);
         return;
       }
-
       setAllowed(true);
-
       /* --------------------------------------------------------
          STAGE
       -------------------------------------------------------- */
-
       const { data: stageData, error: stageError } =
         await supabase
           .from("sneeuwstages")
@@ -242,7 +201,6 @@ export default function SneeuwstageLeerkrachtPage() {
           )
           .eq("slug", "sneeuwstage-2026")
           .maybeSingle();
-
       if (stageError) {
         throw new Error(
           readableSupabaseError(
@@ -251,27 +209,22 @@ export default function SneeuwstageLeerkrachtPage() {
           )
         );
       }
-
       if (!stageData) {
         throw new Error(
           "De sneeuwstage 2026 werd niet gevonden."
         );
       }
-
       const stageValue = stageData as Stage;
       setStage(stageValue);
-
       /* --------------------------------------------------------
          DEELNEMERS
       -------------------------------------------------------- */
-
       const { data: deelnemerData, error: deelnemerError } =
         await supabase
           .from("sneeuwstage_deelnemers")
           .select("id, leerling_id, email, actief")
           .eq("sneeuwstage_id", stageValue.id)
           .eq("actief", true);
-
       if (deelnemerError) {
         throw new Error(
           readableSupabaseError(
@@ -280,16 +233,12 @@ export default function SneeuwstageLeerkrachtPage() {
           )
         );
       }
-
       const deelnemersValue =
         (deelnemerData ?? []) as DeelnemerRow[];
-
       setDeelnemers(deelnemersValue);
-
       /* --------------------------------------------------------
          KEUZES
       -------------------------------------------------------- */
-
       const { data: keuzesData, error: keuzesError } =
         await supabase
           .from("sneeuwstage_keuzes")
@@ -305,7 +254,6 @@ export default function SneeuwstageLeerkrachtPage() {
             `
           )
           .eq("sneeuwstage_id", stageValue.id);
-
       if (keuzesError) {
         throw new Error(
           readableSupabaseError(
@@ -314,38 +262,28 @@ export default function SneeuwstageLeerkrachtPage() {
           )
         );
       }
-
       setKeuzes((keuzesData ?? []) as KeuzeRow[]);
-
       /* --------------------------------------------------------
          LEERLINGINFO
       -------------------------------------------------------- */
-
-      const { data: leerlingData, error: leerlingError } =
-        await supabase
-          .from("eurofit_class_students_view")
-          .select("*")
-          .eq("schooljaar", stageValue.schooljaar);
-
-      if (leerlingError) {
-        throw new Error(
-          readableSupabaseError(
-            leerlingError,
-            "Kon leerlinggegevens niet laden."
-          )
-        );
+      // De schoollijst kan de standaardlimiet van Supabase overschrijden.
+      const leerlingData: Record<string, unknown>[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const { data: page, error: leerlingError } = await supabase
+          .from("eurofit_class_students_view").select("*")
+          .eq("schooljaar", stageValue.schooljaar)
+          .order("email").range(offset, offset + 499);
+        if (leerlingError) throw new Error(readableSupabaseError(leerlingError, "Kon leerlinggegevens niet laden."));
+        leerlingData.push(...(page ?? []));
+        if (!page || page.length < 500) break;
       }
-
       const map = new Map<string, LeerlingInfo>();
-
       for (const row of leerlingData ?? []) {
         const email = normalizeEmail(row.email);
         const klas = normalizeText(
           row.klas_naam ?? row.class_name ?? row.klas
         );
-
         if (!email || !/^[0-9]/.test(klas)) continue;
-
         const naam =
           normalizeText(row.volledige_naam) ||
           [
@@ -354,7 +292,6 @@ export default function SneeuwstageLeerkrachtPage() {
           ]
             .filter(Boolean)
             .join(" ");
-
         if (!map.has(email)) {
           map.set(email, {
             email,
@@ -363,11 +300,19 @@ export default function SneeuwstageLeerkrachtPage() {
           });
         }
       }
-
+      const { data: profiles, error: profilesError } = await supabase.from("profielen").select("id,email,volledige_naam,klas_naam").in("email", deelnemersValue.map(d => normalizeEmail(d.email)).filter(Boolean));
+      if (profilesError) throw profilesError;
+      for (const profile of profiles ?? []) {
+        const email = normalizeEmail(profile.email);
+        const old = map.get(email);
+        map.set(email, { email, naam: old?.naam || profile.volledige_naam || email, klas: old?.klas || profile.klas_naam || "Onbekend", profielId: profile.id });
+      }
+      const { data: answers, error: answersError } = await supabase.from("sneeuwstage_materiaal").select("*").eq("sneeuwstage_id", stageValue.id);
+      if (answersError) throw answersError;
+      setMateriaal(Object.fromEntries((answers ?? []).map(answer => [answer.leerling_id, answer])));
       setLeerlingenInfo(map);
     } catch (err) {
       console.error(err);
-
       setError(
         err instanceof Error
           ? err.message
@@ -377,33 +322,27 @@ export default function SneeuwstageLeerkrachtPage() {
       setLoading(false);
     }
   }
-
   /* ============================================================
      OVERZICHT
   ============================================================ */
-
   const overzicht = useMemo<OverzichtRow[]>(() => {
     const keuzeMap = new Map<string, KeuzeRow>();
-
     keuzes.forEach((keuze) => {
       keuzeMap.set(keuze.leerling_id, keuze);
     });
-
     return deelnemers
       .map((deelnemer) => {
         const email = normalizeEmail(deelnemer.email);
-
         const info = leerlingenInfo.get(email);
-
-        const keuze = deelnemer.leerling_id
-          ? keuzeMap.get(deelnemer.leerling_id) ?? null
+        const leerlingId = deelnemer.leerling_id || info?.profielId || null;
+        const keuze = leerlingId
+          ? keuzeMap.get(leerlingId) ?? null
           : null;
-
         return {
           email,
           naam: info?.naam ?? email,
           klas: info?.klas ?? "Onbekend",
-          leerlingId: deelnemer.leerling_id,
+          leerlingId,
           keuze,
         };
       })
@@ -413,49 +352,38 @@ export default function SneeuwstageLeerkrachtPage() {
           "nl-BE",
           { numeric: true }
         );
-
         if (klasCompare !== 0) return klasCompare;
-
         return a.naam.localeCompare(
           b.naam,
           "nl-BE"
         );
       });
   }, [deelnemers, keuzes, leerlingenInfo]);
-
   /* ============================================================
      STATISTIEKEN
   ============================================================ */
-
   const aantalDeelnemers = overzicht.length;
-
   const aantalIngevuld = overzicht.filter(
     (row) => row.keuze
   ).length;
-
   const aantalOntbrekend =
     aantalDeelnemers - aantalIngevuld;
-
   const aantalSki = overzicht.filter(
     (row) => row.keuze?.discipline === "ski"
   ).length;
-
   const aantalSnowboard = overzicht.filter(
     (row) =>
       row.keuze?.discipline === "snowboard"
   ).length;
-
   const snowboardHuur = overzicht.filter(
     (row) =>
       row.keuze?.discipline === "snowboard" &&
       row.keuze
         .eigen_snowboardmateriaal_meenemen === false
   ).length;
-
   /* ============================================================
      SKI GROEPEN
   ============================================================ */
-
   const skiGroepen = useMemo(() => {
     const result = {
       "0_weken": 0,
@@ -463,7 +391,6 @@ export default function SneeuwstageLeerkrachtPage() {
       "3_4_weken": 0,
       "5_plus_weken": 0,
     };
-
     overzicht.forEach((row) => {
       if (
         row.keuze?.discipline === "ski" &&
@@ -475,14 +402,11 @@ export default function SneeuwstageLeerkrachtPage() {
         ] += 1;
       }
     });
-
     return result;
   }, [overzicht]);
-
   /* ============================================================
      KLASSEN
   ============================================================ */
-
   const klassen = useMemo(() => {
     return Array.from(
       new Set(
@@ -496,45 +420,39 @@ export default function SneeuwstageLeerkrachtPage() {
       })
     );
   }, [overzicht]);
-
   /* ============================================================
      FILTER
   ============================================================ */
-
   const filteredRows = useMemo(() => {
     const q = zoekterm.trim().toLowerCase();
-
     return overzicht.filter((row) => {
+      if (ervaringFilter && (row.keuze?.discipline === "snowboard" ? row.keuze.snowboard_ervaring : row.keuze?.ski_ervaring) !== ervaringFilter) return false;
+      if (materiaalFilter && !heeftMateriaal(row.leerlingId ? materiaal[row.leerlingId] : undefined)) return false;
       if (
         klasFilter !== "Alle" &&
         row.klas !== klasFilter
       ) {
         return false;
       }
-
       if (
         filter === "ski" &&
         row.keuze?.discipline !== "ski"
       ) {
         return false;
       }
-
       if (
         filter === "snowboard" &&
         row.keuze?.discipline !== "snowboard"
       ) {
         return false;
       }
-
       if (
         filter === "ontbrekend" &&
         row.keuze !== null
       ) {
         return false;
       }
-
       if (!q) return true;
-
       const haystack = [
         row.naam,
         row.email,
@@ -542,20 +460,17 @@ export default function SneeuwstageLeerkrachtPage() {
       ]
         .join(" ")
         .toLowerCase();
-
       return haystack.includes(q);
     });
   }, [
     overzicht,
     filter,
     zoekterm,
-    klasFilter,
+    klasFilter, ervaringFilter, materiaalFilter, materiaal,
   ]);
-
   /* ============================================================
      LOADING
   ============================================================ */
-
   if (loading) {
     return (
       <AppShell
@@ -563,13 +478,10 @@ export default function SneeuwstageLeerkrachtPage() {
         subtitle="Sneeuwstage"
       >
         <style>{css}</style>
-
         <div className="snow-loading">
           <div className="snow-spinner" />
-
           <div>
             <strong>Sneeuwstage laden…</strong>
-
             <p>
               Deelnemers en keuzes worden
               opgehaald.
@@ -579,12 +491,10 @@ export default function SneeuwstageLeerkrachtPage() {
       </AppShell>
     );
   }
-
   /* ============================================================
      ACCESS
   ============================================================ */
-
-  if (!allowed) {
+  if (!allowed && !error) {
     return (
       <AppShell
         title="LO App"
@@ -594,16 +504,13 @@ export default function SneeuwstageLeerkrachtPage() {
         }
       >
         <style>{css}</style>
-
         <section className="snow-panel">
           <h2>Geen toegang</h2>
-
           <p>
             Deze pagina is alleen toegankelijk
             voor LO-leerkrachten en
             administrators.
           </p>
-
           <Link
             href="/leerkrachten-lo"
             className="snow-link"
@@ -614,11 +521,9 @@ export default function SneeuwstageLeerkrachtPage() {
       </AppShell>
     );
   }
-
   /* ============================================================
      PAGE
   ============================================================ */
-
   return (
     <AppShell
       title="LO App"
@@ -651,7 +556,6 @@ export default function SneeuwstageLeerkrachtPage() {
             >
               Deelnemers beheren
             </Link>
-
             <Link
               href="/extramurale-sportactiviteiten/sneeuwstage"
               className="snow-hero-button"
@@ -661,19 +565,15 @@ export default function SneeuwstageLeerkrachtPage() {
           </div>
         }
       />
-
       <style>{css}</style>
-
       {error ? (
         <div className="snow-message snow-error">
           <b>Oeps:</b> {error}
         </div>
       ) : null}
-
       {/* ====================================================
           REISINFO
       ==================================================== */}
-
       <section className="snow-info-grid">
         <div className="snow-info-card">
           <span>Vertrek</span>
@@ -681,21 +581,18 @@ export default function SneeuwstageLeerkrachtPage() {
             {formatDate(stage?.vertrekdatum ?? null)}
           </strong>
         </div>
-
         <div className="snow-info-card">
           <span>Terug</span>
           <strong>
             {formatDate(stage?.terugkomstdatum ?? null)}
           </strong>
         </div>
-
         <div className="snow-info-card">
           <span>Bestemming</span>
           <strong>
             {stage?.bestemming ?? "Ahrntal"}
           </strong>
         </div>
-
         <div className="snow-info-card">
           <span>Verblijf</span>
           <strong>
@@ -703,18 +600,15 @@ export default function SneeuwstageLeerkrachtPage() {
           </strong>
         </div>
       </section>
-
       {/* ====================================================
           HOOFDSTATISTIEKEN
       ==================================================== */}
-
       <section className="snow-stat-grid">
         <div className="snow-stat-card">
           <span>Deelnemers</span>
           <strong>{aantalDeelnemers}</strong>
           <small>actieve leerlingen</small>
         </div>
-
         <div className="snow-stat-card">
           <span>Keuze ingevuld</span>
           <strong>{aantalIngevuld}</strong>
@@ -722,7 +616,6 @@ export default function SneeuwstageLeerkrachtPage() {
             van {aantalDeelnemers}
           </small>
         </div>
-
         <div
           className={`snow-stat-card ${
             aantalOntbrekend > 0
@@ -736,19 +629,16 @@ export default function SneeuwstageLeerkrachtPage() {
             nog geen keuze
           </small>
         </div>
-
         <div className="snow-stat-card">
           <span>Ski</span>
           <strong>{aantalSki}</strong>
           <small>leerlingen</small>
         </div>
-
         <div className="snow-stat-card">
           <span>Snowboard</span>
           <strong>{aantalSnowboard}</strong>
           <small>leerlingen</small>
         </div>
-
         <div className="snow-stat-card">
           <span>Snowboard huren</span>
           <strong>{snowboardHuur}</strong>
@@ -757,80 +647,78 @@ export default function SneeuwstageLeerkrachtPage() {
           </small>
         </div>
       </section>
-
       {/* ====================================================
           SKI GROEPEN
       ==================================================== */}
-
       <section className="snow-panel">
         <div className="snow-section-header">
           <div>
             <h2>Voorlopige skigroepen</h2>
-
             <p>
               Verdeling volgens opgegeven
               ski-ervaring.
             </p>
           </div>
         </div>
-
         <div className="snow-level-grid">
-          <div className="snow-level">
+          <button type="button" className="snow-level" onClick={() => { setFilter("ski"); setErvaringFilter("0_weken"); } }>
             <span>Beginner</span>
             <strong>
               {skiGroepen["0_weken"]}
             </strong>
             <small>0 weken</small>
-          </div>
-
-          <div className="snow-level">
+          </button>
+          <button type="button" className="snow-level" onClick={() => { setFilter("ski"); setErvaringFilter("1_2_weken"); } }>
             <span>Basis</span>
             <strong>
               {skiGroepen["1_2_weken"]}
             </strong>
             <small>1–2 weken</small>
-          </div>
-
-          <div className="snow-level">
+          </button>
+          <button type="button" className="snow-level" onClick={() => { setFilter("ski"); setErvaringFilter("3_4_weken"); } }>
             <span>Gevorderd</span>
             <strong>
               {skiGroepen["3_4_weken"]}
             </strong>
             <small>3–4 weken</small>
-          </div>
-
-          <div className="snow-level">
+          </button>
+          <button type="button" className="snow-level" onClick={() => { setFilter("ski"); setErvaringFilter("5_plus_weken"); } }>
             <span>Ervaren</span>
             <strong>
               {skiGroepen["5_plus_weken"]}
             </strong>
             <small>5+ weken</small>
-          </div>
-
-          <div className="snow-level snowboard-level">
+          </button>
+          <button type="button" className="snow-level snowboard-level" onClick={() => { setFilter("snowboard"); setErvaringFilter(""); }}>
             <span>Snowboard</span>
             <strong>{aantalSnowboard}</strong>
-            <small>minimaal 5 weken ervaring</small>
-          </div>
+            <small>Klik om de namen te bekijken</small>
+          </button>
         </div>
       </section>
-
       {/* ====================================================
           FILTERS
       ==================================================== */}
-
       <section className="snow-panel">
         <div className="snow-section-header">
           <div>
-            <h2>Keuzes leerlingen</h2>
-
+            <h2>Keuzes, ervaring & eigen materiaal</h2>
             <p>
               {filteredRows.length} leerlingen
               zichtbaar.
             </p>
           </div>
         </div>
-
+        <div className="snow-filter-buttons" style={{ marginBottom: 16 }}>
+          <button type="button" className="snow-filter" onClick={() => void loadPage()}>Vernieuwen</button>
+          <button type="button" className={materiaalFilter ? "snow-filter active" : "snow-filter"} onClick={() => setMateriaalFilter(!materiaalFilter)}>Alleen eigen materiaal</button>
+          <button type="button" className="snow-filter" onClick={() => { setFilter("alle"); setErvaringFilter(""); setMateriaalFilter(false); setKlasFilter("Alle"); setZoekterm(""); }}>Filters wissen</button>
+          <label>Ervaring <select value={ervaringFilter} onChange={e => setErvaringFilter(e.target.value)} className="snow-filter" style={{ background: "#18343d" }}>
+            <option value="">Alle niveaus</option>
+            {["0_weken", "1_2_weken", "3_4_weken", "5_plus_weken"].map(value => <option key={value} value={value}>{ervaringLabel(value)}</option>)}
+          </select></label>
+        </div>
+        <p>Geen materiaalantwoord betekent: geen eigen materiaal gemeld. Dit verandert de bestaande huurkeuze of toeslag niet automatisch.</p>
         <div className="snow-filters">
           <div className="snow-filter-buttons">
             <button
@@ -845,7 +733,6 @@ export default function SneeuwstageLeerkrachtPage() {
               Alle
               <span>{aantalDeelnemers}</span>
             </button>
-
             <button
               type="button"
               onClick={() => setFilter("ski")}
@@ -858,7 +745,6 @@ export default function SneeuwstageLeerkrachtPage() {
               Ski
               <span>{aantalSki}</span>
             </button>
-
             <button
               type="button"
               onClick={() =>
@@ -873,7 +759,6 @@ export default function SneeuwstageLeerkrachtPage() {
               Snowboard
               <span>{aantalSnowboard}</span>
             </button>
-
             <button
               type="button"
               onClick={() =>
@@ -889,7 +774,6 @@ export default function SneeuwstageLeerkrachtPage() {
               <span>{aantalOntbrekend}</span>
             </button>
           </div>
-
           <div className="snow-search-grid">
             <input
               value={zoekterm}
@@ -899,7 +783,6 @@ export default function SneeuwstageLeerkrachtPage() {
               placeholder="Zoek leerling…"
               className="snow-input"
             />
-
             <select
               value={klasFilter}
               onChange={(e) =>
@@ -910,7 +793,6 @@ export default function SneeuwstageLeerkrachtPage() {
               <option value="Alle">
                 Alle klassen
               </option>
-
               {klassen.map((klas) => (
                 <option
                   key={klas}
@@ -922,11 +804,9 @@ export default function SneeuwstageLeerkrachtPage() {
             </select>
           </div>
         </div>
-
         {/* ====================================================
             TABLE
         ==================================================== */}
-
         <div className="snow-table-wrap">
           <table className="snow-table">
             <thead>
@@ -935,18 +815,15 @@ export default function SneeuwstageLeerkrachtPage() {
                 <th>Klas</th>
                 <th>Keuze</th>
                 <th>Ervaring</th>
-                <th>Eigen snowboardmateriaal</th>
+                <th>Eigen materiaal gemeld</th><th>Opmerking</th><th>Bestaande snowboardkeuze</th>
                 <th>Toeslag</th>
               </tr>
             </thead>
-
             <tbody>
               {filteredRows.map((row) => {
                 const keuze = row.keuze;
-
                 const isSnowboard =
                   keuze?.discipline === "snowboard";
-
                 const ervaring = isSnowboard
                   ? ervaringLabel(
                       keuze?.snowboard_ervaring ??
@@ -955,7 +832,6 @@ export default function SneeuwstageLeerkrachtPage() {
                   : ervaringLabel(
                       keuze?.ski_ervaring ?? null
                     );
-
                 const eigenMateriaal =
                   isSnowboard
                     ? keuze
@@ -968,7 +844,6 @@ export default function SneeuwstageLeerkrachtPage() {
                       ? "Nee"
                       : "—"
                     : "n.v.t.";
-
                 const toeslag =
                   isSnowboard &&
                   keuze
@@ -979,25 +854,21 @@ export default function SneeuwstageLeerkrachtPage() {
                         30
                       }`
                     : "—";
-
                 return (
                   <tr key={row.email}>
                     <td>
                       <div className="student-name">
                         {row.naam}
                       </div>
-
                       <div className="student-email">
                         {row.email}
                       </div>
                     </td>
-
                     <td>
                       <span className="class-badge">
                         {row.klas}
                       </span>
                     </td>
-
                     <td>
                       {!keuze ? (
                         <span className="status missing">
@@ -1014,11 +885,10 @@ export default function SneeuwstageLeerkrachtPage() {
                         </span>
                       )}
                     </td>
-
                     <td>{ervaring}</td>
-
+                    <td>{materiaalLabel(row.leerlingId ? materiaal[row.leerlingId] : undefined)}</td>
+                    <td>{row.leerlingId ? materiaal[row.leerlingId]?.opmerking || "—" : "—"}</td>
                     <td>{eigenMateriaal}</td>
-
                     <td>
                       {toeslag !== "—" ? (
                         <strong className="surcharge">
@@ -1033,7 +903,6 @@ export default function SneeuwstageLeerkrachtPage() {
               })}
             </tbody>
           </table>
-
           {filteredRows.length === 0 ? (
             <div className="snow-empty">
               Geen leerlingen gevonden met
@@ -1045,18 +914,15 @@ export default function SneeuwstageLeerkrachtPage() {
     </AppShell>
   );
 }
-
 /* ============================================================
    CSS
 ============================================================ */
-
 const css = `
   .snow-hero-actions {
     display: flex;
     gap: 10px;
     flex-wrap: wrap;
   }
-
   .snow-hero-button {
     min-height: 44px;
     display: inline-flex;
@@ -1071,26 +937,22 @@ const css = `
     font-size: 13px;
     font-weight: 900;
   }
-
   .snow-message {
     margin-top: 14px;
     padding: 14px 16px;
     border-radius: 18px;
   }
-
   .snow-error {
     border: 1px solid rgba(248,113,113,0.28);
     background: rgba(127,29,29,0.20);
     color: #fecaca;
   }
-
   .snow-info-grid {
     margin-top: 16px;
     display: grid;
     grid-template-columns: repeat(4, minmax(0,1fr));
     gap: 10px;
   }
-
   .snow-info-card,
   .snow-stat-card {
     padding: 16px;
@@ -1102,7 +964,6 @@ const css = `
       rgba(255,255,255,0.035)
     );
   }
-
   .snow-info-card span,
   .snow-stat-card span {
     display: block;
@@ -1112,21 +973,18 @@ const css = `
     text-transform: uppercase;
     letter-spacing: .04em;
   }
-
   .snow-info-card strong {
     display: block;
     margin-top: 6px;
     color: rgba(245,248,255,0.96);
     font-size: 15px;
   }
-
   .snow-stat-grid {
     margin-top: 12px;
     display: grid;
     grid-template-columns: repeat(6, minmax(0,1fr));
     gap: 10px;
   }
-
   .snow-stat-card strong {
     display: block;
     margin: 5px 0;
@@ -1134,21 +992,17 @@ const css = `
     font-size: 28px;
     line-height: 1;
   }
-
   .snow-stat-card small {
     color: rgba(234,240,255,0.48);
     font-size: 11px;
   }
-
   .snow-warning {
     border-color: rgba(251,191,36,0.23);
     background: rgba(251,191,36,0.06);
   }
-
   .snow-good {
     border-color: rgba(74,222,128,0.20);
   }
-
   .snow-panel {
     margin-top: 14px;
     padding: 18px;
@@ -1161,71 +1015,59 @@ const css = `
     );
     color: rgba(234,240,255,0.92);
   }
-
   .snow-panel h2 {
     margin: 0;
     font-size: 19px;
     font-weight: 950;
   }
-
   .snow-panel p {
     margin: 5px 0 0;
     color: rgba(234,240,255,0.58);
     font-size: 12px;
   }
-
   .snow-section-header {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
   }
-
   .snow-level-grid {
     margin-top: 15px;
     display: grid;
     grid-template-columns: repeat(5, minmax(0,1fr));
     gap: 9px;
   }
-
   .snow-level {
     padding: 13px;
     border-radius: 17px;
     border: 1px solid rgba(255,255,255,0.09);
     background: rgba(0,0,0,0.18);
   }
-
   .snow-level span {
     display: block;
     color: rgba(234,240,255,0.61);
     font-size: 11px;
     font-weight: 850;
   }
-
   .snow-level strong {
     display: block;
     margin: 4px 0;
     font-size: 23px;
   }
-
   .snow-level small {
     color: rgba(234,240,255,0.45);
   }
-
   .snowboard-level {
     border-color: rgba(75,142,141,0.30);
     background: rgba(75,142,141,0.08);
   }
-
   .snow-filters {
     margin-top: 15px;
   }
-
   .snow-filter-buttons {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
   }
-
   .snow-filter {
     min-height: 40px;
     display: inline-flex;
@@ -1240,7 +1082,6 @@ const css = `
     font-weight: 900;
     cursor: pointer;
   }
-
   .snow-filter span {
     min-width: 22px;
     padding: 3px 6px;
@@ -1248,20 +1089,17 @@ const css = `
     background: rgba(255,255,255,0.07);
     font-size: 10px;
   }
-
   .snow-filter.active {
     border-color: rgba(137,194,170,0.42);
     background: rgba(137,194,170,0.12);
     color: rgba(245,248,255,0.97);
   }
-
   .snow-search-grid {
     margin-top: 12px;
     display: grid;
     grid-template-columns: minmax(0,1fr) 250px;
     gap: 10px;
   }
-
   .snow-input {
     width: 100%;
     height: 44px;
@@ -1273,24 +1111,20 @@ const css = `
     outline: none;
     font-size: 13px;
   }
-
   .snow-input:focus {
     border-color: rgba(137,194,170,0.50);
   }
-
   .snow-table-wrap {
     margin-top: 14px;
     overflow-x: auto;
     border-radius: 18px;
     border: 1px solid rgba(255,255,255,0.08);
   }
-
   .snow-table {
     width: 100%;
     min-width: 900px;
     border-collapse: collapse;
   }
-
   .snow-table th {
     padding: 11px 12px;
     border-bottom: 1px solid rgba(255,255,255,0.09);
@@ -1301,33 +1135,27 @@ const css = `
     text-transform: uppercase;
     letter-spacing: .05em;
   }
-
   .snow-table td {
     padding: 12px;
     border-bottom: 1px solid rgba(255,255,255,0.055);
     color: rgba(234,240,255,0.82);
     font-size: 12px;
   }
-
   .snow-table tbody tr:last-child td {
     border-bottom: none;
   }
-
   .snow-table tbody tr:hover {
     background: rgba(255,255,255,0.025);
   }
-
   .student-name {
     color: rgba(245,248,255,0.96);
     font-weight: 850;
   }
-
   .student-email {
     margin-top: 3px;
     color: rgba(234,240,255,0.43);
     font-size: 10px;
   }
-
   .class-badge,
   .status {
     display: inline-flex;
@@ -1338,47 +1166,39 @@ const css = `
     font-size: 10px;
     font-weight: 900;
   }
-
   .class-badge {
     border: 1px solid rgba(255,255,255,0.10);
     background: rgba(255,255,255,0.04);
   }
-
   .status.ski {
     border: 1px solid rgba(137,194,170,0.25);
     background: rgba(137,194,170,0.09);
     color: #b6ead5;
   }
-
   .status.snowboard {
     border: 1px solid rgba(75,142,141,0.28);
     background: rgba(75,142,141,0.10);
     color: #b6dfde;
   }
-
   .status.missing {
     border: 1px solid rgba(251,191,36,0.22);
     background: rgba(251,191,36,0.07);
     color: #fde68a;
   }
-
   .surcharge {
     color: #fde68a;
   }
-
   .snow-empty {
     padding: 30px;
     text-align: center;
     color: rgba(234,240,255,0.50);
   }
-
   .snow-link {
     display: inline-block;
     margin-top: 12px;
     color: rgba(234,240,255,0.92);
     font-weight: 900;
   }
-
   .snow-loading {
     display: flex;
     align-items: center;
@@ -1389,12 +1209,10 @@ const css = `
     background: rgba(255,255,255,0.045);
     color: rgba(234,240,255,0.92);
   }
-
   .snow-loading p {
     margin: 4px 0 0;
     color: rgba(234,240,255,0.58);
   }
-
   .snow-spinner {
     width: 28px;
     height: 28px;
@@ -1403,27 +1221,22 @@ const css = `
     border-top-color: #89c2aa;
     animation: snow-spin .75s linear infinite;
   }
-
   @keyframes snow-spin {
     to {
       transform: rotate(360deg);
     }
   }
-
   @media (max-width: 1050px) {
     .snow-stat-grid {
       grid-template-columns: repeat(3, minmax(0,1fr));
     }
-
     .snow-info-grid {
       grid-template-columns: repeat(2, minmax(0,1fr));
     }
-
     .snow-level-grid {
       grid-template-columns: repeat(3, minmax(0,1fr));
     }
   }
-
   @media (max-width: 650px) {
     .snow-stat-grid,
     .snow-info-grid,
@@ -1431,13 +1244,20 @@ const css = `
     .snow-search-grid {
       grid-template-columns: 1fr;
     }
-
     .snow-hero-actions {
       width: 100%;
     }
-
     .snow-hero-button {
       flex: 1;
     }
   }
 `;
+
+type MateriaalAntwoord = { leerling_id: string; opmerking: string | null } & Record<MateriaalVeld, boolean>;
+const materiaalLabels = { ski_schoenen: "Skischoenen", ski_latten: "Skilatten", ski_helm: "Skihelm", ski_stokken: "Skistokken", snowboard_schoenen: "Snowboardschoenen", snowboard_board: "Snowboard", snowboard_helm: "Snowboardhelm" };
+type MateriaalVeld = keyof typeof materiaalLabels;
+function heeftMateriaal(answer?: MateriaalAntwoord) { return !!answer && (Object.keys(materiaalLabels) as MateriaalVeld[]).some(key => answer[key]); }
+function materiaalLabel(answer?: MateriaalAntwoord) {
+  if (!answer) return "Geen eigen materiaal gemeld";
+  return (Object.keys(materiaalLabels) as MateriaalVeld[]).filter(key => answer[key]).map(key => materiaalLabels[key]).join(", ") || "Geen eigen materiaal";
+}

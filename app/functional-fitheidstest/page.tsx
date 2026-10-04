@@ -1,7 +1,5 @@
 "use client";
 
-
-
 import AppShell from "@/components/AppShell";
 
 import BaseHero from "@/components/heroes/BaseHero";
@@ -16,11 +14,7 @@ import React, { useEffect, useMemo, useState } from "react";
 
 import HomeworkTab from "./HomeworkTab";
 
-
-
 const supabase = createClient();
-
-
 
 const brand = {
 
@@ -31,8 +25,6 @@ const brand = {
   mint: "#89C2AA",
 
 };
-
-
 
 type Profiel = {
 
@@ -49,12 +41,12 @@ type Profiel = {
   schooljaar: string | null;
 
   schooljaar_bevestigd_op: string | null;
+
   leerjaar?: number | string | null;
+
   graad?: number | string | null;
 
 };
-
-
 
 const ui = {
 
@@ -86,8 +78,6 @@ const ui = {
 
 };
 
-
-
 function toYMD(d = new Date()) {
 
   const yyyy = d.getFullYear();
@@ -100,11 +90,7 @@ function toYMD(d = new Date()) {
 
 }
 
-
-
 type ScoreValue = number | "";
-
-
 
 type TestKey =
 
@@ -132,8 +118,6 @@ type TestKey =
 
   | "handstand_hold_time_s";
 
-
-
 type TestDef = {
 
   key: TestKey;
@@ -159,8 +143,6 @@ type TestDef = {
   image?: string;
 
 };
-
-
 
 const TESTS: TestDef[] = [
 
@@ -456,17 +438,13 @@ const TESTS: TestDef[] = [
 
 ];
 
-
-
-
-
-
 function isTeacherRole(p?: Profiel | null) {
+
   const raw = (p?.role ?? p?.rol ?? "").trim().toLowerCase();
+
   return ["teacher", "leerkracht", "lo_leerkracht", "admin"].includes(raw);
+
 }
-
-
 
 type SavedRow = {
 
@@ -488,9 +466,15 @@ type SavedRow = {
 
   created_at: string;
 
+  modifications?: {
+
+    pushups_on_knees?: boolean;
+
+    table_pullup_bent_legs?: boolean;
+
+  };
+
 };
-
-
 
 export default function FunctionalFitheidstestPage() {
 
@@ -500,29 +484,19 @@ export default function FunctionalFitheidstestPage() {
 
   const [profiel, setProfiel] = useState<Profiel | null>(null);
 
-
-
   const [error, setError] = useState<string | null>(null);
 
   const [info, setInfo] = useState<string | null>(null);
 
-
-
   const [activeTab, setActiveTab] = useState<"invullen" | "info" | "huiswerk">("invullen");
-
-
 
   const [date, setDate] = useState(toYMD());
 
   const [note, setNote] = useState("");
 
-
-
   const [saving, setSaving] = useState(false);
 
   const [loadingLatest, setLoadingLatest] = useState(false);
-
-
 
   const [scores, setScores] = useState<Record<TestKey, ScoreValue>>(() => {
 
@@ -534,27 +508,35 @@ export default function FunctionalFitheidstestPage() {
 
   });
 
+  const [modifications, setModifications] = useState({
 
+    pushups_on_knees: false,
+
+    table_pullup_bent_legs: false,
+
+  });
 
   const computed = useMemo(() => {
+
     const numeric: Record<TestKey, number> = {} as Record<TestKey, number>;
 
     for (const t of TESTS) {
+
       const v = scores[t.key];
+
       const num = typeof v === "number" ? v : NaN;
+
       numeric[t.key] = Number.isFinite(num) ? num : 0;
+
     }
 
     return { numeric };
+
   }, [scores]);
-
-
 
   const greetingName = profiel?.volledige_naam?.split(" ")?.[0] ?? "Beast";
 
   const teacherMode = isTeacherRole(profiel);
-
-
 
   const fetchProfile = async (userId: string) => {
 
@@ -568,21 +550,15 @@ export default function FunctionalFitheidstestPage() {
 
       .maybeSingle();
 
-
-
     if (error) throw new Error(error.message);
 
     return (data as Profiel) ?? null;
 
   };
 
-
-
   useEffect(() => {
 
     injectFunctionalResponsiveCSS();
-
-
 
     const run = async () => {
 
@@ -591,8 +567,6 @@ export default function FunctionalFitheidstestPage() {
       setError(null);
 
       setInfo(null);
-
-
 
       const { data, error } = await supabase.auth.getSession();
 
@@ -606,8 +580,6 @@ export default function FunctionalFitheidstestPage() {
 
       }
 
-
-
       const userId = data.session?.user?.id ?? null;
 
       if (!userId) {
@@ -618,11 +590,7 @@ export default function FunctionalFitheidstestPage() {
 
       }
 
-
-
       setUid(userId);
-
-
 
       try {
 
@@ -636,27 +604,19 @@ export default function FunctionalFitheidstestPage() {
 
       }
 
-
-
       setLoading(false);
 
     };
 
-
-
     run();
 
   }, []);
-
-
 
   const setOne = (k: TestKey, raw: string) => {
 
     setInfo(null);
 
     setError(null);
-
-
 
     if (raw.trim() === "") {
 
@@ -666,13 +626,9 @@ export default function FunctionalFitheidstestPage() {
 
     }
 
-
-
     const n = Number(raw);
 
     if (!Number.isFinite(n)) return;
-
-
 
     const def = TESTS.find((t) => t.key === k)!;
 
@@ -682,13 +638,9 @@ export default function FunctionalFitheidstestPage() {
 
     const clamped = Math.max(min, Math.min(max, n));
 
-
-
     setScores((s) => ({ ...s, [k]: clamped }));
 
   };
-
-
 
   const resetAll = () => {
 
@@ -704,27 +656,23 @@ export default function FunctionalFitheidstestPage() {
 
     setNote("");
 
+    setModifications({ pushups_on_knees: false, table_pullup_bent_legs: false });
+
     setInfo("Alles leeg gemaakt.");
 
     setError(null);
 
   };
 
-
-
   const handleSave = async () => {
 
     if (!uid) return;
-
-
 
     setSaving(true);
 
     setError(null);
 
     setInfo(null);
-
-
 
     try {
 
@@ -739,24 +687,22 @@ export default function FunctionalFitheidstestPage() {
         scores: Object.fromEntries(TESTS.map((t) => [t.key, computed.numeric[t.key]])),
 
         // Oude databasekolommen behouden voor compatibiliteit.
+
         // De app gebruikt geen arbitraire punten op 10 meer.
+
         points: {},
 
         total_points: 0,
+
+        modifications,
 
         note: note.trim() ? note.trim() : null,
 
       };
 
-
-
       const { error } = await supabase.from("functional_fitheidstest_submissions").insert(payload);
 
-
-
       if (error) throw new Error(error.message);
-
-
 
       setInfo("✅ Opgeslagen!");
 
@@ -774,13 +720,9 @@ export default function FunctionalFitheidstestPage() {
 
   };
 
-
-
   const handleLoadLatest = async () => {
 
     if (!uid) return;
-
-
 
     setLoadingLatest(true);
 
@@ -788,15 +730,13 @@ export default function FunctionalFitheidstestPage() {
 
     setInfo(null);
 
-
-
     try {
 
       const { data, error } = await supabase
 
         .from("functional_fitheidstest_submissions")
 
-        .select("id, user_id, schooljaar, date, scores, points, total_points, note, created_at")
+        .select("id, user_id, schooljaar, date, scores, points, total_points, modifications, note, created_at")
 
         .eq("user_id", uid)
 
@@ -804,11 +744,7 @@ export default function FunctionalFitheidstestPage() {
 
         .limit(1);
 
-
-
       if (error) throw new Error(error.message);
-
-
 
       const row = (data?.[0] as SavedRow | undefined) ?? null;
 
@@ -820,11 +756,17 @@ export default function FunctionalFitheidstestPage() {
 
       }
 
-
-
       setDate(row.date ?? toYMD());
 
       setNote(row.note ?? "");
+
+      setModifications({
+
+        pushups_on_knees: Boolean(row.modifications?.pushups_on_knees),
+
+        table_pullup_bent_legs: Boolean(row.modifications?.table_pullup_bent_legs),
+
+      });
 
       setScores(() => {
 
@@ -842,8 +784,6 @@ export default function FunctionalFitheidstestPage() {
 
       });
 
-
-
       setInfo("Laatste meting geladen.");
 
       setActiveTab("invullen");
@@ -860,8 +800,6 @@ export default function FunctionalFitheidstestPage() {
 
   };
 
-
-
   if (loading) {
 
     return (
@@ -875,8 +813,6 @@ export default function FunctionalFitheidstestPage() {
     );
 
   }
-
-
 
   return (
 
@@ -960,8 +896,6 @@ export default function FunctionalFitheidstestPage() {
 
       />
 
-
-
       <div style={{ ...styles.headerRow, marginTop: 14 }}>
 
         <div style={{ minWidth: 0 }}>
@@ -982,8 +916,6 @@ export default function FunctionalFitheidstestPage() {
 
         </div>
 
-
-
         <Link href="/dashboard" style={styles.blackBtnLink}>
 
           Terug →
@@ -991,8 +923,6 @@ export default function FunctionalFitheidstestPage() {
         </Link>
 
       </div>
-
-
 
       {error && (
 
@@ -1004,8 +934,6 @@ export default function FunctionalFitheidstestPage() {
 
       )}
 
-
-
       {info && (
 
         <div style={styles.okBox}>
@@ -1016,8 +944,6 @@ export default function FunctionalFitheidstestPage() {
 
       )}
 
-
-
       <div style={styles.tabs}>
 
         <TabBtn active={activeTab === "invullen"} onClick={() => setActiveTab("invullen")}>
@@ -1026,23 +952,17 @@ export default function FunctionalFitheidstestPage() {
 
         </TabBtn>
 
-
-
         <Link href="/functional-fitheidstest/resultaten" style={styles.tabLink}>
 
           Resultaten
 
         </Link>
 
-
-
         <TabBtn active={activeTab === "info"} onClick={() => setActiveTab("info")}>
 
           Uitleg
 
         </TabBtn>
-
-
 
         <TabBtn active={activeTab === "huiswerk"} onClick={() => setActiveTab("huiswerk")}>
 
@@ -1051,8 +971,6 @@ export default function FunctionalFitheidstestPage() {
         </TabBtn>
 
       </div>
-
-
 
       {activeTab !== "huiswerk" ? (
 
@@ -1084,8 +1002,6 @@ export default function FunctionalFitheidstestPage() {
 
           </div>
 
-
-
           <div style={styles.metaCard}>
 
             <div style={styles.metaLabel}>📝 Opmerking (optioneel)</div>
@@ -1114,8 +1030,6 @@ export default function FunctionalFitheidstestPage() {
 
       ) : null}
 
-
-
       {activeTab === "invullen" ? (
 
         <>
@@ -1136,15 +1050,11 @@ export default function FunctionalFitheidstestPage() {
 
             </button>
 
-
-
             <button onClick={resetAll} style={styles.ghostBtn}>
 
               Alles leegmaken
 
             </button>
-
-
 
             <button
 
@@ -1164,13 +1074,9 @@ export default function FunctionalFitheidstestPage() {
 
           </div>
 
-
-
                     <section style={{ marginTop: 14 }}>
 
             <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 950, color: ui.text }}>Onderdelen</div>
-
-
 
             <div className="functional-grid" style={styles.gridWrap}>
 
@@ -1184,8 +1090,49 @@ export default function FunctionalFitheidstestPage() {
 
                   value={scores[t.key]}
 
-  
                   onChange={(raw) => setOne(t.key, raw)}
+
+                  modificationChecked={
+
+                    t.key === "pushups_60s"
+
+                      ? modifications.pushups_on_knees
+
+                      : t.key === "table_pullup_invertedrow_60s"
+
+                        ? modifications.table_pullup_bent_legs
+
+                        : undefined
+
+                  }
+
+                  modificationLabel={
+
+                    t.key === "pushups_60s"
+
+                      ? "Op de knieën"
+
+                      : t.key === "table_pullup_invertedrow_60s"
+
+                        ? "Geplooide benen"
+
+                        : undefined
+
+                  }
+
+                  onModificationChange={
+
+                    t.key === "pushups_60s"
+
+                      ? (checked) => setModifications((m) => ({ ...m, pushups_on_knees: checked }))
+
+                      : t.key === "table_pullup_invertedrow_60s"
+
+                        ? (checked) => setModifications((m) => ({ ...m, table_pullup_bent_legs: checked }))
+
+                        : undefined
+
+                  }
 
                 />
 
@@ -1194,8 +1141,6 @@ export default function FunctionalFitheidstestPage() {
             </div>
 
           </section>
-
-
 
           <div style={{ marginTop: 20, display: "flex", justifyContent: "center" }}>
 
@@ -1241,8 +1186,6 @@ export default function FunctionalFitheidstestPage() {
 
           </div>
 
-
-
           <div style={styles.panel}>
 
             <div style={{ fontWeight: 980, color: ui.text }}>Waarom doen we deze meting?</div>
@@ -1256,8 +1199,6 @@ export default function FunctionalFitheidstestPage() {
             </div>
 
           </div>
-
-
 
           <div style={styles.panel}>
 
@@ -1273,8 +1214,6 @@ export default function FunctionalFitheidstestPage() {
 
           </div>
 
-
-
           <div style={styles.panel}>
 
             <div style={{ fontWeight: 980, color: ui.text }}>Doel van de test 💪</div>
@@ -1288,8 +1227,6 @@ export default function FunctionalFitheidstestPage() {
             </div>
 
           </div>
-
-
 
         </div>
 
@@ -1330,8 +1267,6 @@ export default function FunctionalFitheidstestPage() {
   );
 
 }
-
-
 
 function TabBtn({
 
@@ -1381,8 +1316,6 @@ function TabBtn({
 
 }
 
-
-
 function TestCard({
 
   def,
@@ -1390,6 +1323,12 @@ function TestCard({
   value,
 
   onChange,
+
+  modificationChecked,
+
+  modificationLabel,
+
+  onModificationChange,
 
 }: {
 
@@ -1399,11 +1338,15 @@ function TestCard({
 
   onChange: (raw: string) => void;
 
+  modificationChecked?: boolean;
+
+  modificationLabel?: string;
+
+  onModificationChange?: (checked: boolean) => void;
+
 }) {
 
   const hasImg = Boolean(def.image);
-
-
 
   return (
 
@@ -1422,8 +1365,6 @@ function TestCard({
         </div>
 
       </div>
-
-
 
       {hasImg ? (
 
@@ -1461,7 +1402,27 @@ function TestCard({
 
       ) : null}
 
+      {modificationLabel && onModificationChange ? (
 
+        <label style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, color: ui.text, fontWeight: 900, cursor: "pointer" }}>
+
+          <input
+
+            type="checkbox"
+
+            checked={Boolean(modificationChecked)}
+
+            onChange={(e) => onModificationChange(e.target.checked)}
+
+            style={{ width: 20, height: 20, accentColor: brand.teal }}
+
+          />
+
+          <span>{modificationLabel}</span>
+
+        </label>
+
+      ) : null}
 
       <div style={styles.inputRow}>
 
@@ -1493,8 +1454,6 @@ function TestCard({
 
         </div>
 
-
-
         <div style={styles.unitBox}>
 
           <div style={styles.smallLabel}>Eenheid</div>
@@ -1510,8 +1469,6 @@ function TestCard({
   );
 
 }
-
-
 
 const styles: Record<string, React.CSSProperties> = {
 
@@ -2083,19 +2040,13 @@ const styles: Record<string, React.CSSProperties> = {
 
 };
 
-
-
 function injectFunctionalResponsiveCSS() {
 
   if (typeof window === "undefined") return;
 
-
-
   const id = "functional-fit-responsive-css";
 
   if (document.getElementById(id)) return;
-
-
 
   const style = document.createElement("style");
 
