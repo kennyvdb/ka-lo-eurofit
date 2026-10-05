@@ -39,6 +39,7 @@ type FitnessBeschikbaarheid = {
   datum: string;
   slot_key: string;
   is_mine: boolean;
+  aantal_leerlingen: number;
 };
 
 type FitnessAanwezige = {
@@ -263,8 +264,16 @@ function getReadableRpcError(message: string) {
     return "Je hebt geen toestemming om deze reservatie aan te passen.";
   }
 
-  if (message.includes("TIJDSLOT_REEDS_BEZET")) {
-    return "Dit tijdslot is net door iemand anders gereserveerd.";
+  if (message.includes("REEDS_GERESERVEERD")) {
+    return "Je hebt al een reservatie voor dit fitnessmoment.";
+  }
+
+  if (message.includes("REEDS_INGESCHREVEN")) {
+    return "Je bent al ingeschreven voor dit fitnessmoment.";
+  }
+
+  if (message.includes("LEERLING_REEDS_INGESCHREVEN")) {
+    return "Deze leerling is al ingeschreven voor dit fitnessmoment.";
   }
 
   if (message.includes("TIJDSLOT_REEDS_GESTART")) {
@@ -887,8 +896,15 @@ export default function FitnessPage() {
     activeEnded &&
     !isLoStaff;
 
+  const activeSlotBezetting =
+    activeReservation
+      ? reservationsMap.get(
+          activeReservation.slot_key
+        )?.aantal_leerlingen ?? 0
+      : 0;
+
   const groepVol =
-    aanwezigen.length >=
+    activeSlotBezetting >=
     MAX_AANWEZIGEN;
 
   /* =========================================================
@@ -936,16 +952,6 @@ export default function FitnessPage() {
         ) {
           throw new Error(
             "Dit fitnessmoment is al gestart of voorbij."
-          );
-        }
-
-        if (
-          reservationsMap.get(
-            slot.key
-          )
-        ) {
-          throw new Error(
-            "Dit tijdslot is net door iemand anders gereserveerd."
           );
         }
 
@@ -1198,9 +1204,14 @@ export default function FitnessPage() {
           );
         }
 
-        await loadAanwezigen(
-          activeReservation.id
-        );
+        await Promise.all([
+          loadAanwezigen(
+            activeReservation.id
+          ),
+          loadReservations(
+            selectedDate
+          ),
+        ]);
 
         setZoekterm("");
         setZoekResultaten([]);
@@ -1274,9 +1285,14 @@ export default function FitnessPage() {
           );
         }
 
-        await loadAanwezigen(
-          activeReservation.id
-        );
+        await Promise.all([
+          loadAanwezigen(
+            activeReservation.id
+          ),
+          loadReservations(
+            selectedDate
+          ),
+        ]);
 
         setSuccess(
           `${
@@ -1586,8 +1602,8 @@ export default function FitnessPage() {
               </div>
 
               <p>
-                Kies een vrij
-                tijdslot.
+                Reserveer zolang er
+                plaats is.
               </p>
             </div>
 
@@ -1620,16 +1636,32 @@ export default function FitnessPage() {
                           reservation?.is_mine ===
                           true;
 
+                        const aantalLeerlingen =
+                          Number(
+                            reservation?.aantal_leerlingen ??
+                              0
+                          );
+
+                        const plaatsenVrij =
+                          Math.max(
+                            0,
+                            MAX_AANWEZIGEN -
+                              aantalLeerlingen
+                          );
+
+                        const volzet =
+                          aantalLeerlingen >=
+                          MAX_AANWEZIGEN;
+
                         const myReservation =
                           isMine
                             ? myUpcomingReservations.find(
-                                (
-                                  item
-                                ) =>
-                                  item.id ===
-                                  reservation?.id
-                              ) ??
-                              null
+                                (item) =>
+                                  item.datum ===
+                                    selectedDate &&
+                                  item.slot_key ===
+                                    slot.key
+                              ) ?? null
                             : null;
 
                         const started =
@@ -1665,8 +1697,7 @@ export default function FitnessPage() {
                               </span>
                             </div>
 
-                            {!reservation &&
-                            started ? (
+                            {started ? (
                               <div className="slot-content past">
                                 <div>
                                   <strong>
@@ -1674,82 +1705,28 @@ export default function FitnessPage() {
                                   </strong>
 
                                   <p>
-                                    Dit
-                                    moment
-                                    kan niet
-                                    meer
-                                    gereserveerd
-                                    worden.
+                                    Dit moment kan niet meer gereserveerd worden.
                                   </p>
                                 </div>
 
-                                <button
-                                  disabled
-                                >
+                                <button disabled>
                                   Voorbij
                                 </button>
                               </div>
-                            ) : !reservation &&
-                              !allowed ? (
+                            ) : !allowed ? (
                               <div className="slot-content blocked">
                                 <div>
                                   <strong>
-                                    Niet
-                                    toegankelijk
+                                    Niet toegankelijk
                                   </strong>
 
                                   <p>
-                                    Buiten
-                                    het
-                                    vooruur
-                                    is dit
-                                    voorbehouden
-                                    voor
-                                    leerlingen
-                                    van de
-                                    3e graad
-                                    en
-                                    leerkrachten.
+                                    Buiten het vooruur is dit voorbehouden voor leerlingen van de 3e graad en leerkrachten.
                                   </p>
                                 </div>
 
-                                <button
-                                  disabled
-                                >
-                                  Niet
-                                  beschikbaar
-                                </button>
-                              </div>
-                            ) : !reservation ? (
-                              <div className="slot-content free">
-                                <div>
-                                  <strong>
-                                    Vrij
-                                  </strong>
-
-                                  <p>
-                                    {slot.vooruur
-                                      ? "Vooruur — alle leerlingen en leerkrachten kunnen reserveren."
-                                      : "Fitnessruimte beschikbaar."}
-                                  </p>
-                                </div>
-
-                                <button
-                                  type="button"
-                                  disabled={
-                                    saving ||
-                                    !bookingWindowOk
-                                  }
-                                  onClick={() =>
-                                    handleBook(
-                                      slot
-                                    )
-                                  }
-                                  className="primary"
-                                >
-                                  {saving
-                                    ? "Even wachten…"
-                                    : "Reserveer"}
+                                <button disabled>
+                                  Niet beschikbaar
                                 </button>
                               </div>
                             ) : isMine &&
@@ -1757,16 +1734,13 @@ export default function FitnessPage() {
                               <div className="slot-content mine">
                                 <div>
                                   <strong>
-                                    Jouw
-                                    reservatie
+                                    Jouw reservatie · {aantalLeerlingen}/{MAX_AANWEZIGEN}
                                   </strong>
 
                                   <p>
-                                    Beheer
-                                    wie
-                                    samen
-                                    met jou
-                                    traint.
+                                    {plaatsenVrij > 0
+                                      ? `${plaatsenVrij} ${plaatsenVrij === 1 ? "plaats" : "plaatsen"} vrij in dit fitnessmoment.`
+                                      : "Dit fitnessmoment is volzet."}
                                   </p>
                                 </div>
 
@@ -1780,8 +1754,7 @@ export default function FitnessPage() {
                                       )
                                     }
                                   >
-                                    Beheer
-                                    groep
+                                    Beheer groep
                                   </button>
 
                                   {(!started ||
@@ -1803,27 +1776,53 @@ export default function FitnessPage() {
                                   )}
                                 </div>
                               </div>
-                            ) : (
+                            ) : volzet ? (
                               <div className="slot-content booked">
                                 <div>
                                   <strong>
-                                    Bezet
+                                    Volzet · {aantalLeerlingen}/{MAX_AANWEZIGEN}
                                   </strong>
 
                                   <p>
-                                    Dit
-                                    fitnessmoment
-                                    is
-                                    reeds
-                                    gereserveerd.
+                                    Er zijn geen plaatsen meer vrij voor dit fitnessmoment.
+                                  </p>
+                                </div>
+
+                                <button disabled>
+                                  Volzet
+                                </button>
+                              </div>
+                            ) : (
+                              <div className="slot-content free">
+                                <div>
+                                  <strong>
+                                    {aantalLeerlingen}/{MAX_AANWEZIGEN} bezet
+                                  </strong>
+
+                                  <p>
+                                    {plaatsenVrij} {plaatsenVrij === 1 ? "plaats" : "plaatsen"} vrij
+                                    {slot.vooruur
+                                      ? " · vooruur voor alle leerlingen en leerkrachten."
+                                      : "."}
                                   </p>
                                 </div>
 
                                 <button
-                                  disabled
+                                  type="button"
+                                  disabled={
+                                    saving ||
+                                    !bookingWindowOk
+                                  }
+                                  onClick={() =>
+                                    handleBook(
+                                      slot
+                                    )
+                                  }
+                                  className="primary"
                                 >
-                                  Niet
-                                  beschikbaar
+                                  {saving
+                                    ? "Even wachten…"
+                                    : "Reserveer"}
                                 </button>
                               </div>
                             )}

@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import React, { useEffect, useMemo, useState } from "react";
 /* =========================================================
    TYPES
-========================================================= */
+\========================================================= */
 type Tab =
   | "materiaal"
   | "info"
@@ -28,7 +28,7 @@ type ChecklistGroup = {
 };
 /* =========================================================
    UI
-========================================================= */
+\========================================================= */
 const ui = {
   text: "rgba(234,240,255,0.94)",
   muted: "rgba(234,240,255,0.70)",
@@ -39,7 +39,7 @@ const ui = {
 };
 /* =========================================================
    TABS
-========================================================= */
+\========================================================= */
 const tabs: {
   id: Tab;
   icon: string;
@@ -55,7 +55,7 @@ const tabs: {
 ];
 /* =========================================================
    CHECKLIST
-========================================================= */
+\========================================================= */
 const checklistGroups: ChecklistGroup[] = [
   {
     title: "Documenten & geld",
@@ -327,7 +327,7 @@ const checklistGroups: ChecklistGroup[] = [
 ];
 /* =========================================================
    PAGE
-========================================================= */
+\========================================================= */
 export default function SneeuwstagePage() {
   const [activeTab, setActiveTab] = useState<Tab>("info");
   const [checked, setChecked] = useState<Record<string, boolean>>(
@@ -336,7 +336,7 @@ export default function SneeuwstagePage() {
   const [checklistLoaded, setChecklistLoaded] = useState(false);
   /* =======================================================
      CHECKLIST LADEN
-  ======================================================= */
+  \======================================================= */
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem(
@@ -356,7 +356,7 @@ export default function SneeuwstagePage() {
   }, []);
   /* =======================================================
      CHECKLIST OPSLAAN
-  ======================================================= */
+  \======================================================= */
   useEffect(() => {
     if (!checklistLoaded) return;
     try {
@@ -373,7 +373,7 @@ export default function SneeuwstagePage() {
   }, [checked, checklistLoaded]);
   /* =======================================================
      CHECKLIST STATISTIEKEN
-  ======================================================= */
+  \======================================================= */
   const allItems = useMemo(
     () => checklistGroups.flatMap((group) => group.items),
     []
@@ -401,7 +401,7 @@ export default function SneeuwstagePage() {
   }
   /* =======================================================
      RENDER
-  ======================================================= */
+  \======================================================= */
   return (
     <AppShell
       title="LO App"
@@ -409,7 +409,7 @@ export default function SneeuwstagePage() {
     >
       {/* ===================================================
           HERO
-      =================================================== */}
+      \=================================================== */}
       <BaseHero
         label="EXTRAMURALE ACTIVITEIT"
         title={
@@ -440,7 +440,7 @@ export default function SneeuwstagePage() {
           GSM: 2 kolommen
           TABLET: 3 kolommen
           DESKTOP: 6 kolommen
-      =================================================== */}
+      \=================================================== */}
       <div className="mt-5">
         <div className="mb-2 text-[12px] font-black uppercase tracking-[0.12em] text-white/45">
           Sneeuwstage
@@ -498,7 +498,7 @@ export default function SneeuwstagePage() {
       </div>
       {/* ===================================================
           ALGEMENE INFO
-      =================================================== */}
+      \=================================================== */}
       {activeTab === "materiaal" && <EigenMateriaal />}
       {activeTab === "info" && (
         <section className="mt-4">
@@ -565,7 +565,7 @@ export default function SneeuwstagePage() {
       )}
       {/* ===================================================
           CHECKLIST
-      =================================================== */}
+      \=================================================== */}
       {activeTab === "checklist" && (
         <section className="mt-4">
           <SectionTitle
@@ -690,7 +690,7 @@ export default function SneeuwstagePage() {
       )}
       {/* ===================================================
           ANNULERING
-      =================================================== */}
+      \=================================================== */}
       {activeTab === "annulering" && (
         <section className="mt-4">
           <SectionTitle
@@ -777,7 +777,7 @@ export default function SneeuwstagePage() {
       )}
       {/* ===================================================
           KAMERS
-      =================================================== */}
+      \=================================================== */}
       {activeTab === "kamers" && (
         <ComingSoon
           icon="🛏️"
@@ -787,7 +787,7 @@ export default function SneeuwstagePage() {
       )}
       {/* ===================================================
           GROEPEN
-      =================================================== */}
+      \=================================================== */}
       {activeTab === "groepen" && (
         <ComingSoon
           icon="⛷️"
@@ -797,7 +797,7 @@ export default function SneeuwstagePage() {
       )}
       {/* ===================================================
           FAQ
-      =================================================== */}
+      \=================================================== */}
       {activeTab === "faq" && (
         <section className="mt-4">
           <SectionTitle
@@ -845,7 +845,7 @@ export default function SneeuwstagePage() {
 }
 /* =========================================================
    COMPONENTS
-========================================================= */
+\========================================================= */
 function SectionTitle({
   title,
   description,
@@ -991,7 +991,7 @@ function Faq({
 }
 /* =========================================================
    STYLES
-========================================================= */
+\========================================================= */
 const styles: Record<string, React.CSSProperties> = {
   panel: {
     padding: 16,
@@ -1019,6 +1019,7 @@ function EigenMateriaal() {
   const [client] = useState(() => createClient());
   const [stageId, setStageId] = useState("");
   const [values, setValues] = useState<Partial<Record<MateriaalKey, boolean>>>({});
+  const [volledigeSet, setVolledigeSet] = useState<"" | "ja" | "nee">("");
   const [opmerking, setOpmerking] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1049,7 +1050,9 @@ function EigenMateriaal() {
           setStageId(stage.id); setAllowed(true);
           if (answer) {
             setValues(Object.fromEntries(materiaalVelden.map(([key]) => [key, answer[key] === true])));
-            setOpmerking(answer.opmerking ?? "");
+            // Eerdere losse onderdelen blijven bewaard; laat de leerling de nieuwe keuze bevestigen.
+          setVolledigeSet(typeof answer.volledige_set === "boolean" ? (answer.volledige_set ? "ja" : "nee") : "");
+          setOpmerking(answer.opmerking ?? "");
           }
         }
       } catch (error) {
@@ -1059,7 +1062,8 @@ function EigenMateriaal() {
     return () => { active = false; };
   }, [client]);
   async function save() {
-    if (readOnly || !allowed || !stageId) return;
+    if (readOnly || !allowed || !stageId || saving) return;
+    if (!volledigeSet) { setMessage("Kies eerst ja of nee bij de volledige set."); return; }
     setSaving(true); setMessage("");
     try {
       const { data: { user }, error: authError } = await client.auth.getUser();
@@ -1067,7 +1071,7 @@ function EigenMateriaal() {
       if (!user) throw new Error("Log opnieuw in.");
       const { error } = await client.from("sneeuwstage_materiaal").upsert({
         sneeuwstage_id: stageId, leerling_id: user.id,
-        ...Object.fromEntries(materiaalVelden.map(([key]) => [key, !!values[key]])),
+        volledige_set: volledigeSet === "ja",
         opmerking: opmerking.trim(),
       }, { onConflict: "sneeuwstage_id,leerling_id" });
       if (error) throw error;
@@ -1076,23 +1080,37 @@ function EigenMateriaal() {
     finally { setSaving(false); }
   }
   return <section className="mt-4" style={styles.panel}>
-    <SectionTitle title="Eigen materiaal" />
-    <p className="text-sm leading-6 text-white"><strong>Beste leerlingen, dit bericht dient enkel ingevuld te worden door leerlingen die eigen materiaal willen meenemen of kunnen voorzien.</strong></p>
-    <p className="text-sm text-white/70">Vink alleen de onderdelen aan die je zelf meeneemt. Je kan je antwoord later aanpassen. Neem je niets meer mee? Vink alles uit en sla opnieuw op.</p>
+    <SectionTitle title="🎿 Ski- & snowboardmateriaal" />
+    <div className="space-y-3 text-sm leading-6 text-white/80">
+      <p>Beste skiërs en snowboarders,</p>
+      <p>Wie zijn/haar <strong className="text-white">eigen ski- of snowboardmateriaal</strong> wenst mee te nemen, mag dit gerust <strong className="text-white">via de app doorgeven</strong>.</p>
+      <p className="rounded-xl border border-[#89C2AA]/30 bg-[#4B8E8D]/15 p-3">👉 <strong className="text-white">Let op: enkel leerlingen die een volledige ski- of snowboardset meenemen, krijgen €25 korting.</strong></p>
+      <p>Een volledige set bestaat uit:</p>
+      <ul className="list-disc space-y-1 pl-5">
+        <li>🎿 Ski’s of 🏂 snowboard</li>
+        <li>🎿 Stokken (voor skiërs)</li>
+        <li>👢 Skischoenen of snowboardschoenen</li>
+        <li>⛑️ Helm</li>
+      </ul>
+      <p>Geef dus via de app door of je een volledige eigen set meeneemt. Neem je enkel schoenen, latten, een snowboard of een helm mee? Kies dan <strong className="text-white">nee</strong> en vermeld die onderdelen bij opmerkingen. Hiervoor kunnen we geen korting toekennen.</p>
+    </div>
     {readOnly && <p className="rounded-xl border border-white/20 bg-white/5 p-3 text-sm text-white/80">Je bekijkt als LO-leerkracht het leerlingformulier. Invullen en opslaan zijn uitgeschakeld. De antwoorden vind je onder Leerkrachten LO → Extramurale sportactiviteiten → Sneeuwstage.</p>}
     {loading ? <p>Formulier laden…</p> : allowed && <>
-      <div className="grid gap-4 sm:grid-cols-2">
-        {["ski", "snowboard"].map(group => <fieldset key={group} disabled={saving || readOnly} className="rounded-2xl border border-white/20 p-4">
-          <legend className="px-2 font-bold">{group === "ski" ? "Ski" : "Snowboard"}</legend>
-          {materiaalVelden.filter(([key]) => key.startsWith(group + "_")).map(([key, label]) => <label key={key} className="my-3 flex cursor-pointer items-center gap-3">
-            <input type="checkbox" className="h-5 w-5" checked={!!values[key]} onChange={e => { setValues(old => ({ ...old, [key]: e.target.checked })); setMessage(""); }} />{label}
-          </label>)}
-        </fieldset>)}
-      </div>
-      <label className="mt-4 block text-sm">Opmerking (optioneel)
-        <textarea maxLength={1000} disabled={saving || readOnly} value={opmerking} onChange={e => { setOpmerking(e.target.value); setMessage(""); }} className="mt-2 w-full rounded-xl border border-white/20 bg-black/20 p-3 text-white" rows={3} />
+      <label className="mt-5 block text-sm font-bold" htmlFor="volledige-set">
+        Ik neem een volledige ski- of snowboardset mee
       </label>
-      {!readOnly && <button type="button" onClick={save} disabled={saving || readOnly} className="mt-4 rounded-xl border border-white/30 bg-white/10 px-5 py-3 font-bold disabled:opacity-50">{saving ? "Opslaan…" : "Mijn materiaal opslaan"}</button>}
+      <select id="volledige-set" disabled={saving || readOnly} value={volledigeSet}
+        onChange={e => { setVolledigeSet(e.target.value as "" | "ja" | "nee"); setMessage(""); }}
+        className="mt-2 w-full rounded-xl border border-white/20 bg-slate-900 p-3 text-white">
+        <option value="">Kies ja of nee</option>
+        <option value="ja">Ja — ik neem een volledige set mee (€25 korting)</option>
+        <option value="nee">Nee — ik neem geen volledige set mee (geen korting)</option>
+      </select>
+      {Object.values(values).some(Boolean) && <p className="mt-2 text-xs leading-5 text-white/60">Je gaf eerder deze losse onderdelen door: {materiaalVelden.filter(([key]) => values[key]).map(([, label]) => label).join(", ")}. Bevestig hierboven of je een volledige set meeneemt en vermeld eventuele losse onderdelen bij opmerkingen.</p>}
+      <label className="mt-4 block text-sm">Opmerkingen (optioneel)
+        <textarea placeholder="Bijvoorbeeld: ik neem enkel mijn skischoenen en helm mee." maxLength={1000} disabled={saving || readOnly} value={opmerking} onChange={e => { setOpmerking(e.target.value); setMessage(""); }} className="mt-2 w-full rounded-xl border border-white/20 bg-black/20 p-3 text-white" rows={3} />
+      </label>
+      {!readOnly && <button type="button" onClick={save} disabled={saving || readOnly || !volledigeSet} className="mt-4 rounded-xl border border-white/30 bg-white/10 px-5 py-3 font-bold disabled:opacity-50">{saving ? "Opslaan…" : "Mijn materiaal opslaan"}</button>}
     </>}
     {message && <p role="status" className="mt-4 text-sm text-white">{message}</p>}
   </section>;

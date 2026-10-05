@@ -7,7 +7,7 @@ import React, { useEffect, useMemo, useState } from "react";
 const supabase = createClient();
 /* ============================================================
    TYPES
-============================================================ */
+\============================================================ */
 type Profiel = {
   id: string;
   volledige_naam: string | null;
@@ -55,7 +55,7 @@ type OverzichtRow = {
 };
 /* ============================================================
    HELPERS
-============================================================ */
+\============================================================ */
 function normalizeText(value: unknown) {
   return String(value ?? "").trim();
 }
@@ -104,7 +104,7 @@ function ervaringLabel(value: string | null) {
 }
 /* ============================================================
    PAGE
-============================================================ */
+\============================================================ */
 export default function SneeuwstageLeerkrachtPage() {
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
@@ -126,7 +126,7 @@ export default function SneeuwstageLeerkrachtPage() {
   const [error, setError] = useState<string | null>(null);
   /* ============================================================
      LOAD
-  ============================================================ */
+  \============================================================ */
   useEffect(() => {
     void loadPage();
   }, []);
@@ -324,7 +324,7 @@ export default function SneeuwstageLeerkrachtPage() {
   }
   /* ============================================================
      OVERZICHT
-  ============================================================ */
+  \============================================================ */
   const overzicht = useMemo<OverzichtRow[]>(() => {
     const keuzeMap = new Map<string, KeuzeRow>();
     keuzes.forEach((keuze) => {
@@ -361,7 +361,7 @@ export default function SneeuwstageLeerkrachtPage() {
   }, [deelnemers, keuzes, leerlingenInfo]);
   /* ============================================================
      STATISTIEKEN
-  ============================================================ */
+  \============================================================ */
   const aantalDeelnemers = overzicht.length;
   const aantalIngevuld = overzicht.filter(
     (row) => row.keuze
@@ -383,7 +383,7 @@ export default function SneeuwstageLeerkrachtPage() {
   ).length;
   /* ============================================================
      SKI GROEPEN
-  ============================================================ */
+  \============================================================ */
   const skiGroepen = useMemo(() => {
     const result = {
       "0_weken": 0,
@@ -406,7 +406,7 @@ export default function SneeuwstageLeerkrachtPage() {
   }, [overzicht]);
   /* ============================================================
      KLASSEN
-  ============================================================ */
+  \============================================================ */
   const klassen = useMemo(() => {
     return Array.from(
       new Set(
@@ -422,12 +422,12 @@ export default function SneeuwstageLeerkrachtPage() {
   }, [overzicht]);
   /* ============================================================
      FILTER
-  ============================================================ */
+  \============================================================ */
   const filteredRows = useMemo(() => {
     const q = zoekterm.trim().toLowerCase();
     return overzicht.filter((row) => {
       if (ervaringFilter && (row.keuze?.discipline === "snowboard" ? row.keuze.snowboard_ervaring : row.keuze?.ski_ervaring) !== ervaringFilter) return false;
-      if (materiaalFilter && !heeftMateriaal(row.leerlingId ? materiaal[row.leerlingId] : undefined)) return false;
+      if (materiaalFilter && (row.leerlingId ? materiaal[row.leerlingId]?.volledige_set : undefined) !== true) return false;
       if (
         klasFilter !== "Alle" &&
         row.klas !== klasFilter
@@ -470,7 +470,7 @@ export default function SneeuwstageLeerkrachtPage() {
   ]);
   /* ============================================================
      LOADING
-  ============================================================ */
+  \============================================================ */
   if (loading) {
     return (
       <AppShell
@@ -493,7 +493,7 @@ export default function SneeuwstageLeerkrachtPage() {
   }
   /* ============================================================
      ACCESS
-  ============================================================ */
+  \============================================================ */
   if (!allowed && !error) {
     return (
       <AppShell
@@ -523,7 +523,7 @@ export default function SneeuwstageLeerkrachtPage() {
   }
   /* ============================================================
      PAGE
-  ============================================================ */
+  \============================================================ */
   return (
     <AppShell
       title="LO App"
@@ -573,7 +573,7 @@ export default function SneeuwstageLeerkrachtPage() {
       ) : null}
       {/* ====================================================
           REISINFO
-      ==================================================== */}
+      \==================================================== */}
       <section className="snow-info-grid">
         <div className="snow-info-card">
           <span>Vertrek</span>
@@ -602,7 +602,7 @@ export default function SneeuwstageLeerkrachtPage() {
       </section>
       {/* ====================================================
           HOOFDSTATISTIEKEN
-      ==================================================== */}
+      \==================================================== */}
       <section className="snow-stat-grid">
         <div className="snow-stat-card">
           <span>Deelnemers</span>
@@ -649,7 +649,7 @@ export default function SneeuwstageLeerkrachtPage() {
       </section>
       {/* ====================================================
           SKI GROEPEN
-      ==================================================== */}
+      \==================================================== */}
       <section className="snow-panel">
         <div className="snow-section-header">
           <div>
@@ -698,7 +698,7 @@ export default function SneeuwstageLeerkrachtPage() {
       </section>
       {/* ====================================================
           FILTERS
-      ==================================================== */}
+      \==================================================== */}
       <section className="snow-panel">
         <div className="snow-section-header">
           <div>
@@ -711,14 +711,14 @@ export default function SneeuwstageLeerkrachtPage() {
         </div>
         <div className="snow-filter-buttons" style={{ marginBottom: 16 }}>
           <button type="button" className="snow-filter" onClick={() => void loadPage()}>Vernieuwen</button>
-          <button type="button" className={materiaalFilter ? "snow-filter active" : "snow-filter"} onClick={() => setMateriaalFilter(!materiaalFilter)}>Alleen eigen materiaal</button>
+          <button type="button" className={materiaalFilter ? "snow-filter active" : "snow-filter"} onClick={() => setMateriaalFilter(!materiaalFilter)}>Alleen volledige set (€25 korting)</button>
           <button type="button" className="snow-filter" onClick={() => { setFilter("alle"); setErvaringFilter(""); setMateriaalFilter(false); setKlasFilter("Alle"); setZoekterm(""); }}>Filters wissen</button>
           <label>Ervaring <select value={ervaringFilter} onChange={e => setErvaringFilter(e.target.value)} className="snow-filter" style={{ background: "#18343d" }}>
             <option value="">Alle niveaus</option>
             {["0_weken", "1_2_weken", "3_4_weken", "5_plus_weken"].map(value => <option key={value} value={value}>{ervaringLabel(value)}</option>)}
           </select></label>
         </div>
-        <p>Geen materiaalantwoord betekent: geen eigen materiaal gemeld. Dit verandert de bestaande huurkeuze of toeslag niet automatisch.</p>
+        <p>Alleen een bevestigde volledige ski- of snowboardset geeft recht op €25 korting: ski’s of snowboard, schoenen, helm en voor skiërs ook stokken. Losse onderdelen staan bij opmerkingen en geven geen korting. “Nog niet bevestigd” betekent dat de leerling de nieuwe ja/nee-vraag nog moet invullen. De bestaande snowboardhuur en toeslag blijven apart weergegeven.</p>
         <div className="snow-filters">
           <div className="snow-filter-buttons">
             <button
@@ -806,7 +806,7 @@ export default function SneeuwstageLeerkrachtPage() {
         </div>
         {/* ====================================================
             TABLE
-        ==================================================== */}
+        \==================================================== */}
         <div className="snow-table-wrap">
           <table className="snow-table">
             <thead>
@@ -815,13 +815,14 @@ export default function SneeuwstageLeerkrachtPage() {
                 <th>Klas</th>
                 <th>Keuze</th>
                 <th>Ervaring</th>
-                <th>Eigen materiaal gemeld</th><th>Opmerking</th><th>Bestaande snowboardkeuze</th>
+                <th>Volledige eigen set</th><th>Korting</th><th>Eerder gemelde onderdelen</th><th>Opmerkingen</th><th>Bestaande snowboardkeuze</th>
                 <th>Toeslag</th>
               </tr>
             </thead>
             <tbody>
               {filteredRows.map((row) => {
-                const keuze = row.keuze;
+                const materiaalAntwoord = row.leerlingId ? materiaal[row.leerlingId] : undefined;
+              const keuze = row.keuze;
                 const isSnowboard =
                   keuze?.discipline === "snowboard";
                 const ervaring = isSnowboard
@@ -886,7 +887,9 @@ export default function SneeuwstageLeerkrachtPage() {
                       )}
                     </td>
                     <td>{ervaring}</td>
-                    <td>{materiaalLabel(row.leerlingId ? materiaal[row.leerlingId] : undefined)}</td>
+                    <td><span className={materiaalAntwoord?.volledige_set === true ? "status ski" : materiaalAntwoord?.volledige_set === false ? "class-badge" : "status missing"}>{volledigeSetLabel(materiaalAntwoord)}</span></td>
+                    <td>{materiaalAntwoord?.volledige_set === true ? <strong style={{ color: "#b6ead5" }}>€25</strong> : materiaalAntwoord?.volledige_set === false ? "€0" : "—"}</td>
+                    <td>{materiaalLabel(materiaalAntwoord)}</td>
                     <td>{row.leerlingId ? materiaal[row.leerlingId]?.opmerking || "—" : "—"}</td>
                     <td>{eigenMateriaal}</td>
                     <td>
@@ -916,7 +919,7 @@ export default function SneeuwstageLeerkrachtPage() {
 }
 /* ============================================================
    CSS
-============================================================ */
+\============================================================ */
 const css = `
   .snow-hero-actions {
     display: flex;
@@ -1253,11 +1256,15 @@ const css = `
   }
 `;
 
-type MateriaalAntwoord = { leerling_id: string; opmerking: string | null } & Record<MateriaalVeld, boolean>;
+type MateriaalAntwoord = { leerling_id: string; opmerking: string | null; volledige_set?: boolean | null } & Record<MateriaalVeld, boolean>;
 const materiaalLabels = { ski_schoenen: "Skischoenen", ski_latten: "Skilatten", ski_helm: "Skihelm", ski_stokken: "Skistokken", snowboard_schoenen: "Snowboardschoenen", snowboard_board: "Snowboard", snowboard_helm: "Snowboardhelm" };
 type MateriaalVeld = keyof typeof materiaalLabels;
-function heeftMateriaal(answer?: MateriaalAntwoord) { return !!answer && (Object.keys(materiaalLabels) as MateriaalVeld[]).some(key => answer[key]); }
+function volledigeSetLabel(answer?: MateriaalAntwoord) {
+  if (answer?.volledige_set === true) return "Ja";
+  if (answer?.volledige_set === false) return "Nee";
+  return "Nog niet bevestigd";
+}
 function materiaalLabel(answer?: MateriaalAntwoord) {
-  if (!answer) return "Geen eigen materiaal gemeld";
-  return (Object.keys(materiaalLabels) as MateriaalVeld[]).filter(key => answer[key]).map(key => materiaalLabels[key]).join(", ") || "Geen eigen materiaal";
+  if (!answer) return "—";
+  return (Object.keys(materiaalLabels) as MateriaalVeld[]).filter(key => answer[key]).map(key => materiaalLabels[key]).join(", ") || "—";
 }
