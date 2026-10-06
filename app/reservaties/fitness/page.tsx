@@ -276,6 +276,10 @@ function getReadableRpcError(message: string) {
     return "Deze leerling is al ingeschreven voor dit fitnessmoment.";
   }
 
+  if (message.includes("TIJDSLOT_REEDS_AFGELOPEN")) {
+    return "Dit fitnessmoment is al afgelopen.";
+  }
+
   if (message.includes("TIJDSLOT_REEDS_GESTART")) {
     return "Dit fitnessmoment is al gestart of voorbij.";
   }
@@ -945,13 +949,13 @@ export default function FitnessPage() {
         }
 
         if (
-          isSlotStarted(
+          isSlotEnded(
             selectedDate,
             slot
           )
         ) {
           throw new Error(
-            "Dit fitnessmoment is al gestart of voorbij."
+            "Dit fitnessmoment is al afgelopen."
           );
         }
 
@@ -1670,6 +1674,12 @@ export default function FitnessPage() {
                             slot
                           );
 
+                        const ended =
+                          isSlotEnded(
+                            selectedDate,
+                            slot
+                          );
+
                         const allowed =
                           canReserveSlot(
                             slot
@@ -1697,7 +1707,7 @@ export default function FitnessPage() {
                               </span>
                             </div>
 
-                            {started ? (
+                            {ended ? (
                               <div className="slot-content past">
                                 <div>
                                   <strong>

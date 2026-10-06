@@ -1,14 +1,11 @@
 "use client";
-
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-
 const supabase = createClient();
-
 type Profile = {
   id: string;
   volledige_naam: string | null;
@@ -28,8 +25,10 @@ type Profile = {
   given_name: string | null;
   family_name: string | null;
   smartschool_sourced_id: string | null;
+  klassement_toestemming: boolean | null;
+  klassement_toestemming_op: string | null;
+  klassement_toestemming_versie: string | null;
 };
-
 const emptyProfile: Profile = {
   id: "",
   volledige_naam: null,
@@ -49,43 +48,38 @@ const emptyProfile: Profile = {
   given_name: null,
   family_name: null,
   smartschool_sourced_id: null,
+  klassement_toestemming: null,
+  klassement_toestemming_op: null,
+  klassement_toestemming_versie: null,
 };
-
 function getCurrentSchoolYearBelgium(d = new Date()) {
   const year = d.getFullYear();
   const month = d.getMonth() + 1;
   return month >= 9 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
 }
-
 function display(value: string | number | null | undefined) {
   if (value === null || value === undefined || value === "") return "—";
   return String(value);
 }
-
 function geslachtLabel(value: "M" | "V" | null) {
   if (value === "M") return "Mannelijk";
   if (value === "V") return "Vrouwelijk";
   return "—";
 }
-
 const birthDateYears = Array.from({ length: 90 }, (_, index) => String(new Date().getFullYear() - 16 - index));
 const birthDateMonths = Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0"));
-
 function daysInMonth(year: string, month: string) {
   if (!year || !month) return 31;
   return new Date(Number(year), Number(month), 0).getDate();
 }
-
 function splitDate(value: string) {
   const [year = "", month = "", day = ""] = value.split("-");
   return { year, month, day };
 }
-
 function buildDate(year: string, month: string, day: string) {
   if (!year || !month || !day) return "";
   return `${year}-${month}-${day}`;
 }
-
 function monthLabel(month: string) {
   const labels: Record<string, string> = {
     "01": "januari",
@@ -101,17 +95,14 @@ function monthLabel(month: string) {
     "11": "november",
     "12": "december",
   };
-
   return labels[month] ?? month;
 }
-
 function formatDate(value: string | null) {
   if (!value) return "—";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString("nl-BE");
 }
-
 function roleLabel(profile: Profile) {
   const rol = String(profile.rol ?? "").trim().toLowerCase();
   if (rol === "leerkracht lo") return "Leerkracht LO";
@@ -119,7 +110,6 @@ function roleLabel(profile: Profile) {
   if (rol === "leerkracht" || profile.role === "teacher") return "Leerkracht";
   return "Leerling";
 }
-
 function ReadOnlyField({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid gap-2">
@@ -130,7 +120,6 @@ function ReadOnlyField({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
 // MOBIELE FIX DEFINITIEF: geen native <select> meer.
 // Sommige mobiele browsers tonen de keuzelijst wel, maar geven de gekozen waarde niet betrouwbaar door.
 // Deze component gebruikt gewone knoppen + eigen keuzelijsten, zodat dag/maand/jaar altijd zichtbaar blijven.
@@ -146,64 +135,53 @@ function BirthDateSelects({
   const [selectedMonth, setSelectedMonth] = useState(initialDate.month);
   const [selectedYear, setSelectedYear] = useState(initialDate.year);
   const [openPicker, setOpenPicker] = useState<"day" | "month" | "year" | null>(null);
-
   useEffect(() => {
     const nextDate = splitDate(value);
     setSelectedDay(nextDate.day);
     setSelectedMonth(nextDate.month);
     setSelectedYear(nextDate.year);
   }, [value]);
-
   const maxDays = daysInMonth(selectedYear, selectedMonth);
   const days = Array.from({ length: maxDays }, (_, index) =>
     String(index + 1).padStart(2, "0")
   );
-
   function pushDate(nextYear: string, nextMonth: string, nextDay: string) {
     if (!nextYear || !nextMonth || !nextDay) {
       onChange("");
       return;
     }
-
     const nextMaxDays = daysInMonth(nextYear, nextMonth);
     const safeDay =
       Number(nextDay) > nextMaxDays ? String(nextMaxDays).padStart(2, "0") : nextDay;
-
     onChange(buildDate(nextYear, nextMonth, safeDay));
   }
-
   function chooseDay(nextDay: string) {
     setSelectedDay(nextDay);
     setOpenPicker(null);
     pushDate(selectedYear, selectedMonth, nextDay);
   }
-
   function chooseMonth(nextMonth: string) {
     const nextMaxDays = daysInMonth(selectedYear, nextMonth);
     const safeDay =
       selectedDay && Number(selectedDay) > nextMaxDays
         ? String(nextMaxDays).padStart(2, "0")
         : selectedDay;
-
     setSelectedMonth(nextMonth);
     setSelectedDay(safeDay);
     setOpenPicker(null);
     pushDate(selectedYear, nextMonth, safeDay);
   }
-
   function chooseYear(nextYear: string) {
     const nextMaxDays = daysInMonth(nextYear, selectedMonth);
     const safeDay =
       selectedDay && Number(selectedDay) > nextMaxDays
         ? String(nextMaxDays).padStart(2, "0")
         : selectedDay;
-
     setSelectedYear(nextYear);
     setSelectedDay(safeDay);
     setOpenPicker(null);
     pushDate(nextYear, selectedMonth, safeDay);
   }
-
   function PickerButton({
     type,
     label,
@@ -214,7 +192,6 @@ function BirthDateSelects({
     valueLabel: string;
   }) {
     const active = openPicker === type;
-
     return (
       <button
         type="button"
@@ -227,7 +204,6 @@ function BirthDateSelects({
       </button>
     );
   }
-
   function OptionButton({
     children,
     active,
@@ -251,11 +227,9 @@ function BirthDateSelects({
       </button>
     );
   }
-
   return (
     <div className="grid gap-2 md:col-span-2">
       <label className="text-sm font-black text-white">Geboortedatum</label>
-
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         <PickerButton type="day" label="Dag" valueLabel={selectedDay} />
         <PickerButton
@@ -265,7 +239,6 @@ function BirthDateSelects({
         />
         <PickerButton type="year" label="Jaar" valueLabel={selectedYear} />
       </div>
-
       {openPicker === "day" && (
         <div className="rounded-2xl border border-white/10 bg-black/35 p-3">
           <div className="grid max-h-[260px] grid-cols-5 gap-2 overflow-y-auto pr-1 sm:grid-cols-7">
@@ -277,7 +250,6 @@ function BirthDateSelects({
           </div>
         </div>
       )}
-
       {openPicker === "month" && (
         <div className="rounded-2xl border border-white/10 bg-black/35 p-3">
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -293,7 +265,6 @@ function BirthDateSelects({
           </div>
         </div>
       )}
-
       {openPicker === "year" && (
         <div className="rounded-2xl border border-white/10 bg-black/35 p-3">
           <div className="grid max-h-[260px] grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-5">
@@ -305,11 +276,9 @@ function BirthDateSelects({
           </div>
         </div>
       )}
-
     </div>
   );
 }
-
 function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="mb-5">
@@ -318,81 +287,66 @@ function SectionHeader({ title, subtitle }: { title: string; subtitle: string })
     </div>
   );
 }
-
 export default function ProfielPage() {
   const [loading, setLoading] = useState(true);
   const [savingBirthDate, setSavingBirthDate] = useState(false);
+  const [savingLeaderboardConsent, setSavingLeaderboardConsent] = useState(false);
   const [profile, setProfile] = useState<Profile>(emptyProfile);
   const [teacherBirthDate, setTeacherBirthDate] = useState("");
   const [message, setMessage] = useState("");
-
   const currentSchoolYear = getCurrentSchoolYearBelgium();
   const isStudent =
     profile.role === "student" ||
     String(profile.rol ?? "").trim().toLowerCase() === "leerling";
   const isTeacher = !isStudent;
   const schoolYearIsCurrent = profile.schooljaar === currentSchoolYear;
-
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       setMessage("");
-
       const { data: authData } = await supabase.auth.getUser();
-
       if (!authData?.user) {
         window.location.href = "/login";
         return;
       }
-
       const userId = authData.user.id;
-
       const { data, error } = await supabase
         .from("profielen")
         .select(
-          "id, volledige_naam, email, geslacht, geboortedatum, graad, leerjaar, finaliteit, klas_naam, lo_groep, schooljaar, schooljaar_bevestigd_op, role, rol, username, given_name, family_name, smartschool_sourced_id"
+          "id, volledige_naam, email, geslacht, geboortedatum, graad, leerjaar, finaliteit, klas_naam, lo_groep, schooljaar, schooljaar_bevestigd_op, role, rol, username, given_name, family_name, smartschool_sourced_id, klassement_toestemming, klassement_toestemming_op, klassement_toestemming_versie"
         )
         .eq("id", userId)
         .maybeSingle<Profile>();
-
       if (error) {
         setMessage(`Fout bij laden: ${error.message}`);
         setLoading(false);
         return;
       }
-
       const nextProfile =
         data ?? {
           ...emptyProfile,
           id: userId,
           email: authData.user.email ?? null,
         };
-
       setProfile(nextProfile);
       setTeacherBirthDate(nextProfile.geboortedatum ?? "");
       setLoading(false);
     };
-
     load();
   }, []);
-
   async function saveTeacherBirthDate() {
     setSavingBirthDate(true);
     setMessage("");
-
     const { data: authData } = await supabase.auth.getUser();
-
     if (!authData?.user) {
       window.location.href = "/login";
       return;
     }
-
     if (!teacherBirthDate) {
       setMessage("Kies eerst je geboortedatum.");
       setSavingBirthDate(false);
       return;
     }
-
     const { error } = await supabase
       .from("profielen")
       .update({
@@ -401,22 +355,45 @@ export default function ProfielPage() {
         updated_at: new Date().toISOString(),
       })
       .eq("id", authData.user.id);
-
     if (error) {
       setMessage(`Opslaan mislukt: ${error.message}`);
       setSavingBirthDate(false);
       return;
     }
-
     setProfile((p) => ({
       ...p,
       geboortedatum: teacherBirthDate,
     }));
-
     setMessage("Geboortedatum opgeslagen ✅");
     setSavingBirthDate(false);
   }
-
+  async function saveLeaderboardConsent(toestemming: boolean) {
+    if (!isStudent || !profile.id) return;
+    setSavingLeaderboardConsent(true);
+    setMessage("");
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from("profielen")
+      .update({
+        klassement_toestemming: toestemming,
+        klassement_toestemming_op: now,
+        klassement_toestemming_versie: "2026-10-06-v1",
+      })
+      .eq("id", profile.id);
+    if (error) {
+      setMessage(`Opslaan mislukt: ${error.message}`);
+      setSavingLeaderboardConsent(false);
+      return;
+    }
+    setProfile((p) => ({
+      ...p,
+      klassement_toestemming: toestemming,
+      klassement_toestemming_op: now,
+      klassement_toestemming_versie: "2026-10-06-v1",
+    }));
+    setMessage(toestemming ? "Je naam is zichtbaar in Sportfolio-klassementen. ✅" : "Je naam wordt voor andere leerlingen anoniem weergegeven. ✅");
+    setSavingLeaderboardConsent(false);
+  }
   return (
     <AppShell title="LO App" subtitle="Profiel" userName={profile.volledige_naam ?? null}>
       <BaseHero
@@ -437,14 +414,12 @@ export default function ProfielPage() {
             >
               ← Terug naar home
             </Link>
-
             <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
               {roleLabel(profile)}
             </span>
           </div>
         }
       />
-
       {loading ? (
         <main className="mt-5 grid min-h-[180px] place-items-center px-2">
           <div className="rounded-[24px] border border-white/10 bg-white/5 px-6 py-4 text-white/75">
@@ -458,30 +433,25 @@ export default function ProfielPage() {
               {message}
             </div>
           )}
-
           <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-5">
             <SectionHeader
               title="Vaste gegevens"
               subtitle=""
             />
-
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               <ReadOnlyField label="Volledige naam" value={display(profile.volledige_naam)} />
               <ReadOnlyField label="E-mail" value={display(profile.email)} />
               <ReadOnlyField label="Voornaam" value={display(profile.given_name)} />
               <ReadOnlyField label="Naam" value={display(profile.family_name)} />
               <ReadOnlyField label="Geslacht" value={geslachtLabel(profile.geslacht)} />
-
               {isTeacher ? (
                 <BirthDateSelects value={teacherBirthDate} onChange={setTeacherBirthDate} />
               ) : (
                 <ReadOnlyField label="Geboortedatum" value={formatDate(profile.geboortedatum)} />
               )}
-
               <ReadOnlyField label="Smartschool gebruikersnaam" value={display(profile.username)} />
               <ReadOnlyField label="Smartschool ID" value={display(profile.smartschool_sourced_id)} />
             </div>
-
             {isTeacher && (
               <div className="mt-5">
                 <button
@@ -495,14 +465,13 @@ export default function ProfielPage() {
               </div>
             )}
           </section>
-
           {isStudent ? (
-            <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-5">
+            <>
+              <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <SectionHeader
                 title="Klasgegevens"
                 subtitle="Je klas en LO-groep worden automatisch bepaald via Smartschool."
               />
-
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <ReadOnlyField label="Klas" value={display(profile.klas_naam)} />
                 <ReadOnlyField label="LO-groep" value={display(profile.lo_groep)} />
@@ -516,13 +485,38 @@ export default function ProfielPage() {
                 />
               </div>
             </section>
-          ) : (
             <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-5">
-              <SectionHeader
-                title="Klasgegevens"
-                subtitle="Voor leerkrachten is er geen leerlingklas gekoppeld."
+              <SectionHeader title="Sportfolio & klassementen" subtitle="Bepaal zelf of andere leerlingen jouw naam naast je sportprestaties mogen zien." />
+              <div className="rounded-[20px] border border-white/10 bg-black/20 p-4 sm:p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="max-w-2xl">
+                    <div className="font-black text-white">Mijn naam tonen in klassementen</div>
+                    <p className="mt-2 text-sm leading-6 text-white/65">Als dit aanstaat, kunnen andere leerlingen je naam naast je sportprestaties zien. Als je dit uitschakelt, blijven je prestatie en plaats in het klassement behouden, maar zien andere leerlingen je naam als “Anoniem”.</p>
+                    <p className="mt-2 text-xs leading-5 text-white/50">Je kunt deze keuze op elk moment opnieuw wijzigen. Dit heeft geen invloed op je punten of evaluatie.</p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={savingLeaderboardConsent}
+                    onClick={() => saveLeaderboardConsent(profile.klassement_toestemming !== true)}
+                    aria-pressed={profile.klassement_toestemming === true}
+                    className={[
+                      "relative inline-flex h-12 min-w-[170px] shrink-0 items-center justify-center rounded-2xl border px-4 text-sm font-black transition",
+                      profile.klassement_toestemming === true ? "border-emerald-400/30 bg-emerald-400/15 text-emerald-100" : "border-white/15 bg-white/[0.06] text-white/75",
+                      savingLeaderboardConsent ? "cursor-not-allowed opacity-60" : "hover:bg-white/10",
+                    ].join(" ")}
+                  >
+                    {savingLeaderboardConsent ? "Opslaan…" : profile.klassement_toestemming === true ? "✓ Naam zichtbaar" : "Naam anoniem"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          </>
+        ) : (
+          <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-5">
+            <SectionHeader
+              title="Klasgegevens"
+              subtitle="Voor leerkrachten is er geen leerlingklas gekoppeld."
               />
-
               <div className="rounded-[20px] border border-white/10 bg-white/5 p-4 text-sm text-white/75">
                 Als leerkracht hoef je hier geen klas te bevestigen.
               </div>

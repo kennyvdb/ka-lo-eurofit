@@ -8,6 +8,8 @@ import React, { useEffect, useMemo, useState } from "react";
 
 const supabase = createClient();
 
+const CONSENT_VERSION = "2026-10-06-v1";
+
 type Profiel = {
   id: string;
   volledige_naam: string | null;
@@ -17,6 +19,9 @@ type Profiel = {
   schooljaar: string | null;
   leerjaar: string | null;
   geslacht: string | null;
+  klassement_toestemming: boolean | null;
+  klassement_toestemming_op: string | null;
+  klassement_toestemming_versie: string | null;
 };
 
 type Discipline = {
@@ -39,28 +44,27 @@ type ScoreRow = {
   aangemaakt_op: string;
 };
 
-const brand = {
-  blue: "#255971",
-  teal: "#4B8E8D",
-  mint: "#89C2AA",
-};
-
 const ui = {
   text: "rgba(234,240,255,0.92)",
   muted: "rgba(234,240,255,0.72)",
-  panel: "rgba(255,255,255,0.06)",
-  border: "rgba(255,255,255,0.12)",
-  border2: "rgba(255,255,255,0.18)",
   errorBg: "rgba(255,85,112,0.15)",
   errorBorder: "rgba(255,85,112,0.28)",
 };
 
 function getRoleLabel(role?: string | null, rol?: string | null) {
   const raw = (rol ?? role ?? "").trim().toLowerCase();
+
   if (["teacher", "leerkracht", "lo_leerkracht", "admin"].includes(raw)) {
     return "Leerkracht";
   }
+
   return "Leerling";
+}
+
+function isLeerling(profiel?: Profiel | null) {
+  return String(profiel?.rol ?? "")
+    .trim()
+    .toLowerCase() === "leerling";
 }
 
 function formatScore(score?: ScoreRow | null) {
@@ -127,7 +131,10 @@ type SportfolioCardProps = {
   latestScore?: ScoreRow | null;
 };
 
-function SportfolioCard({ discipline, latestScore }: SportfolioCardProps) {
+function SportfolioCard({
+  discipline,
+  latestScore,
+}: SportfolioCardProps) {
   return (
     <Link
       href={`/sportfolio/${discipline.slug}`}
@@ -147,8 +154,11 @@ function SportfolioCard({ discipline, latestScore }: SportfolioCardProps) {
               <div className="text-[15px] font-black tracking-[0.01em] text-white">
                 {discipline.naam}
               </div>
+
               <div className="mt-1 text-xs text-white/60">
-                {discipline.eenheid ? `Eenheid: ${discipline.eenheid}` : "Sportfolio discipline"}
+                {discipline.eenheid
+                  ? `Eenheid: ${discipline.eenheid}`
+                  : "Sportfolio discipline"}
               </div>
             </div>
           </div>
@@ -163,6 +173,7 @@ function SportfolioCard({ discipline, latestScore }: SportfolioCardProps) {
             <div className="text-[11px] font-black uppercase tracking-[0.08em] text-white/55">
               Laatste score
             </div>
+
             <div className="mt-1 text-base font-black text-white">
               {formatScore(latestScore)}
             </div>
@@ -173,6 +184,7 @@ function SportfolioCard({ discipline, latestScore }: SportfolioCardProps) {
               <div className="text-[11px] font-black uppercase tracking-[0.08em] text-white/55">
                 Status
               </div>
+
               <div className="mt-1">
                 <span
                   className={[
@@ -185,7 +197,9 @@ function SportfolioCard({ discipline, latestScore }: SportfolioCardProps) {
               </div>
             </div>
 
-            <div className="text-sm font-black text-white/90">Openen →</div>
+            <div className="text-sm font-black text-white/90">
+              Openen →
+            </div>
           </div>
         </div>
       </div>
@@ -201,10 +215,17 @@ export default function SportfolioPage() {
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [scores, setScores] = useState<ScoreRow[]>([]);
 
+  const [savingConsent, setSavingConsent] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
+
   const roleLabel = useMemo(
     () => getRoleLabel(profiel?.role, profiel?.rol),
     [profiel?.role, profiel?.rol]
   );
+
+  const showConsent =
+    isLeerling(profiel) &&
+    profiel?.klassement_toestemming === null;
 
   useEffect(() => {
     const load = async () => {
@@ -212,45 +233,80 @@ export default function SportfolioPage() {
         setLoading(true);
         setError(null);
 
-        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        const {
+          data: sessionData,
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
         if (sessionError) throw sessionError;
 
         const userId = sessionData.session?.user?.id;
+
         if (!userId) {
           window.location.replace("/login");
           return;
         }
 
-        const { data: profielData, error: profielError } = await supabase
+        const {
+          data: profielData,
+          error: profielError,
+        } = await supabase
           .from("profielen")
-          .select("id, volledige_naam, role, rol, klas_naam, schooljaar, leerjaar, geslacht")
+          .select(
+            "id, volledige_naam, role, rol, klas_naam, schooljaar, leerjaar, geslacht, klassement_toestemming, klassement_toestemming_op, klassement_toestemming_versie"
+          )
           .eq("id", userId)
           .maybeSingle();
 
         if (profielError) throw profielError;
-        if (!profielData) throw new Error("Profiel niet gevonden.");
+        if (!profielData) {
+          throw new Error("Profiel niet gevonden.");
+        }
 
         setProfiel(profielData as Profiel);
 
-        const { data: disciplinesData, error: disciplinesError } = await supabase
+        const {
+          data: disciplinesData,
+          error: disciplinesError,
+        } = await supabase
           .from("sportfolio_disciplines")
-          .select("id, slug, naam, categorie, eenheid, hoger_is_beter, actief")
+          .select(
+            "id, slug, naam, categorie, eenheid, hoger_is_beter, actief"
+          )
           .order("naam", { ascending: true });
 
         if (disciplinesError) throw disciplinesError;
-        setDisciplines((disciplinesData ?? []) as Discipline[]);
 
-        const { data: scoresData, error: scoresError } = await supabase
+        setDisciplines(
+          (disciplinesData ?? []) as Discipline[]
+        );
+
+        const {
+          data: scoresData,
+          error: scoresError,
+        } = await supabase
           .from("sportfolio_scores")
-          .select("id, discipline_id, score_nummer, score_tekst, eenheid, status, aangemaakt_op")
+          .select(
+            "id, discipline_id, score_nummer, score_tekst, eenheid, status, aangemaakt_op"
+          )
           .eq("leerling_id", userId)
-          .eq("schooljaar", profielData.schooljaar ?? "")
-          .order("aangemaakt_op", { ascending: false });
+          .eq(
+            "schooljaar",
+            profielData.schooljaar ?? ""
+          )
+          .order("aangemaakt_op", {
+            ascending: false,
+          });
 
         if (scoresError) throw scoresError;
+
         setScores((scoresData ?? []) as ScoreRow[]);
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Onbekende fout.";
+        const message =
+          err instanceof Error
+            ? err.message
+            : "Onbekende fout.";
+
         setError(message);
       } finally {
         setLoading(false);
@@ -259,6 +315,59 @@ export default function SportfolioPage() {
 
     load();
   }, []);
+
+  const saveConsent = async (toestemming: boolean) => {
+    if (!profiel || !isLeerling(profiel)) return;
+
+    try {
+      setSavingConsent(true);
+      setConsentError(null);
+
+      const now = new Date().toISOString();
+
+      const {
+        data,
+        error: updateError,
+      } = await supabase
+        .from("profielen")
+        .update({
+          klassement_toestemming: toestemming,
+          klassement_toestemming_op: now,
+          klassement_toestemming_versie:
+            CONSENT_VERSION,
+        })
+        .eq("id", profiel.id)
+        .select(
+          "klassement_toestemming, klassement_toestemming_op, klassement_toestemming_versie"
+        )
+        .single();
+
+      if (updateError) throw updateError;
+
+      setProfiel((current) =>
+        current
+          ? {
+              ...current,
+              klassement_toestemming:
+                data.klassement_toestemming,
+              klassement_toestemming_op:
+                data.klassement_toestemming_op,
+              klassement_toestemming_versie:
+                data.klassement_toestemming_versie,
+            }
+          : current
+      );
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Je keuze kon niet worden opgeslagen.";
+
+      setConsentError(message);
+    } finally {
+      setSavingConsent(false);
+    }
+  };
 
   const latestScoreByDiscipline = useMemo(() => {
     const map = new Map<string, ScoreRow>();
@@ -275,97 +384,204 @@ export default function SportfolioPage() {
   if (loading) {
     return (
       <main className="min-h-dvh grid place-items-center px-6">
-        <div style={{ color: ui.text }}>Sportfolio laden…</div>
+        <div style={{ color: ui.text }}>
+          Sportfolio laden…
+        </div>
       </main>
     );
   }
 
   return (
-    <AppShell
-      title="LO App"
-      subtitle="Sportfolio"
-      userName={profiel?.volledige_naam}
-    >
-      <BaseHero
-        label="SPORTFOLIO"
-        title={<>Jouw prestaties per discipline</>}
-        description={
-          <>
-            Bekijk je scores, open een discipline voor detail, en volg je voortgang
-            binnen het huidige schooljaar.
-          </>
-        }
-        imageSrc="/sportfolio/sportfolio.png"
-        imageAlt="Sportfolio overzicht"
-        quoteTitle="Focus"
-        quote="Elke discipline toont je laatste score en status in één helder overzicht."
-        quoteAuthor="Sportfolio"
-        imageClassName="max-h-[320px] md:max-h-[360px]"
-        actions={
-          <div className="flex flex-wrap items-center gap-3">
-            <Link
-              href="/"
-              className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-white/15"
-            >
-              ← Terug naar home
-            </Link>
+    <>
+      <AppShell
+        title="LO App"
+        subtitle="Sportfolio"
+        userName={profiel?.volledige_naam}
+      >
+        <BaseHero
+          label="SPORTFOLIO"
+          title={<>Jouw prestaties per discipline</>}
+          description={
+            <>
+              Bekijk je scores, open een discipline voor
+              detail, en volg je voortgang binnen het
+              huidige schooljaar.
+            </>
+          }
+          imageSrc="/sportfolio/sportfolio.png"
+          imageAlt="Sportfolio overzicht"
+          quoteTitle="Focus"
+          quote="Elke discipline toont je laatste score en status in één helder overzicht."
+          quoteAuthor="Sportfolio"
+          imageClassName="max-h-[320px] md:max-h-[360px]"
+          actions={
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href="/"
+                className="inline-flex items-center justify-center rounded-full border border-white/10 bg-white/10 px-4 py-2 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition hover:bg-white/15"
+              >
+                ← Terug naar home
+              </Link>
 
-            <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
-              {roleLabel}
-            </span>
-
-            {profiel?.klas_naam ? (
               <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
-                {profiel.klas_naam}
+                {roleLabel}
               </span>
-            ) : null}
 
-            {profiel?.schooljaar ? (
-              <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
-                {profiel.schooljaar}
-              </span>
-            ) : null}
+              {profiel?.klas_naam ? (
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
+                  {profiel.klas_naam}
+                </span>
+              ) : null}
+
+              {profiel?.schooljaar ? (
+                <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/75">
+                  {profiel.schooljaar}
+                </span>
+              ) : null}
+            </div>
+          }
+        />
+
+        {error ? (
+          <div
+            className="mt-4 rounded-[20px] border p-4 text-sm"
+            style={{
+              background: ui.errorBg,
+              borderColor: ui.errorBorder,
+              color: ui.text,
+            }}
+          >
+            <b>Oeps:</b> {error}
           </div>
-        }
-      />
+        ) : null}
 
-      {error ? (
-        <div
-          className="mt-4 rounded-[20px] border p-4 text-sm"
-          style={{
-            background: ui.errorBg,
-            borderColor: ui.errorBorder,
-            color: ui.text,
-          }}
-        >
-          <b>Oeps:</b> {error}
-        </div>
-      ) : null}
+        <section className="mt-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-black text-white">
+                Disciplines
+              </div>
 
-      <section className="mt-5">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-black text-white">Disciplines</div>
-            <div className="text-xs text-white/60">
-              Klik op een discipline om je detailweergave te openen.
+              <div className="text-xs text-white/60">
+                Klik op een discipline om je
+                detailweergave te openen.
+              </div>
+            </div>
+
+            <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/70">
+              {disciplines.length} items
             </div>
           </div>
 
-          <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-white/70">
-            {disciplines.length} items
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {disciplines.map((discipline) => (
+              <SportfolioCard
+                key={discipline.id}
+                discipline={discipline}
+                latestScore={
+                  latestScoreByDiscipline.get(
+                    discipline.id
+                  ) ?? null
+                }
+              />
+            ))}
+          </div>
+        </section>
+      </AppShell>
+
+      {showConsent ? (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="klassement-title"
+        >
+          <div className="w-full max-w-lg overflow-hidden rounded-[28px] border border-white/15 bg-[#101820] shadow-[0_30px_100px_rgba(0,0,0,0.75)]">
+            <div className="border-b border-white/10 bg-white/[0.04] px-5 py-5 sm:px-6">
+              <div className="mb-3 inline-flex rounded-full border border-[#89C2AA]/30 bg-[#89C2AA]/10 px-3 py-1 text-[11px] font-black uppercase tracking-[0.1em] text-[#b9e2d0]">
+                Eenmalige keuze
+              </div>
+
+              <h2
+                id="klassement-title"
+                className="text-xl font-black text-white sm:text-2xl"
+              >
+                Jouw naam in Sportfolio-klassementen
+              </h2>
+            </div>
+
+            <div className="grid gap-5 px-5 py-5 sm:px-6 sm:py-6">
+              <div className="grid gap-3 text-sm leading-6 text-white/75">
+                <p>
+                  In Sportfolio worden prestaties in
+                  klassementen weergegeven. Je ouders en
+                  leerlingen worden hierover vooraf
+                  geïnformeerd door de school.
+                </p>
+
+                <p>
+                  Je kiest zelf of andere leerlingen jouw
+                  <strong className="font-bold text-white">
+                    {" "}
+                    naam
+                  </strong>{" "}
+                  naast je sportprestatie mogen zien.
+                </p>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div className="font-bold text-white">
+                    Als je kiest voor “Nee”
+                  </div>
+
+                  <div className="mt-1 text-white/65">
+                    Je prestaties en plaats in het
+                    klassement blijven behouden, maar
+                    andere leerlingen zien bij jouw
+                    resultaat alleen “Anoniem”. Jijzelf en
+                    bevoegde LO-leerkrachten kunnen jouw
+                    naam wel zien.
+                  </div>
+                </div>
+
+                <p className="text-xs leading-5 text-white/55">
+                  Je keuze heeft geen invloed op je punten
+                  of evaluatie. Je kunt deze toestemming
+                  later altijd opnieuw wijzigen via je
+                  profiel.
+                </p>
+              </div>
+
+              {consentError ? (
+                <div className="rounded-2xl border border-red-400/25 bg-red-400/10 p-3 text-sm text-red-100">
+                  {consentError}
+                </div>
+              ) : null}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={savingConsent}
+                  onClick={() => saveConsent(false)}
+                  className="rounded-2xl border border-white/15 bg-white/[0.06] px-4 py-3.5 text-sm font-black text-white transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Nee, toon mijn naam niet
+                </button>
+
+                <button
+                  type="button"
+                  disabled={savingConsent}
+                  onClick={() => saveConsent(true)}
+                  className="rounded-2xl border border-[#89C2AA]/30 bg-[#4B8E8D]/25 px-4 py-3.5 text-sm font-black text-white transition hover:bg-[#4B8E8D]/35 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {savingConsent
+                    ? "Opslaan…"
+                    : "Ja, toon mijn naam"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {disciplines.map((discipline) => (
-            <SportfolioCard
-              key={discipline.id}
-              discipline={discipline}
-              latestScore={latestScoreByDiscipline.get(discipline.id) ?? null}
-            />
-          ))}
-        </div>
-      </section>
-    </AppShell>
+      ) : null}
+    </>
   );
 }
