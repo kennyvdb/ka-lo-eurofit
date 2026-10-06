@@ -1081,19 +1081,12 @@ function EigenMateriaal() {
   }
   return <section className="mt-4" style={styles.panel}>
     <SectionTitle title="🎿 Ski- & snowboardmateriaal" />
-    <div className="space-y-3 text-sm leading-6 text-white/80">
-      <p>Beste skiërs en snowboarders,</p>
-      <p>Wie zijn/haar <strong className="text-white">eigen ski- of snowboardmateriaal</strong> wenst mee te nemen, mag dit gerust <strong className="text-white">via de app doorgeven</strong>.</p>
-      <p className="rounded-xl border border-[#89C2AA]/30 bg-[#4B8E8D]/15 p-3">👉 <strong className="text-white">Let op: enkel leerlingen die een volledige ski- of snowboardset meenemen, krijgen €25 korting.</strong></p>
-      <p>Een volledige set bestaat uit:</p>
-      <ul className="list-disc space-y-1 pl-5">
-        <li>🎿 Ski’s of 🏂 snowboard</li>
-        <li>🎿 Stokken (voor skiërs)</li>
-        <li>👢 Skischoenen of snowboardschoenen</li>
-        <li>⛑️ Helm</li>
-      </ul>
-      <p>Geef dus via de app door of je een volledige eigen set meeneemt. Neem je enkel schoenen, latten, een snowboard of een helm mee? Kies dan <strong className="text-white">nee</strong> en vermeld die onderdelen bij opmerkingen. Hiervoor kunnen we geen korting toekennen.</p>
-    </div>
+    <p className="text-sm leading-6 text-white/70">
+      Een volledige set bestaat uit ski’s of een snowboard, schoenen en een helm, plus stokken voor skiërs. Alleen een volledige set geeft €25 korting.
+    </p>
+    <p className="text-sm leading-6 text-white/70">
+      Neem je enkel losse onderdelen mee? Kies nee en vermeld ze bij opmerkingen. Hiervoor krijg je geen korting.
+    </p>
     {readOnly && <p className="rounded-xl border border-white/20 bg-white/5 p-3 text-sm text-white/80">Je bekijkt als LO-leerkracht het leerlingformulier. Invullen en opslaan zijn uitgeschakeld. De antwoorden vind je onder Leerkrachten LO → Extramurale sportactiviteiten → Sneeuwstage.</p>}
     {loading ? <p>Formulier laden…</p> : allowed && <>
       <label className="mt-5 block text-sm font-bold" htmlFor="volledige-set">
