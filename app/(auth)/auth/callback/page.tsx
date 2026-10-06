@@ -1,4 +1,5 @@
 // app/(auth)/auth/callback/page.tsx
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -222,19 +223,7 @@ export default function AuthCallbackPage() {
          * Volgorde:
          * 1. username uit bestaand profiel
          * 2. lokale deel van Google-schoolmail
-         *
-         * Voor Féy:
-         *
-         * Google:
-         * delombaerdefey@leerling-atheneumavelgem.be
-         *
-         * OneRoster:
-         * delombaerdefay@leerling-atheneumavelgem.be
-         *
-         * Username:
-         * delombaerdefey
          */
-
         const loginUsername =
           normalizeUsername(existingProfile?.username) ||
           usernameFromEmail(email);
@@ -424,10 +413,31 @@ export default function AuthCallbackPage() {
         }
 
         /* =========================================
-           7. GEEN SMARTSCHOOL ACCOUNT?
+           7. TOEGANG ZONDER SMARTSCHOOL
+
+           Een bestaand LO-leerkracht- of adminprofiel
+           heeft rechtstreeks toegang tot de app.
+
+           Dit is o.a. nodig voor directie/beheerders
+           die bewust toegang kregen maar niet in
+           smartschool_users voorkomen.
         ========================================= */
 
-        if (!smartschoolUser && !selectedClass) {
+        const bestaandeRol = String(
+          existingProfile?.rol ?? ""
+        )
+          .trim()
+          .toLowerCase();
+
+        const heeftAppToegangZonderSmartschool =
+          bestaandeRol === "lo_leerkracht" ||
+          bestaandeRol === "admin";
+
+        if (
+          !smartschoolUser &&
+          !selectedClass &&
+          !heeftAppToegangZonderSmartschool
+        ) {
           await supabase.auth.signOut({
             scope: "local",
           });
@@ -450,9 +460,15 @@ export default function AuthCallbackPage() {
           .trim()
           .toLowerCase();
 
+        /*
+         * Als er geen Smartschool-record is maar wel
+         * expliciete app-toegang als LO/admin, behandelen
+         * we de gebruiker technisch als medewerker.
+         */
         const isStudent =
-          rawRole === "student" ||
-          rawRole === "leerling";
+          !heeftAppToegangZonderSmartschool &&
+          (rawRole === "student" ||
+            rawRole === "leerling");
 
         const defaultRole = isStudent
           ? "student"
