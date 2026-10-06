@@ -4,7 +4,6 @@ export default function PrivacyPage() {
   return (
     <main className="min-h-dvh bg-neutral-950 px-5 py-8 text-white sm:px-6">
       <div className="mx-auto w-full max-w-3xl">
-        {/* Terug */}
         <Link
           href="/login"
           className="inline-flex items-center gap-2 text-sm font-medium text-white/60 transition hover:text-white"
@@ -13,7 +12,6 @@ export default function PrivacyPage() {
           Terug naar inloggen
         </Link>
 
-        {/* Header */}
         <header className="mt-8">
           <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white/60">
             LOOP
@@ -24,8 +22,9 @@ export default function PrivacyPage() {
           </h1>
 
           <p className="mt-3 max-w-2xl text-sm leading-6 text-white/60 sm:text-base">
-            LOOP gaat zorgvuldig om met persoonsgegevens van leerlingen en
-            medewerkers van GO! Atheneum Avelgem.
+            Informatie over de verwerking van persoonsgegevens binnen LOOP,
+            het digitale platform voor lichamelijke opvoeding van GO! Atheneum
+            Avelgem.
           </p>
         </header>
 
@@ -33,55 +32,146 @@ export default function PrivacyPage() {
           <Section title="Wat is LOOP?">
             <p>
               LOOP staat voor Lichamelijke Opvoeding Online Platform en is een
-              digitaal platform dat wordt gebruikt binnen de lessen
-              lichamelijke opvoeding van GO! Atheneum Avelgem.
+              digitaal platform dat wordt gebruikt ter ondersteuning van de
+              lessen en activiteiten lichamelijke opvoeding binnen GO! Atheneum
+              Avelgem.
+            </p>
+
+            <p>
+              Het platform ondersteunt onder andere de opvolging van
+              leeractiviteiten, testresultaten, opdrachten, evaluaties,
+              Sportfolio en activiteiten binnen lichamelijke opvoeding.
             </p>
           </Section>
 
-          <Section title="Welke gegevens verwerken we?">
+          <Section title="Wie is verantwoordelijk voor de verwerking?">
             <p>
-              Afhankelijk van het gebruik van LOOP kunnen onder andere de
-              volgende gegevens worden verwerkt:
+              LOOP wordt gebruikt binnen GO! Atheneum Avelgem. De verwerking
+              van persoonsgegevens gebeurt binnen de onderwijsopdracht en het
+              privacybeleid van GO! Onderwijs van de Vlaamse Gemeenschap.
+            </p>
+
+            <p>
+              Voor vragen over de verwerking van persoonsgegevens binnen de
+              school kan contact worden opgenomen via:
+            </p>
+
+            <ContactBlock>
+              <strong>GO! Atheneum Avelgem</strong>
+              <br />
+              Oudenaardsesteenweg 20
+              <br />
+              8580 Avelgem
+              <br />
+              E-mail:{" "}
+              <a
+                href="mailto:privacy@go-atheneumavelgem.be"
+                className="text-white underline decoration-white/30 underline-offset-2 hover:decoration-white"
+              >
+                privacy@go-atheneumavelgem.be
+              </a>
+            </ContactBlock>
+          </Section>
+
+          <Section title="Welke persoonsgegevens verwerkt LOOP?">
+            <p>
+              Afhankelijk van de functies die worden gebruikt, kan LOOP onder
+              andere de volgende persoonsgegevens verwerken:
             </p>
 
             <ul className="list-disc space-y-2 pl-5">
               <li>naam en school-e-mailadres;</li>
               <li>klas, leerjaar, graad, finaliteit en LO-groep;</li>
-              <li>geboortedatum of leeftijd wanneer dit functioneel nodig is;</li>
-              <li>geslacht wanneer dit nodig is voor toepasselijke sportnormen;</li>
               <li>gebruikersrol en technische accountidentificatie;</li>
-              <li>resultaten van LO- en fitheidstesten;</li>
-              <li>opdrachten, reflecties, plannen en evaluaties;</li>
-              <li>Sportfolioresultaten;</li>
-              <li>challenge- en sportscores;</li>
-              <li>reservaties binnen LOOP.</li>
+
+              <li>
+                geboortedatum of leeftijd wanneer dit nodig is voor een
+                specifieke functie of normering;
+              </li>
+
+              <li>
+                geslacht wanneer dit nodig is voor de toepassing van sport- of
+                fitheidsnormen;
+              </li>
+
+              <li>resultaten van LO-, conditie- en fitheidstesten;</li>
+              <li>MAS-, Eurofit- en andere sportresultaten;</li>
+              <li>Sportfolioresultaten en evaluaties;</li>
+              <li>opdrachten, reflecties en antwoorden;</li>
+              <li>deelname aan challenges en sportactiviteiten;</li>
+              <li>reservaties en inschrijvingen voor activiteiten;</li>
+
+              <li>
+                technische gegevens die noodzakelijk zijn voor de veilige en
+                correcte werking van het platform.
+              </li>
             </ul>
           </Section>
 
-          <Section title="Waarvoor gebruiken we deze gegevens?">
+          <Section title="Waar komen de gegevens vandaan?">
             <p>
-              De gegevens worden gebruikt om LOOP te laten functioneren en om
-              onderwijsactiviteiten binnen lichamelijke opvoeding te
-              ondersteunen.
+              Een deel van de gegevens wordt rechtstreeks door leerlingen of
+              medewerkers in LOOP ingevoerd.
             </p>
 
             <p>
-              Dit omvat onder andere het tonen en opvolgen van resultaten,
-              opdrachten en evaluaties, het beheren van deelname aan
-              activiteiten en het beschikbaar maken van relevante informatie
-              aan de juiste leerling of bevoegde medewerker.
+              Andere gegevens kunnen afkomstig zijn uit de administratieve
+              systemen van de school, waaronder gegevens die vanuit Smartschool
+              worden gesynchroniseerd, zoals naam, schoolaccount, klas en
+              groepsinformatie.
+            </p>
+
+            <p>
+              Resultaten en andere gegevens die binnen LOOP worden aangemaakt,
+              kunnen vervolgens binnen het platform worden gebruikt voor
+              opvolging en evaluatie binnen lichamelijke opvoeding.
             </p>
           </Section>
 
-          <Section title="Wie heeft toegang?">
+          <Section title="Waarom verwerken we deze gegevens?">
             <p>
-              Toegang tot LOOP gebeurt via een toegelaten Google-schoolaccount.
-              Binnen het platform worden toegangsrechten gebruikt om te bepalen
-              welke informatie een leerling, leerkracht, LO-leerkracht of
-              beheerder kan raadplegen.
+              De persoonsgegevens worden verwerkt om de onderwijsactiviteiten
+              binnen lichamelijke opvoeding te organiseren en te ondersteunen.
             </p>
 
             <p>
+              Dit omvat onder andere het identificeren van leerlingen, beheren
+              van klassen en LO-groepen, registreren en opvolgen van
+              testresultaten, aanbieden en evalueren van opdrachten, bijhouden
+              van het Sportfolio en organiseren van sportactiviteiten en
+              reservaties.
+            </p>
+          </Section>
+
+          <Section title="Op welke rechtsgrond gebeurt dit?">
+            <p>
+              GO! Atheneum Avelgem verwerkt persoonsgegevens in het kader van
+              zijn onderwijsopdracht. Voor verwerkingen die noodzakelijk zijn
+              voor deze onderwijsopdracht kan de verwerking onder andere
+              gebaseerd zijn op de vervulling van taken van algemeen belang en
+              op wettelijke of decretale verplichtingen die op de school van
+              toepassing zijn.
+            </p>
+
+            <p>
+              Wanneer voor een specifieke verwerking een andere rechtsgrond
+              vereist is, wordt de toepasselijke rechtsgrond gebruikt. Wanneer
+              een verwerking op toestemming gebaseerd is, kan die toestemming
+              worden ingetrokken overeenkomstig de toepasselijke regels.
+            </p>
+          </Section>
+
+          <Section title="Wie heeft toegang tot de gegevens?">
+            <p>
+              Toegang tot LOOP gebeurt via een toegelaten schoolaccount. Binnen
+              het platform worden rollen en toegangsrechten gebruikt om te
+              bepalen welke informatie een leerling, leerkracht, LO-leerkracht
+              of beheerder kan raadplegen of wijzigen.
+            </p>
+
+            <p>
+              Gebruikers krijgen alleen toegang tot persoonsgegevens voor zover
+              dit noodzakelijk is voor hun rol en de werking van het platform.
               Leerlingen krijgen geen algemene beheertoegang tot de
               persoonsgegevens van andere gebruikers.
             </p>
@@ -90,14 +180,95 @@ export default function PrivacyPage() {
           <Section title="Externe dienstverleners">
             <p>
               Voor de technische werking van LOOP wordt gebruikgemaakt van
-              externe dienstverleners. Supabase wordt onder andere gebruikt
-              voor authenticatie en gegevensopslag. Vercel wordt gebruikt voor
-              de hosting en beschikbaarheid van de webapplicatie.
+              externe dienstverleners.
+            </p>
+
+            <ul className="list-disc space-y-2 pl-5">
+              <li>
+                <strong>Supabase</strong> wordt gebruikt voor onder andere
+                authenticatie, databankfunctionaliteit en gegevensopslag.
+              </li>
+
+              <li>
+                <strong>Vercel</strong> wordt gebruikt voor de hosting en
+                beschikbaarheid van de webapplicatie.
+              </li>
+
+              <li>
+                <strong>Google</strong> wordt gebruikt voor authenticatie met
+                het schoolaccount.
+              </li>
+
+              <li>
+                <strong>OpenAI</strong> wordt gebruikt als ondersteunende
+                AI-dienstverlener voor de beoordeling van bepaalde
+                LO-opdrachten. Hiervoor worden alleen de inhoudelijke gegevens
+                uit het huiswerkformulier doorgestuurd die noodzakelijk zijn
+                voor de AI-beoordeling.
+              </li>
+            </ul>
+
+            <p>
+              Wanneer externe partijen in opdracht van de school
+              persoonsgegevens verwerken, moeten daarvoor de toepasselijke
+              afspraken inzake gegevensbescherming worden nageleefd.
+            </p>
+          </Section>
+
+          <Section title="Gebruik van artificiële intelligentie">
+            <p>
+              Bij bepaalde huiswerkopdrachten binnen LOOP wordt artificiële
+              intelligentie gebruikt als aanvullende ondersteuning bij de
+              beoordeling. Hiervoor wordt de API van OpenAI gebruikt.
             </p>
 
             <p>
-              Google wordt gebruikt voor de authenticatie via het
-              schoolaccount.
+              Voor deze AI-beoordeling worden alleen de inhoudelijke gegevens
+              uit het huiswerkformulier doorgestuurd die nodig zijn om de
+              opdracht te beoordelen. Afhankelijk van de opdracht kan dit
+              bijvoorbeeld gaan om trainingsgegevens, MAS, hartslag, praattest,
+              RPE, energie-inname, energieverbruik, macronutriënten en
+              persoonlijke reflecties.
+            </p>
+
+            <p>
+              Naam, e-mailadres, klas, gebruikers-ID, geslacht en
+              lichaamsgewicht worden niet afzonderlijk aan OpenAI meegestuurd
+              voor deze beoordeling.
+            </p>
+
+            <p>
+              De AI-beoordeling is een aanvullende ondersteuning voor de
+              LO-leerkracht. Ze vervangt niet de verantwoordelijkheid van de
+              leerkracht voor de uiteindelijke beoordeling en opvolging van de
+              leerling.
+            </p>
+
+            <p>
+              Gegevens die via de OpenAI API worden verwerkt, worden standaard
+              niet gebruikt om de modellen van OpenAI te trainen.
+            </p>
+          </Section>
+
+          <Section title="Lokale opslag op het toestel">
+            <p>
+              LOOP gebruikt voor bepaalde functies ook lokale browseropslag.
+              Dit kan bijvoorbeeld nodig zijn voor tijdelijke conceptgegevens,
+              persoonlijke checklists, voorlopige testresultaten en offline
+              functionaliteit.
+            </p>
+
+            <p>
+              Hiervoor kunnen technieken zoals cookies, localStorage, IndexedDB
+              en browsercache worden gebruikt. Meer informatie hierover staat
+              in het{" "}
+              <Link
+                href="/cookies"
+                className="text-white underline decoration-white/30 underline-offset-2 hover:decoration-white"
+              >
+                cookiebeleid
+              </Link>
+              .
             </p>
           </Section>
 
@@ -105,51 +276,134 @@ export default function PrivacyPage() {
             <p>
               Er worden technische en organisatorische maatregelen toegepast
               om persoonsgegevens te beschermen tegen ongeoorloofde toegang,
-              verlies of misbruik.
+              verlies, wijziging of misbruik.
             </p>
 
             <p>
-              LOOP maakt onder andere gebruik van authenticatie,
-              rolgebaseerde toegang en beveiligingsregels op databaseniveau.
+              LOOP maakt onder andere gebruik van authenticatie, rolgebaseerde
+              toegangscontrole en beveiligingsregels op databaseniveau.
             </p>
           </Section>
 
-          <Section title="Bewaartermijn">
+          <Section title="Hoe lang worden gegevens bewaard?">
             <p>
               Persoonsgegevens worden niet langer bewaard dan noodzakelijk voor
-              het doel waarvoor ze worden verwerkt.
+              het doel waarvoor ze worden verwerkt en overeenkomstig de
+              toepasselijke onderwijs-, privacy- en archiveringsregels.
             </p>
 
-            <p className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.07] p-4 text-amber-100/80">
-              De definitieve bewaartermijnen worden vóór de officiële
-              ingebruikname afgestemd met de directie en/of de
-              gegevensbeschermingsverantwoordelijke van de school.
+            <p>
+              De concrete bewaartermijn kan verschillen naargelang het soort
+              gegeven en het doel van de verwerking. Wanneer gegevens niet
+              langer noodzakelijk zijn en er geen wettelijke of
+              organisatorische reden bestaat om ze te bewaren, worden ze
+              verwijderd of geanonimiseerd waar dit passend is.
             </p>
           </Section>
 
-          <Section title="Rechten en vragen">
+          <Section title="Welke rechten heb je?">
             <p>
-              Leerlingen, ouders en medewerkers kunnen vragen stellen over de
-              verwerking van persoonsgegevens en over de uitoefening van hun
-              privacyrechten via de daarvoor voorziene kanalen van de school.
+              Betrokkenen kunnen, binnen de voorwaarden van de AVG, onder andere
+              vragen om:
+            </p>
+
+            <ul className="list-disc space-y-2 pl-5">
+              <li>inzage in hun persoonsgegevens;</li>
+              <li>verbetering van onjuiste gegevens;</li>
+
+              <li>
+                wissing van gegevens wanneer daarvoor aan de voorwaarden is
+                voldaan;
+              </li>
+
+              <li>beperking van een verwerking;</li>
+
+              <li>
+                bezwaar tegen een verwerking wanneer de AVG dit recht voorziet;
+              </li>
+
+              <li>
+                overdraagbaarheid van gegevens wanneer dit recht van toepassing
+                is;
+              </li>
+
+              <li>
+                intrekking van toestemming wanneer een verwerking op
+                toestemming gebaseerd is.
+              </li>
+            </ul>
+
+            <p>
+              Niet elk recht is in iedere situatie onbeperkt van toepassing. De
+              school kan bijvoorbeeld verplicht zijn bepaalde leerlinggegevens
+              gedurende een bepaalde periode te bewaren.
+            </p>
+          </Section>
+
+          <Section title="Privacyvragen en Data Protection Officer">
+            <p>
+              Voor vragen of verzoeken over persoonsgegevens kan contact worden
+              opgenomen met de school via:
+            </p>
+
+            <ContactBlock>
+              <a
+                href="mailto:privacy@go-atheneumavelgem.be"
+                className="text-white underline decoration-white/30 underline-offset-2 hover:decoration-white"
+              >
+                privacy@go-atheneumavelgem.be
+              </a>
+            </ContactBlock>
+
+            <p>
+              De Data Protection Officer van GO! Scholengroep Vlaamse Ardennen
+              kan worden gecontacteerd via:
+            </p>
+
+            <ContactBlock>
+              <strong>Data Protection Officer</strong>
+              <br />
+              GO! Scholengroep Vlaamse Ardennen
+              <br />
+              E-mail:{" "}
+              <a
+                href="mailto:privacy@sgr21.be"
+                className="text-white underline decoration-white/30 underline-offset-2 hover:decoration-white"
+              >
+                privacy@sgr21.be
+              </a>
+            </ContactBlock>
+          </Section>
+
+          <Section title="Klacht indienen">
+            <p>
+              Wie van mening is dat persoonsgegevens niet correct worden
+              verwerkt, kan eerst contact opnemen met de school of de Data
+              Protection Officer.
             </p>
 
             <p>
-              De definitieve contactgegevens van de verantwoordelijke en/of
-              functionaris voor gegevensbescherming worden vóór de officiële
-              ingebruikname aan deze privacyverklaring toegevoegd.
+              Daarnaast kan een klacht worden ingediend bij de bevoegde
+              toezichthoudende autoriteit voor gegevensbescherming.
+            </p>
+          </Section>
+
+          <Section title="Wijzigingen">
+            <p>
+              LOOP wordt verder ontwikkeld. Wanneer functies of verwerkingen
+              wijzigen, kan deze privacyverklaring worden aangepast. De meest
+              recente versie wordt via LOOP beschikbaar gesteld.
             </p>
           </Section>
 
           <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 text-sm text-white/55">
             <p>
               Laatst bijgewerkt:{" "}
-              <strong className="text-white/75">31 augustus 2026</strong>
+              <strong className="text-white/75">6 oktober 2026</strong>
             </p>
           </div>
         </div>
 
-        {/* Footer */}
         <footer className="mt-10 border-t border-white/10 pt-6 text-center text-xs text-white/40">
           <div className="flex flex-wrap items-center justify-center gap-3">
             <span>Privacy</span>
@@ -190,5 +444,17 @@ function Section({
         {children}
       </div>
     </section>
+  );
+}
+
+function ContactBlock({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm leading-6 text-white/70">
+      {children}
+    </div>
   );
 }

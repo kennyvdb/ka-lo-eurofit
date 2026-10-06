@@ -1197,7 +1197,39 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
           },
           body: JSON.stringify({
             grade: mode,
-            form: mode === "2e" ? f2 : f3,
+            // Dataminimalisatie: stuur alleen velden door die de AI nodig heeft
+            // voor de inhoudelijke beoordeling. Geen naam, e-mail, klas, user-id,
+            // geslacht, datum of lichaamsgewicht wordt naar OpenAI gestuurd.
+            form:
+              mode === "2e"
+                ? {
+                    mas: f2.mas,
+                    trainingType: f2.trainingType,
+                    trainingGoal: f2.trainingGoal,
+                    expectedRpe: f2.expectedRpe,
+                    expectedTalk: f2.expectedTalk,
+                    warmupMin: f2.warmupMin,
+                    coreText: f2.coreText,
+                    cooldownMin: f2.cooldownMin,
+                    hrRest: f2.hrRest,
+                    hrPeak: f2.hrPeak,
+                    hrRec1: f2.hrRec1,
+                    talk: f2.talk,
+                    talkExplain: f2.talkExplain,
+                    rpe: f2.rpe,
+                    reflection: f2.reflection,
+                  }
+                : {
+                    kcalIntake: f3.kcalIntake,
+                    proteinG: f3.proteinG,
+                    carbsG: f3.carbsG,
+                    fatG: f3.fatG,
+                    kcalTotalBurn: f3.kcalTotalBurn,
+                    balanceExplain: f3.balanceExplain,
+                    longTermExplain: f3.longTermExplain,
+                    macroExplain: f3.macroExplain,
+                    reflection: f3.reflection,
+                  },
           }),
         });
 

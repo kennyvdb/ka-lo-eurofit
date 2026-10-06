@@ -5,7 +5,62 @@ type RubricLevel = "-" | "+/-" | "+" | "++";
 
 const LEVELS: RubricLevel[] = ["-", "+/-", "+", "++"];
 
-function assessmentPrompt(grade: GradeMode, form: Record<string, unknown>) {
+type FormData = Record<string, unknown>;
+
+/*
+ * Maak expliciet een minimale versie van het formulier voor OpenAI.
+ *
+ * BELANGRIJK:
+ * - Dit verandert niets aan het originele formulier.
+ * - Dit verandert niets aan wat in Supabase wordt opgeslagen.
+ * - Dit verandert niets aan de gewone rubric.
+ * - Dit verandert niets aan de UI voor leerling of leerkracht.
+ *
+ * Alleen de gegevens die naar OpenAI worden gestuurd, worden beperkt.
+ */
+function formForAi(grade: GradeMode, form: FormData): FormData {
+  if (grade === "2e") {
+    return {
+      mas: form.mas,
+      trainingType: form.trainingType,
+      trainingGoal: form.trainingGoal,
+      expectedRpe: form.expectedRpe,
+      expectedTalk: form.expectedTalk,
+      warmupMin: form.warmupMin,
+      coreText: form.coreText,
+      cooldownMin: form.cooldownMin,
+
+      hrRest: form.hrRest,
+      hrPeak: form.hrPeak,
+      hrRec1: form.hrRec1,
+
+      talk: form.talk,
+      talkExplain: form.talkExplain,
+
+      rpe: form.rpe,
+      reflection: form.reflection,
+    };
+  }
+
+  return {
+    kcalIntake: form.kcalIntake,
+    proteinG: form.proteinG,
+    carbsG: form.carbsG,
+    fatG: form.fatG,
+
+    kcalTotalBurn: form.kcalTotalBurn,
+
+    balanceExplain: form.balanceExplain,
+    longTermExplain: form.longTermExplain,
+    macroExplain: form.macroExplain,
+    reflection: form.reflection,
+  };
+}
+
+function assessmentPrompt(
+  grade: GradeMode,
+  form: Record<string, unknown>,
+) {
   const criteria =
     grade === "2e"
       ? [
@@ -49,6 +104,7 @@ ${JSON.stringify(form, null, 2)}`;
 async function verifySupabaseUser(token: string) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
   if (!url || !anon) return false;
 
   const response = await fetch(`${url}/auth/v1/user`, {
@@ -58,92 +114,168 @@ async function verifySupabaseUser(token: string) {
     },
     cache: "no-store",
   });
+
   return response.ok;
 }
 
 export async function POST(request: NextRequest) {
   try {
     const auth = request.headers.get("authorization") ?? "";
-    const token = auth.startsWith("Bearer ") ? auth.slice(7).trim() : "";
+    const token = auth.startsWith("Bearer ")
+      ? auth.slice(7).trim()
+      : "";
+
     if (!token || !(await verifySupabaseUser(token))) {
-      return NextResponse.json({ error: "Niet aangemeld." }, { status: 401 });
+      return NextResponse.json(
+        { error: "Niet aangemeld." },
+        { status: 401 },
+      );
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
+
     if (!apiKey) {
-      return NextResponse.json({ error: "OPENAI_API_KEY ontbreekt op de server." }, { status: 500 });
+      return NextResponse.json(
+        { error: "OPENAI_API_KEY ontbreekt op de server." },
+        { status: 500 },
+      );
     }
 
     const body = await request.json();
     const grade = body?.grade as GradeMode;
     const form = body?.form;
-    if (!(["2e", "3e"] as GradeMode[]).includes(grade) || !form || typeof form !== "object") {
-      return NextResponse.json({ error: "Ongeldige huiswerkgegevens." }, { status: 400 });
+
+    if (
+      !(["2e", "3e"] as GradeMode[]).includes(grade) ||
+      !form ||
+      typeof form !== "object" ||
+      Array.isArray(form)
+    ) {
+      return NextResponse.json(
+        { error: "Ongeldige huiswerkgegevens." },
+        { status: 400 },
+      );
     }
 
-    const response = await fetch("https://api.openai.com/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_HOMEWORK_MODEL || "gpt-6-luna",
-        store: false,
-        input: assessmentPrompt(grade, form),
-        text: {
-          format: {
-            type: "json_schema",
-            name: "homework_assessment",
-            strict: true,
-            schema: {
-              type: "object",
-              additionalProperties: false,
-              properties: {
-                level: { type: "string", enum: LEVELS },
-                summary: { type: "string" },
-                criteria: {
-                  type: "array",
-                  minItems: 4,
-                  maxItems: 4,
-                  items: {
-                    type: "object",
-                    additionalProperties: false,
-                    properties: {
-                      name: { type: "string" },
-                      level: { type: "string", enum: LEVELS },
-                      feedback: { type: "string" },
+    /*
+     * Privacy/dataminimalisatie:
+     * gebruik vanaf hier NIET rechtstreeks het volledige formulier.
+     */
+    const aiForm = formForAi(
+      grade,
+      form as Record<string, unknown>,
+    );
+
+    const response = await fetch(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model:
+            process.env.OPENAI_HOMEWORK_MODEL ||
+            "gpt-6-luna",
+
+          store: false,
+
+          input: assessmentPrompt(grade, aiForm),
+
+          text: {
+            format: {
+              type: "json_schema",
+              name: "homework_assessment",
+              strict: true,
+              schema: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  level: {
+                    type: "string",
+                    enum: LEVELS,
+                  },
+
+                  summary: {
+                    type: "string",
+                  },
+
+                  criteria: {
+                    type: "array",
+                    minItems: 4,
+                    maxItems: 4,
+                    items: {
+                      type: "object",
+                      additionalProperties: false,
+                      properties: {
+                        name: {
+                          type: "string",
+                        },
+                        level: {
+                          type: "string",
+                          enum: LEVELS,
+                        },
+                        feedback: {
+                          type: "string",
+                        },
+                      },
+                      required: [
+                        "name",
+                        "level",
+                        "feedback",
+                      ],
                     },
-                    required: ["name", "level", "feedback"],
                   },
                 },
+                required: [
+                  "level",
+                  "summary",
+                  "criteria",
+                ],
               },
-              required: ["level", "summary", "criteria"],
             },
           },
-        },
-      }),
-    });
+        }),
+      },
+    );
 
     const result = await response.json();
+
     if (!response.ok) {
-      const message = result?.error?.message || "OpenAI-beoordeling mislukt.";
-      return NextResponse.json({ error: message }, { status: 502 });
+      const message =
+        result?.error?.message ||
+        "OpenAI-beoordeling mislukt.";
+
+      return NextResponse.json(
+        { error: message },
+        { status: 502 },
+      );
     }
 
     const outputText = result?.output
       ?.flatMap((item: any) => item?.content ?? [])
-      ?.find((part: any) => part?.type === "output_text")?.text;
+      ?.find(
+        (part: any) => part?.type === "output_text",
+      )?.text;
 
     if (!outputText) {
-      return NextResponse.json({ error: "Geen AI-beoordeling ontvangen." }, { status: 502 });
+      return NextResponse.json(
+        { error: "Geen AI-beoordeling ontvangen." },
+        { status: 502 },
+      );
     }
 
     const assessment = JSON.parse(outputText);
+
     return NextResponse.json(assessment);
   } catch (error: any) {
     return NextResponse.json(
-      { error: error?.message || "AI-beoordeling kon niet worden uitgevoerd." },
+      {
+        error:
+          error?.message ||
+          "AI-beoordeling kon niet worden uitgevoerd.",
+      },
       { status: 500 },
     );
   }
