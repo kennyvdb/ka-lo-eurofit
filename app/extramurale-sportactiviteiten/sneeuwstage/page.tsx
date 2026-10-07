@@ -420,10 +420,10 @@ export default function SneeuwstagePage() {
             </span>
           </>
         }
-        description="Alle praktische informatie voor onze sneeuwstage naar Ahrntal in Oostenrijk."
+        description="Alle praktische informatie voor onze sneeuwstage naar Ahrntal in Italië."
         imageSrc="/lo/LO.png"
         imageAlt="Sneeuwstage"
-        quoteTitle="Ahrntal • Oostenrijk"
+        quoteTitle="Ahrntal • Italië"
         quote="Samen sporten, leren en genieten van de bergen."
         quoteAuthor="LO team"
         actions={
@@ -520,7 +520,7 @@ export default function SneeuwstagePage() {
             <InfoCard
               icon="📍"
               label="Bestemming"
-              value="Ahrntal, Oostenrijk"
+              value="Ahrntal, Italië"
             />
             <InfoCard
               icon="💶"
