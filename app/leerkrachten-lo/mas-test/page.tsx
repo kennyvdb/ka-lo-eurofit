@@ -71,6 +71,9 @@ export default function MasTestPage() {
   const player = useRef<HTMLAudioElement | null>(null);
   const playerUrl = useRef<string | null>(null);
   const ticker = useRef<ReturnType<typeof setInterval> | null>(null);
+  const testStartPerf = useRef<number | null>(null);
+  const lastOfficialElapsed = useRef(0);
+  const lastAudioSyncPerf = useRef(0);
   const stopLock = useRef<Set<string>>(new Set());
   const sessionClosingRef = useRef(false);
   const [showLive, setShowLive] = useState(true);
@@ -87,7 +90,7 @@ export default function MasTestPage() {
     return ()=>{cancelled=true;window.removeEventListener("online",updateOnline);window.removeEventListener("offline",updateOnline);};
   }, []);
   const persistDrafts = async (change: (rows: Draft[]) => Draft[]) => { const rows=await masUpdateDrafts(change); setDrafts(rows); return rows; };
-  useEffect(() => () => { player.current?.pause(); if (ticker.current) clearInterval(ticker.current); if (playerUrl.current) URL.revokeObjectURL(playerUrl.current); }, []);
+  useEffect(() => () => { player.current?.pause(); if (ticker.current) clearInterval(ticker.current); testStartPerf.current=null; if (playerUrl.current) URL.revokeObjectURL(playerUrl.current); }, []);
   useEffect(() => { let cancelled=false; (async()=>{ try { const cache=await caches.open("lo-mas-test-audio-tempowissel-v5"); const [a,t]=await Promise.all([cache.match(AUDIO_URL),cache.match(TIMING_URL)]); if (!a || !t) return; const data=await t.json() as MasTiming; if (!cancelled && data.protocol==="leger_boucher_50m_workbook_cumulative" && data.events?.length) { setTiming(data);setAudioReady(true); } } catch { /* Audio kan opnieuw voorbereid worden. */ } })(); return ()=>{cancelled=true;}; }, []);
   async function prepareAudio() {
     setPreparing(true); setError("");
@@ -106,24 +109,46 @@ export default function MasTestPage() {
     } catch (e) { setAudioReady(false); setError(errText(e)); }
     finally { setPreparing(false); }
   }
+  const officialElapsedNow = () => testStartPerf.current === null ? lastOfficialElapsed.current : Math.max(0,(performance.now()-testStartPerf.current)/1000);
   async function startLive() {
     if (!draftsLoaded || !teacherId || !audioReady || !timing || !participants.some(id => (attendance[id] ?? "deelneemt") === "deelneemt") || running) { setError("Bereid de audio voor en kies minstens één deelnemende leerling."); return; }
     try {
       const response = await (await caches.open("lo-mas-test-audio-tempowissel-v5")).match(AUDIO_URL);
       if (!response) throw new Error("Offline MP3 niet gevonden.");
-      const url = URL.createObjectURL(await response.blob()); playerUrl.current = url;
-      const a = new Audio(url); player.current = a;
-      a.onended = () => stopAllLive();
-      a.onerror = () => { stopAllLive(); setError("Audio onderbroken. Controleer de voorlopige scores."); };
-      await a.play(); setElapsed(0); setStopped([]); stopLock.current.clear(); sessionClosingRef.current = false; setRunning(true);
-      ticker.current = setInterval(() => setElapsed(a.currentTime), 120);
+      if (playerUrl.current) URL.revokeObjectURL(playerUrl.current);
+    const url = URL.createObjectURL(await response.blob()); playerUrl.current = url;
+    const a = new Audio(url); player.current = a; a.preload = "auto"; a.defaultPlaybackRate = 1; a.playbackRate = 1;
+    a.onended = () => { void stopAllLive(); };
+    a.onerror = () => { void stopAllLive(); setError("Audio onderbroken. Controleer de voorlopige scores."); };
+    await a.play();
+    testStartPerf.current = performance.now() - a.currentTime * 1000;
+    lastOfficialElapsed.current = a.currentTime;
+    lastAudioSyncPerf.current = 0;
+    setElapsed(a.currentTime); setStopped([]); stopLock.current.clear(); sessionClosingRef.current = false; setRunning(true);
+    if (ticker.current) clearInterval(ticker.current);
+    ticker.current = setInterval(() => {
+      if (testStartPerf.current === null) return;
+      const official = officialElapsedNow();
+      lastOfficialElapsed.current = official;
+      setElapsed(official);
+      if (!a.paused && a.readyState >= 2) {
+        const drift = a.currentTime - official;
+        const now = performance.now();
+        if (Math.abs(drift) > 0.75 && now - lastAudioSyncPerf.current > 1000) {
+          try { a.currentTime = Math.max(0,Math.min(official,Number.isFinite(a.duration) ? Math.max(0,a.duration-0.05) : official)); lastAudioSyncPerf.current=now; }
+          catch { /* De officiële testklok blijft verder lopen. */ }
+        }
+      }
+    }, 120);
     } catch (e) { setError(errText(e)); }
   }
   async function stopAllLive() {
     if (sessionClosingRef.current) return;
     sessionClosingRef.current = true;
-    player.current?.pause(); if (ticker.current) clearInterval(ticker.current);
-    setElapsed(player.current?.currentTime ?? 0); setRunning(false);
+    const official = officialElapsedNow();
+    lastOfficialElapsed.current = official; testStartPerf.current = null;
+    player.current?.pause(); if (ticker.current) { clearInterval(ticker.current); ticker.current=null; }
+    setElapsed(official); setRunning(false);
     try { await masWriteQueue; const latest=(await masGet<Draft[]>("drafts")) ?? []; setDrafts(latest); }
     catch(e) { setError(`Niet alle STOP-scores konden lokaal gecontroleerd worden: ${errText(e)}`); }
     setTab("controle");
@@ -132,7 +157,7 @@ export default function MasTestPage() {
   function stopPupil(id: string) {
     if (!running || sessionClosingRef.current || !draftsLoaded || !timing || stopLock.current.has(id) || (attendance[id] ?? "deelneemt") !== "deelneemt") return;
     stopLock.current.add(id);
-    const seconds = Math.max(0, (player.current?.currentTime ?? 0) - timing.countdown_s);
+    const seconds = Math.max(0, officialElapsedNow() - timing.countdown_s);
     const completed = [...timing.events].filter(e => e.type === "marker" && e.time_s <= seconds).at(-1);
     const currentSpeed = timing.events.find(e => e.type === "marker" && e.time_s > seconds)?.speed ?? timing.events.at(-1)?.speed ?? 7;
     const lastFull = completed?.speed ?? 7;
@@ -402,7 +427,7 @@ export default function MasTestPage() {
         <div style={{padding:12,borderRadius:14,background:running?"rgba(137,194,170,.18)":"rgba(255,255,255,.06)"}}><div style={{fontSize:12,opacity:.7}}>Volgende kegel over</div><strong style={{fontSize:32}}>{running ? secondsToNextMarker : "—"} s</strong></div>
       </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:8}}><button type="button" style={btn} disabled={!audioReady || !participants.some(id => (attendance[id] ?? "deelneemt") === "deelneemt") || running} onClick={()=>void startLive()}>▶ Start MAS-test</button><button type="button" style={danger} disabled={!running} onClick={()=>void stopAllLive()}>■ STOP ALL</button></div>
-        <p style={{fontSize:13,opacity:.85}}>Tik tijdens de test op de <strong>naam van de leerling</strong> zodra die stopt. De MAS-score wordt op dat exacte moment berekend uit de afspeeltijd van de MP3 en voorlopig opgeslagen.</p>
+        <p style={{fontSize:13,opacity:.85}}>Tik tijdens de test op de <strong>naam van de leerling</strong> zodra die stopt. De MAS-score wordt op dat exacte moment berekend uit de beveiligde testklok en voorlopig opgeslagen.</p>
         <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:12}}>{sortedParticipantIds.map(id=>{const p=byId.get(id);const done=stopped.includes(id);const status=attendance[id] ?? "deelneemt";const excluded=status!=="deelneemt";const result=drafts.find(d=>d.leerling_id===id && d.testdatum===liveDate);return <button type="button" key={id} aria-label={`${p?.volledige_naam ?? "Leerling"}: ${done ? "score bewaard" : "MAS registreren"}`} style={{...btn,minHeight:108,width:"100%",padding:"10px 9px",textAlign:"left",display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",gap:7,border:"1px solid rgba(137,194,170,.35)",background:done?"#89C2AA":excluded?"#48576a":"linear-gradient(90deg,#255971,#4B8E8D)",color:done?"#102b32":"#fff",opacity:!running&&!done?.75:1}} disabled={!running || done || excluded} onClick={()=>stopPupil(id)}><strong style={{fontSize:15,lineHeight:1.15,overflowWrap:"anywhere"}}>{p?.volledige_naam}{profileWarning(p)}</strong><span style={{fontSize:13}}>{done?`✓ MAS geregistreerd: ${result?.value ?? "—"} km/u · ${result?.distance_m ?? 0} m`:status==="afwezig"?"Afwezig":status==="geblesseerd"?"Geblesseerd":`${p?.klas_naam ?? ""} · Tik om MAS te registreren`}</span></button>})}</div>
         <p style={{fontSize:13}}>Een STOP-score is voorlopig. Controleer en corrigeer de MAS in ‘Te bevestigen’. Het laatst volledig afgelegde niveau is niet automatisch gelijk aan de snelheid waarbij de leerling stopte.</p>
     </div>
