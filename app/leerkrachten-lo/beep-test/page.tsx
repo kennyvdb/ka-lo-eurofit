@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 const supabase = createClient();
 const AUDIO = { muziek: "/beep-test/met-muziek-v2.mp3", beeps: "/beep-test/alleen-beeps-v2.mp3" } as const;
 const TIMING = "/beep-test/timing-v2.json";
-const CACHE = "lo-beeptest-audio-v4-237-shuttles";
+const CACHE = "lo-beeptest-audio-v5-officiele-klok";
 const EXPECTED_PROTOCOL = "leger_20m_8p5_corrected_v4";
 const EXPECTED_SHUTTLES = 237;
 const DB = "lo-beeptest-v1";
@@ -152,6 +152,10 @@ export default function BeepTestPage() {
   const [message, setMessage] = useState("Laad je klasgroep en audio vóór de les.");
   const audio = useRef<HTMLAudioElement | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const testStartPerf = useRef<number | null>(null);
+  const lastOfficialPosition = useRef(0);
+  const lastAudioSyncPerf = useRef(0);
+  const playerUrl = useRef<string | null>(null);
   const sessionRef = useRef("");
   const resultsRef = useRef<Result[]>([]);
   const syncBusy = useRef(false);
@@ -215,9 +219,23 @@ export default function BeepTestPage() {
   const formatHistoryTime = (seconds:number) => Number.isFinite(seconds) ? `${Math.floor(seconds/60)}:${String(Math.floor(seconds%60)).padStart(2,"0")}` : "—";
   const studentKey = (s: Student) => s.leerling_email.trim().toLowerCase();
   const elapsed = Math.max(0, position - (timing?.audio_start_s ?? 4));
-  const last = timing?.events.filter(e => e.time_s <= position && (e.type === "stage_start" || e.type === "shuttle")).at(-1);
-  const level = last?.level ?? 1;
-  const shuttle = last?.shuttle ?? 0;
+  const currentStage = timing?.stages.find(st => position >= st.start_s && position < st.end_s) ?? timing?.stages.at(-1);
+  const completedEvent = timing?.events.filter(e => e.type === "shuttle" && e.time_s <= position + 0.00001).at(-1);
+  const level = position < (timing?.audio_start_s ?? 4) ? 1 : currentStage?.level ?? 1;
+  const shuttle = position < (timing?.audio_start_s ?? 4) ? 0 : (completedEvent?.level === level ? completedEvent.shuttle : 0);
+  const remainingLengths = Math.max(0, (currentStage?.shuttles ?? 0) - shuttle);
+  const nextStage = timing?.stages.find(st => st.level === level + 1);
+  const officialPositionNow = () => testStartPerf.current === null ? lastOfficialPosition.current : Math.max(0, (performance.now() - testStartPerf.current) / 1000);
+  const completedAt = (seconds: number): Event | undefined => {
+    if (!timing) return undefined;
+    const last = timing.events.filter(e => e.time_s <= seconds + 0.00001 && (e.type === "shuttle" || e.type === "stage_start")).at(-1);
+    if (!last) return undefined;
+    if (last.type === "stage_start" && last.level > 1) {
+      const previous = timing.stages.find(st => st.level === last.level - 1);
+      return previous ? { time_s: last.time_s, type: "shuttle", level: previous.level, shuttle: previous.shuttles } : undefined;
+    }
+    return last.type === "shuttle" ? last : undefined;
+  };
   const current = results.filter(r => r.session_id === sessionId && !r.confirmed && !r.sportfolio_synced && !r.archived && !r.parked);
   // Houd de controlelijst stabiel. Sorteren op score liet rijen verspringen zodra één score handmatig werd gewijzigd.
   const reviewRows = sortByFirstName(current);
@@ -311,7 +329,8 @@ export default function BeepTestPage() {
     return !!t && t.protocol_id === EXPECTED_PROTOCOL &&
       t.stages.length === 21 &&
       t.stages.reduce((n, stage) => n + stage.shuttles, 0) === EXPECTED_SHUTTLES &&
-      t.events.length > 0 && t.events.every(e => Number.isFinite(e.time_s));
+      t.events.length > 0 && t.events.every(e => Number.isFinite(e.time_s)) &&
+      t.stages.every((stage, index) => index === 0 || t.events.some(e => e.type === "stage_start" && e.level === stage.level && Math.abs(e.time_s - stage.start_s) < 0.01));
   }
   async function checkAudio(which: keyof typeof AUDIO) {
     if (!("caches" in window)) { setReady(false); return false; }
@@ -478,7 +497,7 @@ export default function BeepTestPage() {
     })();
     const onOnline = () => { /* Alleen na bevestiging publiceren. */ };
     window.addEventListener("online", onOnline);
-    return () => { cancelled = true; window.removeEventListener("online", onOnline); if (timer.current) clearInterval(timer.current); audio.current?.pause(); };
+    return () => { cancelled = true; window.removeEventListener("online", onOnline); if (timer.current) clearInterval(timer.current); audio.current?.pause(); testStartPerf.current = null; if (playerUrl.current) URL.revokeObjectURL(playerUrl.current); };
   }, [syncResults]);
   useEffect(() => { void checkAudio(track); }, [track]);
   useEffect(() => {
@@ -548,22 +567,47 @@ export default function BeepTestPage() {
   async function start() {
     if (!authorized || !ready || !timing || !participatingStudents.length || running) return;
     if (review) setReview(false);
-    const cache = await caches.open(CACHE); const response = await cache.match(AUDIO[track]);
+    const cache = await caches.open(CACHE);
+    const response = await cache.match(AUDIO[track]);
     if (!response) { setReady(false); return; }
+    if (playerUrl.current) { URL.revokeObjectURL(playerUrl.current); playerUrl.current = null; }
     const url = URL.createObjectURL(await response.blob());
-    const player = new Audio(url); audio.current = player;
-    player.onended = () => { setRunning(false); if (timer.current) clearInterval(timer.current); URL.revokeObjectURL(url); };
-    player.onerror = () => { setRunning(false); setMessage("Audio onderbroken: controleer de resultaten."); URL.revokeObjectURL(url); };
+    playerUrl.current = url;
+    const player = new Audio(url);
+    audio.current = player;
+    player.preload = "auto";
+    player.defaultPlaybackRate = 1;
+    player.playbackRate = 1;
+    player.onended = () => { void stopAll(); };
+    player.onerror = () => { void stopAll(); setMessage("Audio onderbroken: controleer de resultaten en herstart de test indien nodig."); };
     try {
       await player.play();
+      testStartPerf.current = performance.now() - player.currentTime * 1000;
+      lastOfficialPosition.current = player.currentTime;
+      lastAudioSyncPerf.current = 0;
       const id = crypto.randomUUID(); stopLocks.current.clear(); sessionClosingRef.current = false;
-      sessionRef.current = id; setSessionId(id); setPosition(0); setRunning(true);
-      setMessage("Test loopt. Scores worden lokaal bewaard; Sportfolio wordt pas na bevestiging bijgewerkt.");
+      sessionRef.current = id; setSessionId(id); setPosition(player.currentTime); setRunning(true);
+      setMessage("Test loopt met een onafhankelijke klok. STOP-scores worden lokaal bewaard.");
+      if (timer.current) clearInterval(timer.current);
       timer.current = setInterval(() => {
-        setPosition(player.currentTime);
-        if (player.paused && !player.ended) { setRunning(false); setMessage("Audio onderbroken: controleer de testsessie."); }
+        if (testStartPerf.current === null) return;
+        const official = officialPositionNow();
+        lastOfficialPosition.current = official;
+        setPosition(official);
+        if (player.paused && !player.ended) { void stopAll(); setMessage("Audio gepauzeerd: test gestopt om foutieve scores te vermijden."); return; }
+        if (!player.paused && player.readyState >= 2) {
+          const drift = player.currentTime - official;
+          const now = performance.now();
+          if (Math.abs(drift) > 0.75 && now - lastAudioSyncPerf.current > 1000) {
+            try {
+              player.currentTime = Math.max(0, Math.min(official, Number.isFinite(player.duration) ? Math.max(0, player.duration - 0.05) : official));
+              lastAudioSyncPerf.current = now;
+            } catch { /* De onafhankelijke klok blijft leidend. */ }
+          }
+        }
+        if (official >= timing.total_duration_s) void stopAll();
       }, 120);
-    } catch { URL.revokeObjectURL(url); setMessage("Audio kon niet starten. Controleer de geluidsinstellingen."); }
+    } catch { URL.revokeObjectURL(url); playerUrl.current = null; setMessage("Audio kon niet starten. Controleer de geluidsinstellingen."); }
   }
   async function stopStudent(student: Student) {
     const sid = sessionRef.current;
@@ -572,10 +616,9 @@ export default function BeepTestPage() {
     if (!running || sessionClosingRef.current || !sid || !audio.current || stopLocks.current.has(key)) return;
     if (resultsRef.current.some(r => r.session_id === sid && r.email.trim().toLowerCase() === key)) return;
     stopLocks.current.add(key);
-    const at = audio.current.currentTime;
-    const e = timing?.events.filter(x => x.time_s <= at && (x.type === "stage_start" || x.type === "shuttle")).at(-1);
-    if (!e) { stopLocks.current.delete(key); return; }
-    const completed = e.type === "stage_start" && e.level > 1 ? { level:e.level-1, shuttle:timing?.stages.find(s => s.level === e.level-1)?.shuttles ?? 0 } : e;
+    const at = officialPositionNow();
+    const e = completedAt(at);
+    const completed = e ? { level: e.level, shuttle: e.shuttle } : { level: 1, shuttle: 0 };
     const official = schoolStudents.find(s => studentKey(s) === key);
     const record: Result = {
       id: crypto.randomUUID(),
@@ -604,8 +647,10 @@ export default function BeepTestPage() {
   async function stopAll() {
     if (!running || sessionClosingRef.current) return;
     sessionClosingRef.current = true;
-    setPosition(audio.current?.currentTime ?? position); audio.current?.pause(); setRunning(false);
-    if (timer.current) clearInterval(timer.current);
+    const official = officialPositionNow();
+    lastOfficialPosition.current = official; testStartPerf.current = null;
+    setPosition(official); audio.current?.pause(); setRunning(false);
+    if (timer.current) { clearInterval(timer.current); timer.current = null; }
     try { await resultQueue; const latest = (await get<Result[]>("results")) ?? []; applyResults(latest); }
     catch { setMessage("Niet alle STOP-scores konden lokaal gecontroleerd worden. Controleer de resultaten zorgvuldig."); }
     setReview(true); setTab("controle");
@@ -1111,7 +1156,7 @@ export default function BeepTestPage() {
         </div>
       </div>
     </div>
-    <div style={panel}><h2>3. Gezamenlijke test</h2><p>Niveau {level} · shuttle {shuttle} · {elapsed.toFixed(1)} sec sinds startsignaal</p><p style={{fontSize:13,opacity:.8}}>Oude of niet-publiceerbare resultaten blokkeren nooit een nieuwe test.</p>
+    <div style={panel}><h2>3. Gezamenlijke test</h2><p><strong>Trap {level} · {remainingLengths} {remainingLengths === 1 ? "lengte" : "lengtes"} tot volgende trap</strong>{nextStage ? ` (${nextStage.level})` : " (laatste trap)"}</p><p>Afgelegde lengtes in deze trap: {shuttle} / {currentStage?.shuttles ?? 0} · {elapsed.toFixed(1)} sec sinds startsignaal</p><p style={{fontSize:13,opacity:.8}}>Oude of niet-publiceerbare resultaten blokkeren nooit een nieuwe test.</p>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <button style={button} disabled={!authorized || !ready || !participatingStudents.length || running} onClick={() => void start()}>▶ Start test</button>
         <button style={{ ...button, background: "#71394b" }} disabled={!running} onClick={() => void stopAll()}>■ STOP ALL</button>
