@@ -14,7 +14,7 @@ type SchoolRow = Record<string, unknown>;
 type SchoolStudent = { leerling_email: string; volledige_naam: string; klas_naam: string; group_id?: string | null };
 type AttendanceStatus = "deelneemt" | "afwezig" | "geblesseerd";
 type Score = { id: string; leerling_id: string; discipline_id: string; schooljaar: string | null; klas_naam: string | null; score_nummer: number | null; score_tekst: string | null; status: string; bevestigd_op: string | null; extra_data: Record<string, unknown> | null };
-type Draft = { id: string; leerling_id: string; value: string; testdatum: string; schooljaar?: string | null; klas_naam?: string | null; distance_m?: number; duration_s?: number; completed_speed?: number; reached_speed?: number; markers?: number };
+type Draft = { id: string; leerling_id: string; leerling_email?: string; leerling_naam?: string; value: string; testdatum: string; schooljaar?: string | null; klas_naam?: string | null; distance_m?: number; duration_s?: number; completed_speed?: number; reached_speed?: number; markers?: number };
 type MasEvent = { time_s: number; type: "stage" | "marker"; speed: number; distance_m: number };
 type MasTiming = { protocol: string; duration_s: number; countdown_s: number; events: MasEvent[] };
 const AUDIO_URL = "/mas-test/alleen-beeps-tempowissel-v5.mp3";
@@ -165,7 +165,7 @@ export default function MasTestPage() {
     const exactMas = masForDistance(distanceM) ?? lastFull;
     const p = byId.get(id);
     if (!p || !player.current || player.current.paused) { stopLock.current.delete(id); return; }
-    const d: Draft = { id: crypto.randomUUID(), leerling_id: id, value: String(exactMas), testdatum: liveDate, schooljaar: p.schooljaar ?? schoolYear, klas_naam: p.klas_naam,
+    const d: Draft = { id: crypto.randomUUID(), leerling_id: id, leerling_email: p.email ?? undefined, leerling_naam: p.volledige_naam ?? undefined, value: String(exactMas), testdatum: liveDate, schooljaar: p.schooljaar ?? schoolYear, klas_naam: p.klas_naam,
       distance_m: distanceM, duration_s: seconds, completed_speed: lastFull,
       reached_speed: currentSpeed, markers: distanceM / 50 };
     void persistDrafts(old => old.some(row => row.leerling_id === id && row.testdatum === liveDate) ? old : [...old, d])
@@ -301,6 +301,8 @@ export default function MasTestPage() {
     .sort((a,b)=>String(a.volledige_naam).localeCompare(String(b.volledige_naam),"nl-BE"));
   const classes = useMemo(() => [...new Set(pupils.map(p => p.klas_naam).filter((x): x is string => !!x))].sort((a,b) => a.localeCompare(b,"nl",{numeric:true})), [pupils]);
   const byId = useMemo(() => new Map(pupils.map(p => [p.id, p])), [pupils]);
+  const resolveDraftPupil = (d: Draft) => pupils.find(p => p.id === d.leerling_id) ?? pupils.find(p => !!(d.leerling_email || d.leerling_id.startsWith("email:")) && String(p.email ?? "").toLowerCase() === String(d.leerling_email ?? d.leerling_id.slice(6)).toLowerCase());
+  const draftName = (d: Draft) => resolveDraftPupil(d)?.volledige_naam ?? d.leerling_naam ?? d.leerling_email ?? (d.leerling_id.startsWith("email:") ? d.leerling_id.slice(6) : "Leerling");
   const sortedParticipantIds = useMemo(() => [...participants].sort((a,b) => String(byId.get(a)?.volledige_naam ?? "").localeCompare(String(byId.get(b)?.volledige_naam ?? ""), "nl-BE", { sensitivity: "base" })), [participants, byId]);
   const historyPupils = (historyGroup ? pupils.filter(p=>historyGroupIds.includes(p.id)) : historyClass ? pupils.filter(p=>p.klas_naam===historyClass) : []).sort((a,b)=>String(a.volledige_naam??"").localeCompare(String(b.volledige_naam??""),"nl-BE",{sensitivity:"base"}));
   const visibleScores = scores.filter(s => s.status === "bevestigd" && s.schooljaar === schoolYear && (historyGroup ? historyGroupIds.includes(s.leerling_id) : !historyClass || (s.klas_naam ?? byId.get(s.leerling_id)?.klas_naam) === historyClass));
@@ -314,17 +316,31 @@ export default function MasTestPage() {
       const { data: auth } = await supabase.auth.getUser();
       if (auth.user?.id !== teacherId) throw new Error("Je aanmelding is verlopen. Meld je opnieuw aan.");
       for (const d of chosen) {
-        const p = byId.get(d.leerling_id);
+        const p = resolveDraftPupil(d);
         const n = validMas(d.value);
-        if (!p || n === null) { setError(old => `${old ? old + " · " : ""}Ongeldige score of leerling niet gevonden; deze rij blijft lokaal.`); continue; }
-        if (p.id.startsWith("email:") || !p.schooljaar) { setError(old => `${old ? old + " · " : ""}${p.volledige_naam ?? p.email}: geen gekoppeld profiel/schooljaar; deze rij blijft lokaal.`); continue; }
+        if (n === null || (!p && !d.leerling_email && !d.leerling_id.startsWith("email:"))) { setError(old => `${old ? old + " · " : ""}Ongeldige score of leerling niet gevonden; deze rij blijft lokaal.`); continue; }
+        const email = String(d.leerling_email ?? p?.email ?? (d.leerling_id.startsWith("email:") ? d.leerling_id.slice(6) : "")).trim().toLowerCase();
+      const year = d.schooljaar ?? schoolYear;
+      const klas = d.klas_naam ?? p?.klas_naam ?? "";
+      const extra = { bron: "lo_mas_test", protocol_id: "leger_boucher_50m_workbook_cumulative", testdatum: `${d.testdatum}T12:00:00`, mas_km_u: n, session_id: d.id, mas_draft_id: d.id,
+        ...(d.distance_m === undefined ? {} : { afstand_meter: d.distance_m, testduur_seconden: d.duration_s, laatste_volledige_snelheid: d.completed_speed, bereikte_snelheid: d.reached_speed, volledige_50m_stukken: d.markers }) };
+      if (!p || p.id.startsWith("email:")) {
+        if (!email || !klas) { setError(old => `${old ? old + " · " : ""}${draftName(d)}: geen betrouwbare identiteit/klas; lokaal behouden.`); continue; }
+        const { data: pending, error: pendingError } = await supabase.rpc("sportfolio_save_and_link_pending_score", {
+          p_email: email, p_username: "", p_name: draftName(d), p_discipline_id: disciplineId, p_schooljaar: year, p_klas_naam: klas,
+          p_score_nummer: n, p_score_tekst: String(n).replace(".", ","), p_eenheid: "km/u", p_extra_data: extra
+        });
+        if (pendingError || !pending) { setError(old => `${old ? old + " · " : ""}${draftName(d)}: ${errText(pendingError ?? "Opslag niet bevestigd")}; lokaal behouden.`); continue; }
+        await persistDrafts(old => old.filter(x => x.id !== d.id));
+        setSelectedDrafts(old => old.filter(id => id !== d.id));
+        continue;
+      }
         // Een vaste ID voorkomt dubbele publicatie bij opnieuw proberen na netwerkverlies.
         const payload = {
-          id: d.id, leerling_id: p.id, discipline_id: disciplineId, schooljaar: d.schooljaar ?? p.schooljaar,
-          klas_naam: d.klas_naam ?? p.klas_naam, score_nummer: n, score_tekst: String(n).replace(".", ","), eenheid: "km/u",
+          id: d.id, leerling_id: p.id, discipline_id: disciplineId, schooljaar: year,
+          klas_naam: klas, score_nummer: n, score_tekst: String(n).replace(".", ","), eenheid: "km/u",
           status: "bevestigd", bevestigd_door: teacherId, bevestigd_op: new Date().toISOString(),
-          extra_data: { bron: "lo_mas_test", protocol_id: "leger_boucher_50m_workbook_cumulative", testdatum: `${d.testdatum}T12:00:00`, mas_km_u: n,
-            ...(d.distance_m === undefined ? {} : { afstand_meter: d.distance_m, testduur_seconden: d.duration_s, laatste_volledige_snelheid: d.completed_speed, bereikte_snelheid: d.reached_speed, volledige_50m_stukken: d.markers }) },
+          extra_data: extra,
           leerjaar_snapshot: p.leerjaar ? Number(p.leerjaar) || null : null,
           graad_snapshot: p.graad ? Number(p.graad) || null : null,
           geslacht_snapshot: p.geslacht, naam_snapshot: p.volledige_naam,
@@ -345,7 +361,7 @@ export default function MasTestPage() {
         setSelectedDrafts(old => old.filter(id => id !== d.id));
       }
       await refreshScores(disciplineId);
-      setMessage("Geselecteerde scores zijn bevestigd in Sportfolio.");
+      setMessage("Geselecteerde scores zijn veilig opgeslagen in Sportfolio of als voorlopige score in Supabase.");
     } catch (e) { setError(`${errText(e)} Reeds bevestigde rijen blijven bewaard; controleer de historiek voordat je opnieuw probeert.`); }
     finally { setBusy(false); }
   };
@@ -434,7 +450,7 @@ export default function MasTestPage() {
     </>}
   {tab === "controle" && <div style={panel}><h2>Te bevestigen resultaten</h2>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}><button type="button" style={btn} onClick={() => setSelectedDrafts(drafts.map(d => d.id))}>Alles selecteren</button><button type="button" style={btn} onClick={() => setSelectedDrafts([])}>Selectie wissen</button><button type="button" style={danger} disabled={busy || !selectedDrafts.length} onClick={() => { if (window.confirm("Geselecteerde voorlopige scores verwijderen?")) { void persistDrafts(old => old.filter(d => !selectedDrafts.includes(d.id))).then(()=>setSelectedDrafts([])).catch(e=>setError(errText(e))); } }}>Geselecteerde voorlopige scores verwijderen</button></div>
-      <div style={{ display: "grid", gap: 9 }}>{drafts.map(d => <div key={d.id} style={{ border: "1px solid #55748a", borderRadius: 12, padding: 12, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}><input type="checkbox" aria-label={`Selecteer ${byId.get(d.leerling_id)?.volledige_naam ?? "leerling"}`} checked={selectedDrafts.includes(d.id)} onChange={e => setSelectedDrafts(old => e.target.checked ? [...old, d.id] : old.filter(x => x !== d.id))}/><span style={{ flex: "1 1 170px" }}><strong>{byId.get(d.leerling_id)?.volledige_naam ?? "Leerling"}</strong><br/>{byId.get(d.leerling_id)?.klas_naam} · {fmt(d.testdatum)}</span><strong>{d.value} km/u</strong>{d.distance_m !== undefined && <small>{d.distance_m} m · {timeLabel(d.duration_s ?? 0)} · bereikte snelheid {d.reached_speed} km/u</small>}<button type="button" style={btn} disabled={busy} onClick={() => { const next=window.prompt(`MAS-score voor ${byId.get(d.leerling_id)?.volledige_naam ?? "leerling"} (km/u)`, d.value); if(next===null)return; const n=validMas(next); if(n===null){setError("Geef een geldige MAS-waarde tussen 0 en 35 km/u.");return;} void persistDrafts(old=>old.map(row=>row.id===d.id?{...row,value:String(n)}:row)).catch(e=>setError(errText(e))); }}>MAS aanpassen</button></div>)}</div>
+      <div style={{ display: "grid", gap: 9 }}>{drafts.map(d => <div key={d.id} style={{ border: "1px solid #55748a", borderRadius: 12, padding: 12, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}><input type="checkbox" aria-label={`Selecteer ${draftName(d)}`} checked={selectedDrafts.includes(d.id)} onChange={e => setSelectedDrafts(old => e.target.checked ? [...old, d.id] : old.filter(x => x !== d.id))}/><span style={{ flex: "1 1 170px" }}><strong>{draftName(d)}</strong><br/>{resolveDraftPupil(d)?.klas_naam ?? d.klas_naam} · {fmt(d.testdatum)}</span><strong>{d.value} km/u</strong>{d.distance_m !== undefined && <small>{d.distance_m} m · {timeLabel(d.duration_s ?? 0)} · bereikte snelheid {d.reached_speed} km/u</small>}<button type="button" style={btn} disabled={busy} onClick={() => { const next=window.prompt(`MAS-score voor ${draftName(d)} (km/u)`, d.value); if(next===null)return; const n=validMas(next); if(n===null){setError("Geef een geldige MAS-waarde tussen 0 en 35 km/u.");return;} void persistDrafts(old=>old.map(row=>row.id===d.id?{...row,value:String(n)}:row)).catch(e=>setError(errText(e))); }}>MAS aanpassen</button></div>)}</div>
       {!drafts.length && <p>Er staan geen voorlopige scores klaar.</p>}
       <button type="button" style={{ ...btn, marginTop: 14 }} disabled={busy || running || !online || !selectedDrafts.length || !disciplineId} onClick={() => void publish()}>{busy ? "Bevestigen…" : `Geselecteerde bevestigen (${selectedDrafts.length})`}</button>
     </div>}
