@@ -225,6 +225,7 @@ export default function BeepTestPage() {
   const shuttle = position < (timing?.audio_start_s ?? 4) ? 0 : (completedEvent?.level === level ? completedEvent.shuttle : 0);
   const remainingLengths = Math.max(0, (currentStage?.shuttles ?? 0) - shuttle);
   const nextStage = timing?.stages.find(st => st.level === level + 1);
+  const speedKmh = 8.5 + (level - 1) * 0.5;
   const officialPositionNow = () => testStartPerf.current === null ? lastOfficialPosition.current : Math.max(0, (performance.now() - testStartPerf.current) / 1000);
   const completedAt = (seconds: number): Event | undefined => {
     if (!timing) return undefined;
@@ -1156,7 +1157,12 @@ export default function BeepTestPage() {
         </div>
       </div>
     </div>
-    <div style={panel}><h2>3. Gezamenlijke test</h2><p><strong>Trap {level} · {remainingLengths} {remainingLengths === 1 ? "lengte" : "lengtes"} tot volgende trap</strong>{nextStage ? ` (${nextStage.level})` : " (laatste trap)"}</p><p>Afgelegde lengtes in deze trap: {shuttle} / {currentStage?.shuttles ?? 0} · {elapsed.toFixed(1)} sec sinds startsignaal</p><p style={{fontSize:13,opacity:.8}}>Oude of niet-publiceerbare resultaten blokkeren nooit een nieuwe test.</p>
+    <div style={panel}><h2>3. Gezamenlijke test</h2>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:12}}>
+        <div style={{padding:12,borderRadius:14,background:"rgba(255,255,255,.06)"}}><div style={{fontSize:12,opacity:.7}}>Snelheid · trap {level}</div><strong style={{fontSize:24}}>{speedKmh.toLocaleString("nl-BE",{minimumFractionDigits:1,maximumFractionDigits:1})} km/u</strong></div>
+        <div style={{padding:12,borderRadius:14,background:"rgba(255,255,255,.06)"}}><div style={{fontSize:12,opacity:.7}}>Lengtes in deze trap</div><strong style={{fontSize:24}}>{shuttle}/{currentStage?.shuttles ?? 0}</strong><div style={{fontSize:12}}>nog {remainingLengths} tot {nextStage ? `trap ${nextStage.level}` : "het einde"}</div></div>
+      </div>
+      <p style={{fontSize:13,opacity:.8}}>Testtijd: {elapsed.toFixed(1)} sec sinds startsignaal. Oude of niet-publiceerbare resultaten blokkeren nooit een nieuwe test.</p>
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
         <button style={button} disabled={!authorized || !ready || !participatingStudents.length || running} onClick={() => void start()}>▶ Start test</button>
         <button style={{ ...button, background: "#71394b" }} disabled={!running} onClick={() => void stopAll()}>■ STOP ALL</button>
