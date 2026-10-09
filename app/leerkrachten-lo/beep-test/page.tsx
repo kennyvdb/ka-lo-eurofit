@@ -7,7 +7,9 @@ import { createClient } from "@/lib/supabase/client";
 const supabase = createClient();
 const AUDIO = { muziek: "/beep-test/met-muziek-v2.mp3", beeps: "/beep-test/alleen-beeps-v2.mp3" } as const;
 const TIMING = "/beep-test/timing-v2.json";
-const CACHE = "lo-beeptest-audio-v2";
+const CACHE = "lo-beeptest-audio-v4-237-shuttles";
+const EXPECTED_PROTOCOL = "leger_20m_8p5_corrected_v4";
+const EXPECTED_SHUTTLES = 237;
 const DB = "lo-beeptest-v1";
 const STORE = "data";
 type Group = { id: string; naam: string; schooljaar: string };
@@ -22,7 +24,7 @@ type Student = {
 type AttendanceStatus = "deelneemt" | "afwezig" | "geblesseerd";
 type SchoolRow = Record<string, unknown>;
 type Event = { time_s: number; type: string; level: number; shuttle: number };
-type Timing = { audio_start_s: number; events: Event[]; total_duration_s: number; stages: {level:number;shuttles:number;start_s:number;end_s:number}[] };
+type Timing = { protocol_id?: string; audio_start_s: number; events: Event[]; total_duration_s: number; stages: {level:number;shuttles:number;start_s:number;end_s:number}[] };
 type Norm = { geslacht: string; leeftijd: number; p5:number; p20:number; p50:number; p80:number; p95:number };
 type Result = {
   id: string; session_id: string; email: string; naam: string; klas: string; group_id: string | null;
@@ -305,12 +307,22 @@ export default function BeepTestPage() {
     }
   }, []);
 
+  function validTiming(t: Timing | null | undefined): t is Timing {
+    return !!t && t.protocol_id === EXPECTED_PROTOCOL &&
+      t.stages.length === 21 &&
+      t.stages.reduce((n, stage) => n + stage.shuttles, 0) === EXPECTED_SHUTTLES &&
+      t.events.length > 0 && t.events.every(e => Number.isFinite(e.time_s));
+  }
   async function checkAudio(which: keyof typeof AUDIO) {
     if (!("caches" in window)) { setReady(false); return false; }
     const cache = await caches.open(CACHE);
     const [a, t] = await Promise.all([cache.match(AUDIO[which]), cache.match(TIMING)]);
-    const ok = !!a && !!t && !!(await get<Timing>("timing"));
-    setReady(ok); return ok;
+    const stored = await get<Timing>("timing");
+    let cachedTiming: Timing | null = null;
+    if (t) { try { cachedTiming = await t.json() as Timing; } catch { /* beschadigde cache */ } }
+    const ok = !!a && validTiming(stored) && validTiming(cachedTiming);
+    setReady(ok);
+    return ok;
   }
   useEffect(() => {
     let cancelled = false;
@@ -502,21 +514,36 @@ export default function BeepTestPage() {
   }, [students, teacherId, running]);
 
   async function downloadAudio() {
-    setDownloading(true); setMessage("Audio wordt opgeslagen. Houd de pagina open.");
+    setDownloading(true); setReady(false);
+    setMessage("Nieuwste audio en timing worden gedownload. Houd de pagina open.");
     try {
-      const cache = await caches.open(CACHE);
-      for (const path of [TIMING, AUDIO[track]]) {
-        if (await cache.match(path)) continue;
-        const response = await fetch(path, { cache: "reload" });
-        if (!response.ok) throw new Error(`Download mislukt: ${path}`);
-        await cache.put(path, response);
+      if (!("caches" in window)) throw new Error("Offline opslag wordt niet ondersteund.");
+      // Download beide bestanden opnieuw, ook als een oudere versie onder dezelfde naam bestaat.
+      const [timingResponse, audioResponse] = await Promise.all([
+        fetch(`${TIMING}?v=${EXPECTED_PROTOCOL}`, { cache: "no-store" }),
+        fetch(`${AUDIO[track]}?v=${EXPECTED_PROTOCOL}`, { cache: "no-store" })
+      ]);
+      if (!timingResponse.ok || !audioResponse.ok) throw new Error("Download mislukt. Controleer je internetverbinding.");
+      const t = await timingResponse.clone().json() as Timing;
+      if (!validTiming(t)) throw new Error("Timingbestand is niet de verwachte versie met 237 shuttles. Niets vervangen.");
+      if (!audioResponse.headers.get("content-type")?.toLowerCase().includes("audio") &&
+          !audioResponse.headers.get("content-type")?.toLowerCase().includes("mpeg") &&
+          !audioResponse.headers.get("content-type")?.toLowerCase().includes("octet-stream")) {
+        throw new Error("Het audiobestand lijkt geen MP3. Controleer het pad.");
       }
-      const t = await (await cache.match(TIMING))!.json() as Timing;
-      await put("timing", t); setTiming(t);
+      const cache = await caches.open(CACHE);
+      await Promise.all([
+        cache.put(TIMING, timingResponse),
+        cache.put(AUDIO[track], audioResponse)
+      ]);
+      await put("timing", t);
+      setTiming(t);
       if (!(await checkAudio(track))) throw new Error("Offlinecontrole mislukt.");
-      setMessage("Audio en timing lokaal beschikbaar. Test vooraf ook in vliegtuigmodus.");
-    } catch (error) { setReady(false); setMessage(error instanceof Error ? error.message : "Download mislukt."); }
-    finally { setDownloading(false); }
+      setMessage("Nieuwe audio en timing (237 shuttles) lokaal beschikbaar. Test ook in vliegtuigmodus.");
+    } catch (error) {
+      setReady(false);
+      setMessage(error instanceof Error ? error.message : "Download mislukt.");
+    } finally { setDownloading(false); }
   }
   async function start() {
     if (!authorized || !ready || !timing || !participatingStudents.length || running) return;
@@ -833,7 +860,7 @@ export default function BeepTestPage() {
           bron: "lo_beeptest",
           lokaal_resultaat_id: r.id,
           session_id: r.session_id,
-          protocol_id: "leger_20m_8p5_fixed_shuttles_v2_countdown",
+          protocol_id: timing.protocol_id ?? EXPECTED_PROTOCOL,
           niveau: r.level,
           shuttle: r.shuttle,
           totaal_shuttles: totalShuttles,

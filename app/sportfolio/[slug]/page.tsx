@@ -810,9 +810,11 @@ export default function DisciplineDetailPage() {
                             <div className="break-words text-[15px] font-extrabold leading-snug text-white sm:text-base [overflow-wrap:anywhere]">
                               {row.volledige_naam ?? "Onbekende leerling"}
                             </div>
-                            <div className="mt-1 break-words text-xs font-semibold text-white/75">
-                              {row.klas_naam ?? "Geen klas"}
+                            {row.volledige_naam !== "Anoniem" && (
+                              <div className="mt-1 break-words text-xs font-semibold text-white/75">
+                                {row.klas_naam ?? "Geen klas"}
                             </div>
+                            )}
                           </div>
                           <div className="col-span-2 min-w-0 rounded-xl border border-emerald-300/30 bg-emerald-950/70 px-3 py-2.5 sm:col-span-1 sm:justify-self-end sm:text-right">
                             <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-100/90">
