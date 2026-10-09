@@ -68,6 +68,7 @@ export default function MasTestPage() {
   const [attendance, setAttendance] = useState<Record<string, AttendanceStatus>>({});
   const [stopped, setStopped] = useState<string[]>([]);
   const [liveDate, setLiveDate] = useState(today());
+  const livePanelRef = useRef<HTMLDivElement | null>(null);
   const player = useRef<HTMLAudioElement | null>(null);
   const playerUrl = useRef<string | null>(null);
   const ticker = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -77,6 +78,7 @@ export default function MasTestPage() {
   const stopLock = useRef<Set<string>>(new Set());
   const sessionClosingRef = useRef(false);
   const [showLive, setShowLive] = useState(true);
+  useEffect(() => { if (running) livePanelRef.current?.scrollIntoView({ block: "start", behavior: "instant" }); }, [running]);
   const profileWarning = (p: Pupil | undefined) => p?.id.startsWith("email:") ? <span title="Geen gekoppeld leerlingprofiel: MAS kan voorlopig bewaard worden, maar nog niet naar Sportfolio gepubliceerd." aria-label="Geen gekoppeld leerlingprofiel" style={{color:"#ffd166",fontWeight:900,marginLeft:6}} role="img">⚠</span> : null;
   useEffect(() => {
     let cancelled=false;
@@ -434,17 +436,19 @@ export default function MasTestPage() {
         <h3 style={{marginTop:18,paddingTop:12,borderTop:"1px solid rgba(137,194,170,.25)"}}>Geselecteerd voor deze test: {participants.length}</h3>
         <div style={{display:"grid",gap:6}}>{sortedParticipantIds.map(id=>{const p=byId.get(id);const status=attendance[id] ?? "deelneemt";return <div key={id} style={{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(130px,180px) auto",alignItems:"center",gap:10,padding:8,border:"1px solid rgba(137,194,170,.2)",borderRadius:10}}><span>{p?.volledige_naam ?? "Leerling"}{profileWarning(p)} · {p?.klas_naam ?? ""}</span><select aria-label={`Status ${p?.volledige_naam ?? "leerling"}`} style={{...control,minHeight:40,padding:"6px 9px"}} value={status} disabled={running} onChange={e=>setAttendance(old=>({...old,[id]:e.target.value as AttendanceStatus}))}><option value="deelneemt">✓ Neemt deel</option><option value="afwezig">○ Afwezig</option><option value="geblesseerd">✚ Geblesseerd</option></select><button type="button" style={{...danger,minHeight:36,padding:"6px 10px"}} disabled={running} onClick={()=>{setParticipants(old=>old.filter(x=>x!==id));setAttendance(old=>{const next={...old};delete next[id];return next;});}}>✕</button></div>})}</div>
     </div>
-    <div style={panel}>
-        <h2>3. Gezamenlijke test</h2>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:12}}>
+    <div ref={livePanelRef} style={{...panel,scrollMarginTop:0}}>
+        <div style={running ? {position:"sticky",top:0,zIndex:30,background:"#17354b",padding:"10px 8px",borderRadius:14,boxShadow:"0 5px 16px rgba(0,0,0,.35)"} : undefined}>
+        <h2 style={{marginTop:0}}>3. Gezamenlijke test</h2>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:12}}> 
         <div style={{padding:12,borderRadius:14,background:"rgba(255,255,255,.06)"}}><div style={{fontSize:12,opacity:.7}}>Snelheid</div><strong style={{fontSize:24}}>{currentStage} km/u</strong></div>
         <div style={{padding:12,borderRadius:14,background:"rgba(255,255,255,.06)"}}><div style={{fontSize:12,opacity:.7}}>Kegels in deze snelheid</div><strong style={{fontSize:24}}>{completedStageMarkers}/{stageMarkerTotal || "—"}</strong><div style={{fontSize:12}}>nog {markersRemaining} tot volgende snelheid</div></div>
         <div style={{padding:12,borderRadius:14,background:"rgba(255,255,255,.06)"}}><div style={{fontSize:12,opacity:.7}}>Afstand</div><strong style={{fontSize:24}}>{lastMarker?.distance_m ?? 0} m</strong><div style={{fontSize:12}}>testtijd {timeLabel(testSeconds)}</div></div>
         <div style={{padding:12,borderRadius:14,background:running?"rgba(137,194,170,.18)":"rgba(255,255,255,.06)"}}><div style={{fontSize:12,opacity:.7}}>Volgende kegel over</div><strong style={{fontSize:32}}>{running ? secondsToNextMarker : "—"} s</strong></div>
       </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:8}}><button type="button" style={btn} disabled={!audioReady || !participants.some(id => (attendance[id] ?? "deelneemt") === "deelneemt") || running} onClick={()=>void startLive()}>▶ Start MAS-test</button><button type="button" style={danger} disabled={!running} onClick={()=>void stopAllLive()}>■ STOP ALL</button></div>
+        </div>
         <p style={{fontSize:13,opacity:.85}}>Tik tijdens de test op de <strong>naam van de leerling</strong> zodra die stopt. De MAS-score wordt op dat exacte moment berekend uit de beveiligde testklok en voorlopig opgeslagen.</p>
-        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:12}}>{sortedParticipantIds.map(id=>{const p=byId.get(id);const done=stopped.includes(id);const status=attendance[id] ?? "deelneemt";const excluded=status!=="deelneemt";const result=drafts.find(d=>d.leerling_id===id && d.testdatum===liveDate);return <button type="button" key={id} aria-label={`${p?.volledige_naam ?? "Leerling"}: ${done ? "score bewaard" : "MAS registreren"}`} style={{...btn,minHeight:108,width:"100%",padding:"10px 9px",textAlign:"left",display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",gap:7,border:"1px solid rgba(137,194,170,.35)",background:done?"#89C2AA":excluded?"#48576a":"linear-gradient(90deg,#255971,#4B8E8D)",color:done?"#102b32":"#fff",opacity:!running&&!done?.75:1}} disabled={!running || done || excluded} onClick={()=>stopPupil(id)}><strong style={{fontSize:15,lineHeight:1.15,overflowWrap:"anywhere"}}>{p?.volledige_naam}{profileWarning(p)}</strong><span style={{fontSize:13}}>{done?`✓ MAS geregistreerd: ${result?.value ?? "—"} km/u · ${result?.distance_m ?? 0} m`:status==="afwezig"?"Afwezig":status==="geblesseerd"?"Geblesseerd":`${p?.klas_naam ?? ""} · Tik om MAS te registreren`}</span></button>})}</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginTop:12,...(running?{maxHeight:"calc(100dvh - 285px)",minHeight:160,overflowY:"auto" as const,overscrollBehavior:"contain" as const,WebkitOverflowScrolling:"touch" as const}: {})}}>{sortedParticipantIds.map(id=>{const p=byId.get(id);const done=stopped.includes(id);const status=attendance[id] ?? "deelneemt";const excluded=status!=="deelneemt";const result=drafts.find(d=>d.leerling_id===id && d.testdatum===liveDate);return <button type="button" key={id} aria-label={`${p?.volledige_naam ?? "Leerling"}: ${done ? "score bewaard" : "MAS registreren"}`} style={{...btn,minHeight:108,width:"100%",padding:"10px 9px",textAlign:"left",display:"flex",flexDirection:"column",alignItems:"flex-start",justifyContent:"center",gap:7,border:"1px solid rgba(137,194,170,.35)",background:done?"#89C2AA":excluded?"#48576a":"linear-gradient(90deg,#255971,#4B8E8D)",color:done?"#102b32":"#fff",opacity:!running&&!done?.75:1}} disabled={!running || done || excluded} onClick={()=>stopPupil(id)}><strong style={{fontSize:15,lineHeight:1.15,overflowWrap:"anywhere"}}>{p?.volledige_naam}{profileWarning(p)}</strong><span style={{fontSize:13}}>{done?`✓ MAS geregistreerd: ${result?.value ?? "—"} km/u · ${result?.distance_m ?? 0} m`:status==="afwezig"?"Afwezig":status==="geblesseerd"?"Geblesseerd":`${p?.klas_naam ?? ""} · Tik om MAS te registreren`}</span></button>})}</div>
         <p style={{fontSize:13}}>Een STOP-score is voorlopig. Controleer en corrigeer de MAS in ‘Te bevestigen’. Het laatst volledig afgelegde niveau is niet automatisch gelijk aan de snelheid waarbij de leerling stopte.</p>
     </div>
     </>}
