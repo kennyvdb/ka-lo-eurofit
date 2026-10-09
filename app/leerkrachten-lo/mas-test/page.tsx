@@ -436,8 +436,8 @@ export default function MasTestPage() {
         <h3 style={{marginTop:18,paddingTop:12,borderTop:"1px solid rgba(137,194,170,.25)"}}>Geselecteerd voor deze test: {participants.length}</h3>
         <div style={{display:"grid",gap:6}}>{sortedParticipantIds.map(id=>{const p=byId.get(id);const status=attendance[id] ?? "deelneemt";return <div key={id} style={{display:"grid",gridTemplateColumns:"minmax(150px,1fr) minmax(130px,180px) auto",alignItems:"center",gap:10,padding:8,border:"1px solid rgba(137,194,170,.2)",borderRadius:10}}><span>{p?.volledige_naam ?? "Leerling"}{profileWarning(p)} · {p?.klas_naam ?? ""}</span><select aria-label={`Status ${p?.volledige_naam ?? "leerling"}`} style={{...control,minHeight:40,padding:"6px 9px"}} value={status} disabled={running} onChange={e=>setAttendance(old=>({...old,[id]:e.target.value as AttendanceStatus}))}><option value="deelneemt">✓ Neemt deel</option><option value="afwezig">○ Afwezig</option><option value="geblesseerd">✚ Geblesseerd</option></select><button type="button" style={{...danger,minHeight:36,padding:"6px 10px"}} disabled={running} onClick={()=>{setParticipants(old=>old.filter(x=>x!==id));setAttendance(old=>{const next={...old};delete next[id];return next;});}}>✕</button></div>})}</div>
     </div>
-    <div ref={livePanelRef} style={{...panel,scrollMarginTop:0}}>
-        <div style={running ? {position:"sticky",top:0,zIndex:30,background:"#17354b",padding:"10px 8px",borderRadius:14,boxShadow:"0 5px 16px rgba(0,0,0,.35)"} : undefined}>
+    <div ref={livePanelRef} style={{...panel,scrollMarginTop:88}}>
+        <div style={running ? {position:"sticky",top:80,zIndex:30,background:"#17354b",padding:"10px 8px",borderRadius:14,boxShadow:"0 5px 16px rgba(0,0,0,.35)"} : undefined}>
         <h2 style={{marginTop:0}}>3. Gezamenlijke test</h2>
         <div style={{display:"grid",gridTemplateColumns:"repeat(2,minmax(0,1fr))",gap:10,marginBottom:12}}> 
         <div style={{padding:12,borderRadius:14,background:"rgba(255,255,255,.06)"}}><div style={{fontSize:12,opacity:.7}}>Snelheid</div><strong style={{fontSize:24}}>{currentStage} km/u</strong></div>
