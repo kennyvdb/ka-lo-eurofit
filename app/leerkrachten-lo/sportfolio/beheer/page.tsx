@@ -683,6 +683,12 @@ export default function SportfolioBeheerPage() {
       profielen.push(...(data ?? []));
     }
     const profielPerEmail = new Map(profielen.map((p) => [getEmail(p), p]));
+    // Klasgroepleden kunnen geen username bevatten: verifieer die via de officiële class_students-lijst.
+    const officieelPerEmail = new Map<string, RawRow>();
+    for (const row of leerlingenRows) {
+      const email = getEmail(row);
+      if (email && !officieelPerEmail.has(email)) officieelPerEmail.set(email, row);
+    }
     return [...uniekeRijen.entries()].map(([email, row]) => {
       const p = profielPerEmail.get(email);
       const klas = getKlasNaam(row);
@@ -692,7 +698,7 @@ export default function SportfolioBeheerPage() {
         id: p?.id ? String(p.id) : `zonder-profiel:${email}`,
         naam: getNaam(row) || String(p?.volledige_naam ?? email),
         email,
-        username: String(getValue(row, ["username", "smartschool_username"])).trim(),
+        username: String(getValue(officieelPerEmail.get(email) ?? {}, ["username", "smartschool_username"]) || getValue(row, ["username", "smartschool_username"])).trim().toLowerCase(),
         klas_naam: klas || (p?.klas_naam ? String(p.klas_naam) : null),
         leerjaar: effectiefLeerjaar,
         graad: effectiefLeerjaar == null ? null : Math.ceil(effectiefLeerjaar / 2),
@@ -1419,6 +1425,44 @@ export default function SportfolioBeheerPage() {
 
     try {
       setSavingScores(true);
+      // Controleer vlak voor het schrijven op identieke bestaande scores. Een herhaalde
+      // test blijft mogelijk, maar niet onopgemerkt door een tweede klik op Opslaan.
+      const duplicates: string[] = [];
+      const profileRows = rows as Array<{ leerling_id: string; score_nummer: number | null; score_tekst: string | null }>;
+      for (let i = 0; i < profileRows.length; i += 100) {
+        const batch = profileRows.slice(i, i + 100);
+        const { data, error } = await supabase.from("sportfolio_scores")
+          .select("leerling_id,score_nummer,score_tekst")
+          .eq("discipline_id", selectedDiscipline.id).eq("schooljaar", selectedSchooljaar)
+          .in("leerling_id", batch.map(r => r.leerling_id));
+        if (error) throw new Error(readableSupabaseError(error, "Dubbele scores controleren mislukt."));
+        for (const r of batch) {
+          if ((data ?? []).some(old => old.leerling_id === r.leerling_id &&
+            old.score_nummer === r.score_nummer && (old.score_tekst ?? null) === r.score_tekst)) {
+            duplicates.push(targetLeerlingen.find(l => l.id === r.leerling_id)?.naam ?? r.leerling_id);
+          }
+        }
+      }
+      if (pending.length) {
+        const { data, error } = await supabase.rpc("sportfolio_pending_for_selection", {
+          p_discipline_id: selectedDiscipline.id,
+          p_schooljaar: selectedSchooljaar,
+          p_emails: pending.map(l => l.email),
+        });
+        if (error) throw new Error(readableSupabaseError(error, "Voorlopige dubbele scores controleren mislukt."));
+        for (const leerling of pending) {
+          const draft = scoreDrafts[leerling.id] ?? EMPTY_DRAFT;
+          const nummer = draft.status ? null : bestePoging(draft, selectedDiscipline);
+          const tekst = draft.status === "geblesseerd" ? "Geblesseerd" : draft.status === "afwezig" ? "Afwezig" : null;
+          if ((data ?? []).some((old: RawRow) => getEmail({ email: old.leerling_email }) === leerling.email &&
+            (old.score_nummer == null ? null : Number(old.score_nummer)) === nummer &&
+            (old.score_tekst ?? null) === tekst)) duplicates.push(leerling.naam);
+        }
+      }
+      if (duplicates.length && !window.confirm(
+        `Voor ${duplicates.join(", ")} bestaat al een identieke score voor ${selectedDiscipline.naam} in ${selectedSchooljaar}.\n\n` +
+        "Wil je toch een nieuwe registratie toevoegen? Kies Annuleren om dubbele opslag te vermijden."
+      )) return;
 
       let pendingSaved = 0;
       for (const leerling of pending) {
