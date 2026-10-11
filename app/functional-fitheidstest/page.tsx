@@ -140,7 +140,7 @@ const TESTS: TestDef[] = [
     inputMode: "numeric",
     step: 1,
     min: 0,
-    max: 900,
+    max: 7200,
     icon: "🧊",
     image: "/functional/wallsit.png",
   },
