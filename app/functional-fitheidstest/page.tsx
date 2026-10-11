@@ -222,6 +222,7 @@ function isTeacherRole(p?: Profiel | null) {
   const raw = (p?.role ?? p?.rol ?? "").trim().toLowerCase();
   return ["teacher", "leerkracht", "lo_leerkracht", "admin"].includes(raw);
 }
+type RankRow = { plaats: number; naam: string | null; score: number; schooljaar: string | null };
 type SavedRow = {
   id: string;
   user_id: string;
@@ -250,6 +251,28 @@ export default function FunctionalFitheidstestPage() {
   const [loadingLatest, setLoadingLatest] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
   const [masInfo, setMasInfo] = useState<string | null>(null);
+  const teacherMode = isTeacherRole(profiel);
+  const [rankTest, setRankTest] = useState<TestDef | null>(null);
+  const [rankGender, setRankGender] = useState("M");
+  const [rankGrade, setRankGrade] = useState(1);
+  const [rankAllTime, setRankAllTime] = useState(false);
+  const [rankRows, setRankRows] = useState<RankRow[]>([]);
+  const [rankBusy, setRankBusy] = useState(false);
+  const [rankError, setRankError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!rankTest) return;
+    let alive = true;
+    setRankBusy(true);
+    setRankError(null);
+    supabase.rpc("functional_fitheidstest_klassement", { p_test_key: rankTest.key, p_graad: teacherMode ? rankGrade : null, p_geslacht: teacherMode ? rankGender : null, p_aller_tijden: teacherMode && rankAllTime }).then(({data,error}) => {
+      if (!alive) return;
+      setRankRows((data ?? []) as RankRow[]);
+      setRankError(error?.message ?? null);
+      setRankBusy(false);
+    });
+    return () => { alive = false; };
+  }, [rankTest,rankGrade,rankGender,rankAllTime,teacherMode]);
+
   const [scores, setScores] = useState<Record<TestKey, ScoreValue>>(() => {
     const obj = {} as Record<TestKey, ScoreValue>;
     for (const t of TESTS) obj[t.key] = "";
@@ -269,7 +292,6 @@ export default function FunctionalFitheidstestPage() {
     return { numeric };
   }, [scores]);
   const greetingName = profiel?.volledige_naam?.split(" ")?.[0] ?? "Beast";
-  const teacherMode = isTeacherRole(profiel);
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from("profielen")
@@ -604,6 +626,7 @@ export default function FunctionalFitheidstestPage() {
                 <TestCard
                   key={t.key}
                   def={t}
+                onRank={() => { setRankTest(t); setRankAllTime(false); setRankGrade(Number(profiel?.graad) || Math.ceil(Number(profiel?.leerjaar || 1) / 2)); setRankGender("jongen"); }}
                   value={scores[t.key]}
                   onChange={(raw) => setOne(t.key, raw)}
                   modificationChecked={
@@ -691,7 +714,18 @@ export default function FunctionalFitheidstestPage() {
           defaultMas={computed.numeric.vma_kmu ?? null}
         />
       ) : null}
-    </AppShell>
+    {rankTest && <div role="presentation" onMouseDown={(e) => { if(e.target===e.currentTarget)setRankTest(null); }} style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,.78)",display:"grid",placeItems:"center",padding:12}}>
+  <section role="dialog" aria-modal="true" aria-label={`Klassement ${rankTest.title}`} style={{background:"#102638",color:"white",border:"1px solid #4B8E8D",borderRadius:20,padding:20,width:"min(100%,600px)",maxHeight:"85dvh",overflowY:"auto"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}><h2 style={{fontSize:20,fontWeight:900}}>🏆 {rankTest.title}</h2><button type="button" onClick={()=>setRankTest(null)} style={{padding:10,color:"white"}} aria-label="Sluiten">✕</button></div>
+    {teacherMode ? <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:14}}>
+      <label>Geslacht <select value={rankGender} onChange={e=>setRankGender(e.target.value)} style={{color:"#111",padding:8,borderRadius:8}}><option value="M">Jongens</option><option value="V">Meisjes</option></select></label>
+      <label>Graad <select value={rankGrade} onChange={e=>setRankGrade(Number(e.target.value))} style={{color:"#111",padding:8,borderRadius:8}}>{[1,2,3].map(g=><option key={g} value={g}>{g}e graad</option>)}</select></label>
+      <label>Periode <select value={rankAllTime?"all":"current"} onChange={e=>setRankAllTime(e.target.value==="all")} style={{color:"#111",padding:8,borderRadius:8}}><option value="current">Dit schooljaar</option><option value="all">Aller tijden</option></select></label>
+    </div> : <p style={{marginTop:10,opacity:.8}}>Dit schooljaar · jouw geslacht · jouw graad · anoniem</p>}
+    {rankBusy ? <p style={{marginTop:20}}>Klassement laden…</p> : rankError ? <p role="alert" style={{marginTop:20,color:"#ffb4b4"}}>{rankError}</p> : rankRows.length===0 ? <p style={{marginTop:20}}>Nog geen resultaten beschikbaar.</p> : <div style={{overflowX:"auto",marginTop:18}}><table style={{width:"100%",borderCollapse:"collapse"}}><thead><tr><th style={{textAlign:"left",padding:8}}>Plaats</th>{teacherMode&&<th style={{textAlign:"left",padding:8}}>Naam</th>}<th style={{textAlign:"right",padding:8}}>Score</th>{teacherMode&&rankAllTime&&<th style={{textAlign:"right",padding:8}}>Schooljaar</th>}</tr></thead><tbody>{rankRows.map((r,i)=><tr key={i} style={{borderTop:"1px solid #ffffff25"}}><td style={{padding:8}}>{r.plaats}</td>{teacherMode&&<td style={{padding:8}}>{r.naam??"—"}</td>}<td style={{padding:8,textAlign:"right"}}>{r.score.toLocaleString("nl-BE")} {rankTest.unit}</td>{teacherMode&&rankAllTime&&<td style={{padding:8,textAlign:"right"}}>{r.schooljaar}</td>}</tr>)}</tbody></table></div>}
+  </section>
+</div>}
+</AppShell>
   );
 }
 function TabBtn({
@@ -725,8 +759,10 @@ function TestCard({
   modificationChecked,
   modificationLabel,
   onModificationChange,
+  onRank,
 }: {
   def: TestDef;
+  onRank: () => void;
   value: ScoreValue;
   onChange: (raw: string) => void;
   modificationChecked?: boolean;
@@ -735,8 +771,9 @@ function TestCard({
 }) {
   const hasImg = Boolean(def.image);
   return (
-    <div style={styles.testCard}>
-      <div style={styles.testTop}>
+    <div style={{...styles.testCard,position:"relative"}}>
+      <button type="button" onClick={onRank} title={`Klassement ${def.title}`} aria-label={`Klassement ${def.title}`} style={{position:"absolute",top:12,right:12,zIndex:3,border:"1px solid rgba(255,255,255,.2)",background:"#255971",color:"white",borderRadius:12,padding:"9px 11px",cursor:"pointer",fontSize:19}}>🏆</button>
+      <div style={{...styles.testTop,paddingRight:48}}>
         <div style={styles.iconBox}>{def.icon}</div>
         <div style={{ minWidth: 0 }}>
           <div style={styles.testTitle}>{def.title}</div>
