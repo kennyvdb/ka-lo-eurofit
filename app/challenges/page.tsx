@@ -1,131 +1,65 @@
-"use client";
 
+"use client";
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import AppShell from "../../components/AppShell";
 import ChallengeCard from "./ChallengeCard";
 import BaseHero from "@/components/heroes/BaseHero";
 import { createClient } from "@/lib/supabase/client";
-
 const supabase = createClient();
-
 type Profiel = {
   id: string;
   volledige_naam: string | null;
 };
-
 const ui = {
   text: "rgba(234,240,255,0.92)",
   muted: "rgba(234,240,255,0.72)",
   border: "rgba(255,255,255,0.12)",
 };
-
 function InfoPill({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        height: 38,
-        padding: "0 12px",
-        borderRadius: 999,
-        border: `1px solid ${ui.border}`,
-        background: "rgba(0,0,0,0.28)",
-        color: ui.text,
-        fontWeight: 900,
-        fontSize: 13,
-      }}
-    >
+    <div style={{ display: "inline-flex", alignItems: "center", height: 38, padding: "0 12px", borderRadius: 999, border: `1px solid ${ui.border}`, background: "rgba(0,0,0,0.28)", color: ui.text, fontWeight: 900, fontSize: 13 }}>
       {children}
     </div>
   );
 }
-
-function SectionCard({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}) {
+function SectionCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <section
-      style={{
-        padding: 16,
-        borderRadius: 22,
-        background: "rgba(255,255,255,0.06)",
-        border: `1px solid ${ui.border}`,
-      }}
-    >
+    <section style={{ padding: 16, borderRadius: 22, background: "rgba(255,255,255,0.06)", border: `1px solid ${ui.border}` }}>
       <div>
-        <div
-          style={{
-            fontWeight: 950,
-            color: ui.text,
-            fontSize: 16,
-          }}
-        >
-          {title}
-        </div>
-
-        {subtitle ? (
-          <div
-            style={{
-              marginTop: 4,
-              color: ui.muted,
-              fontSize: 13,
-            }}
-          >
-            {subtitle}
-          </div>
-        ) : null}
+        <div style={{ fontWeight: 950, color: ui.text, fontSize: 16 }}>{title}</div>
+        {subtitle ? <div style={{ marginTop: 4, color: ui.muted, fontSize: 13 }}>{subtitle}</div> : null}
       </div>
-
       <div style={{ marginTop: 14 }}>{children}</div>
     </section>
   );
 }
-
 export default function Page() {
   const [profiel, setProfiel] = useState<Profiel | null>(null);
-
   useEffect(() => {
     const loadProfiel = async () => {
       const { data, error } = await supabase.auth.getSession();
-
       if (error) {
         console.error("Fout bij ophalen sessie:", error.message);
         return;
       }
-
       const userId = data.session?.user?.id;
       if (!userId) return;
-
       const { data: profielData, error: profielError } = await supabase
         .from("profielen")
         .select("id, volledige_naam")
         .eq("id", userId)
         .maybeSingle();
-
       if (profielError) {
         console.error("Fout bij ophalen profiel:", profielError.message);
         return;
       }
-
-      setProfiel(profielData as Profiel);
+      setProfiel(profielData as Profiel | null);
     };
-
-    loadProfiel();
+    void loadProfiel();
   }, []);
-
   return (
-    <AppShell
-      title="LO App"
-      subtitle="Challenges"
-      userName={profiel?.volledige_naam ?? null}
-    >
+    <AppShell title="LO App" subtitle="Challenges" userName={profiel?.volledige_naam ?? null}>
       <div style={{ display: "grid", gap: 14 }}>
         <BaseHero
           label="CHALLENGE HUB"
@@ -133,18 +67,14 @@ export default function Page() {
             <>
               Beweeg. Competeer.
               <br />
-              <span
-                className="bg-[linear-gradient(90deg,#255971,#4B8E8D,#89C2AA)] bg-clip-text text-transparent"
-              >
+              <span className="bg-[linear-gradient(90deg,#255971,#4B8E8D,#89C2AA)] bg-clip-text text-transparent">
                 Scoor voor jezelf en je klas.
               </span>
             </>
           }
           description={
             <>
-              Ontdek alle sportieve challenges van school. Binnenkort kun je
-              deelnemen aan de Run & Walk Challenge, je kracht testen op de
-              roeier of je inschrijven voor een tornooi.
+              Ontdek de sportieve challenges van onze school. Schrijf je in voor het pingpongtornooi, bekijk de resultaten van afgelopen challenges en ontdek welke uitdagingen binnenkort starten.
             </>
           }
           imageSrc="/challenges/challenges.png"
@@ -153,7 +83,6 @@ export default function Page() {
             <>
               <InfoPill>🏆 Klassementen</InfoPill>
               <InfoPill>👟 Individuele prestaties</InfoPill>
-
               <div style={{ width: "100%", marginTop: 4 }}>
                 <Link href="/dashboard" style={styles.dashboardBtn}>
                   ← Terug naar dashboard
@@ -163,11 +92,31 @@ export default function Page() {
           }
           imageClassName="scale-[1.02]"
         />
-
-        <SectionCard
-          title="Komende challenges"
-          subtitle="Deze challenges worden binnenkort beschikbaar."
-        >
+        <SectionCard title="Open voor inschrijvingen" subtitle="Schrijf je in en neem deel aan onze sportieve uitdagingen.">
+          <div className="challengeGrid">
+            <ChallengeCard
+              href="/challenges/pingpongtornooi"
+              emoji="🏓"
+              subtitle="Schooltornooi"
+              title="Pingpongtornooi"
+              description="Schrijf je in, speel wedstrijden tijdens de pauzes en strijd om de titel van pingpongkampioen!"
+              status="Inschrijven"
+            />
+          </div>
+        </SectionCard>
+        <SectionCard title="Afgelopen challenges" subtitle="Bekijk de resultaten en klassementen van voorbije uitdagingen.">
+          <div className="challengeGrid">
+            <ChallengeCard
+              href="/challenges/roeichallenge"
+              emoji="🚣"
+              subtitle="Row Cup 2026"
+              title="Roeichallenge"
+              description="Vorm een team van 3 roeiers en probeer samen in 6 minuten zoveel mogelijk meters af te leggen."
+              status="Afgelopen"
+            />
+          </div>
+        </SectionCard>
+        <SectionCard title="Komende challenges" subtitle="Deze uitdagingen worden binnenkort beschikbaar.">
           <div className="challengeGrid">
             <ChallengeCard
               href="/challenges/RunWalkChallenge"
@@ -177,26 +126,6 @@ export default function Page() {
               description="Registreer je gelopen of gewandelde kilometers en help jouw klas naar de top van het klassement."
               status="Binnenkort"
             />
-
-            <ChallengeCard
-               href="/challenges/roeichallenge"
-               emoji="🚣"
-               subtitle="Row Cup 2026"
-               title="Roeichallenge"
-               description="Vorm een team van 3 roeiers en probeer samen in 6 minuten zoveel mogelijk meters af te leggen."
-               status="Binnenkort"
-               clickable={true}
-            />
-
-            <ChallengeCard
-              href="/challenges/pingpongtornooi"
-              emoji="🏓"
-              subtitle="Binnenkort"
-              title="Pingpongtornooi"
-              description="Daag andere leerlingen uit in een ladder- of tornooisysteem."
-              status="Binnenkort"
-            />
-
             <ChallengeCard
               href="/challenges/voetbaltornooi"
               emoji="⚽"
@@ -205,16 +134,22 @@ export default function Page() {
               description="Schrijf je klas of team in voor een schooltornooi."
               status="Binnenkort"
             />
+            <ChallengeCard
+              href="/challenges/volleybaltornooi"
+              emoji="🏐"
+              subtitle="Binnenkort"
+              title="Volleybaltornooi"
+              description="Stel je team samen en neem het op tegen andere ploegen tijdens ons schooltornooi!"
+              status="Binnenkort"
+            />
           </div>
         </SectionCard>
-
         <style jsx>{`
           .challengeGrid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 14px;
           }
-
           @media (max-width: 900px) {
             .challengeGrid {
               grid-template-columns: 1fr;
@@ -225,7 +160,6 @@ export default function Page() {
     </AppShell>
   );
 }
-
 const styles: Record<string, React.CSSProperties> = {
   dashboardBtn: {
     display: "inline-flex",
