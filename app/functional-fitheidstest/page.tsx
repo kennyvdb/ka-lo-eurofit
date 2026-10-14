@@ -251,6 +251,8 @@ export default function FunctionalFitheidstestPage() {
   const [loadingLatest, setLoadingLatest] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
   const [masInfo, setMasInfo] = useState<string | null>(null);
+  const [masLoading, setMasLoading] = useState(false);
+  const [confirmedMas, setConfirmedMas] = useState<number | null>(null);
   const teacherMode = isTeacherRole(profiel);
   const [rankTest, setRankTest] = useState<TestDef | null>(null);
   const [rankGender, setRankGender] = useState("M");
@@ -272,7 +274,6 @@ export default function FunctionalFitheidstestPage() {
     });
     return () => { alive = false; };
   }, [rankTest,rankGrade,rankGender,rankAllTime,teacherMode]);
-
   const [scores, setScores] = useState<Record<TestKey, ScoreValue>>(() => {
     const obj = {} as Record<TestKey, ScoreValue>;
     for (const t of TESTS) obj[t.key] = "";
@@ -338,7 +339,7 @@ export default function FunctionalFitheidstestPage() {
         const draft = JSON.parse(saved) as { date?: string; note?: string; scores?: Partial<Record<TestKey, ScoreValue>>; modifications?: { pushups_on_knees?: boolean; table_pullup_bent_legs?: boolean } };
         if (draft.date) setDate(draft.date);
         if (typeof draft.note === "string") setNote(draft.note);
-        if (draft.scores) setScores((old) => ({ ...old, ...draft.scores }));
+        if (draft.scores) { const { vma_kmu: _ignoredMas, ...otherScores } = draft.scores; setScores((old) => ({ ...old, ...otherScores, vma_kmu: "" })); }
         if (draft.modifications) setModifications({ pushups_on_knees: Boolean(draft.modifications.pushups_on_knees), table_pullup_bent_legs: Boolean(draft.modifications.table_pullup_bent_legs) });
       }
     } catch {
@@ -349,33 +350,42 @@ export default function FunctionalFitheidstestPage() {
   }, [uid]);
   useEffect(() => {
     if (!uid || !draftReady) return;
-    localStorage.setItem(`functional-fitheidstest-draft:${uid}`, JSON.stringify({ date, note, scores, modifications }));
+    localStorage.setItem(`functional-fitheidstest-draft:${uid}`, JSON.stringify({ date, note, scores: { ...scores, vma_kmu: "" }, modifications }));
   }, [uid, draftReady, date, note, scores, modifications]);
   useEffect(() => {
     if (!uid || !draftReady || !profiel?.schooljaar) return;
     let cancelled = false;
     const loadMas = async () => {
+      setMasLoading(true);
+      setConfirmedMas(null);
+      setMasInfo(null);
+      setScores((old) => ({ ...old, vma_kmu: "" }));
       try {
         const { data: discipline, error: disciplineError } = await supabase.from("sportfolio_disciplines").select("id").eq("slug", "mas_test").maybeSingle();
         if (disciplineError) throw disciplineError;
-        if (!discipline?.id) return;
+        if (!discipline?.id) { if (!cancelled) setMasInfo("Nog geen MAS-score beschikbaar in Sportfolio."); return; }
         const { data, error: scoreError } = await supabase.from("sportfolio_scores").select("score_nummer, score_tekst, extra_data, bevestigd_op").eq("leerling_id", uid).eq("discipline_id", discipline.id).eq("schooljaar", profiel.schooljaar).eq("status", "bevestigd").order("bevestigd_op", { ascending: false }).limit(1);
         if (scoreError) throw scoreError;
+        if (cancelled) return;
         const latest = data?.[0];
-        if (!latest || cancelled) return;
+        if (!latest) { setMasInfo("Nog geen bevestigde MAS-score beschikbaar in Sportfolio."); return; }
         const rawMas = latest.score_nummer ?? latest.extra_data?.mas_km_u ?? latest.score_tekst;
         const mas = typeof rawMas === "number" ? rawMas : Number(String(rawMas ?? "").trim().replace(",", "."));
-        if (!Number.isFinite(mas)) return;
-        setScores((old) => String(old.vma_kmu ?? "").trim() ? old : { ...old, vma_kmu: String(mas).replace(".", ",") });
-        setMasInfo(`MAS automatisch ingevuld uit Sportfolio: ${String(mas).replace(".", ",")} km/u`);
+        if (!Number.isFinite(mas) || mas <= 0) { setMasInfo("De bevestigde MAS-score kon niet worden gelezen."); return; }
+        setConfirmedMas(mas);
+        setScores((old) => ({ ...old, vma_kmu: String(mas).replace(".", ",") }));
+        setMasInfo(`MAS automatisch overgenomen uit Sportfolio: ${String(mas).replace(".", ",")} km/u (niet aanpasbaar).`);
       } catch {
-        // MAS kan nog altijd handmatig ingevuld worden.
+        if (!cancelled) setMasInfo("MAS-score kon niet worden opgehaald. Probeer de pagina opnieuw te laden.");
+      } finally {
+        if (!cancelled) setMasLoading(false);
       }
     };
     void loadMas();
     return () => { cancelled = true; };
   }, [uid, draftReady, profiel?.schooljaar]);
   const setOne = (k: TestKey, raw: string) => {
+    if (k === "vma_kmu") return;
     setInfo(null);
     setError(null);
     if (raw.trim() === "") {
@@ -399,7 +409,7 @@ export default function FunctionalFitheidstestPage() {
   const resetAll = () => {
     setScores(() => {
       const obj = {} as Record<TestKey, ScoreValue>;
-      for (const t of TESTS) obj[t.key] = "";
+      for (const t of TESTS) obj[t.key] = t.key === "vma_kmu" && confirmedMas !== null ? String(confirmedMas).replace(".", ",") : "";
       return obj;
     });
     setNote("");
@@ -418,7 +428,7 @@ export default function FunctionalFitheidstestPage() {
         user_id: uid,
         schooljaar: profiel?.schooljaar ?? null,
         date,
-        scores: Object.fromEntries(TESTS.map((t) => [t.key, computed.numeric[t.key]])),
+        scores: Object.fromEntries(TESTS.filter((t) => t.key !== "vma_kmu").map((t) => [t.key, computed.numeric[t.key]])),
         // Oude databasekolommen behouden voor compatibiliteit.
         // De app gebruikt geen arbitraire punten op 10 meer.
         points: {},
@@ -465,7 +475,7 @@ export default function FunctionalFitheidstestPage() {
         const obj = {} as Record<TestKey, ScoreValue>;
         for (const t of TESTS) {
           const v = (row.scores as any)?.[t.key];
-          obj[t.key] = typeof v === "number" ? v : "";
+          obj[t.key] = t.key === "vma_kmu" ? (confirmedMas !== null ? String(confirmedMas).replace(".", ",") : "") : typeof v === "number" ? v : "";
         }
         return obj;
       });
@@ -626,9 +636,11 @@ export default function FunctionalFitheidstestPage() {
                 <TestCard
                   key={t.key}
                   def={t}
-                onRank={() => { setRankTest(t); setRankAllTime(false); setRankGrade(Number(profiel?.graad) || Math.ceil(Number(profiel?.leerjaar || 1) / 2)); setRankGender("jongen"); }}
+                onRank={() => { setRankTest(t); setRankAllTime(false); setRankGrade(Number(profiel?.graad) || Math.ceil(Number(profiel?.leerjaar || 1) / 2)); setRankGender("M"); }}
                   value={scores[t.key]}
                   onChange={(raw) => setOne(t.key, raw)}
+                readOnly={t.key === "vma_kmu"}
+                loadingValue={t.key === "vma_kmu" && masLoading}
                   modificationChecked={
                     t.key === "pushups_60s"
                       ? modifications.pushups_on_knees
@@ -711,7 +723,7 @@ export default function FunctionalFitheidstestPage() {
             leerjaar: profiel?.leerjaar ?? null,
             graad: profiel?.graad ?? null,
           }}
-          defaultMas={computed.numeric.vma_kmu ?? null}
+          defaultMas={confirmedMas}
         />
       ) : null}
     {rankTest && <div role="presentation" onMouseDown={(e) => { if(e.target===e.currentTarget)setRankTest(null); }} style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,.78)",display:"grid",placeItems:"center",padding:12}}>
@@ -752,6 +764,20 @@ function TabBtn({
     </button>
   );
 }
+type ExerciseGuide = { uitvoering: string[]; aandacht: string[]; geldig: string; ongeldig: string };
+const EXERCISE_GUIDES: Partial<Record<TestKey, ExerciseGuide>> = {
+  situp_floor_tap_60s: { uitvoering: ["Ga op je rug liggen met gebogen knieën en de voeten op de grond.", "Raak met je handen de vloer achter je hoofd aan en kom rechtop tot je de vloer bij je voeten aantikt.", "Herhaal gedurende 60 seconden."], aandacht: ["Houd de voeten zoveel mogelijk op de grond.", "Werk gecontroleerd en gebruik dezelfde bewegingsuitslag bij elke herhaling."], geldig: "Beide aantikpunten worden bereikt: achter het hoofd en bij de voeten.", ongeldig: "Geen volledige beweging of de aantikpunten niet bereikt." },
+  wallball_3kg_60s: { uitvoering: ["Houd de wallball voor je borst en sta voor het afgesproken doel.", "Zak in een squat en kom krachtig recht om de bal naar het doel te werpen.", "Vang de bal op en herhaal gedurende 60 seconden."], aandacht: ["Gebruik het afgesproken balgewicht (op de kaart: 5 kg).", "Zak telkens voldoende diep en werp naar de afgesproken doelhoogte."], geldig: "Correcte squat én de bal raakt het afgesproken doel.", ongeldig: "Onvoldoende squatdiepte of het doel wordt niet geraakt." },
+  pushups_60s: { uitvoering: ["Start in hoge plank met handen onder of iets breder dan de schouders.", "Buig je ellebogen tot de borst bijna de grond raakt.", "Duw terug omhoog met gestrekte armen gedurende 60 seconden."], aandacht: ["Houd romp en benen in één lijn.", "Vermijd doorhangende heupen en halve herhalingen.", "Push-ups op de knieën moeten afzonderlijk worden aangeduid."], geldig: "Volledige neerwaartse en opwaartse beweging met stabiele romp.", ongeldig: "Onvoldoende zakken, niet uitstrekken of verlies van correcte lichaamshouding." },
+  burpees_60s: { uitvoering: ["Start rechtop, plaats je handen op de grond en breng je voeten naar achter in plank.", "Breng je voeten weer naar voren en kom rechtop met een sprong.", "Herhaal gedurende 60 seconden."], aandacht: ["Houd je romp stevig in plank.", "Volg steeds dezelfde afgesproken variant; een borstcontact met de grond telt alleen als dat vooraf is afgesproken."], geldig: "De volledige afgesproken cyclus van staand naar plank en terug met sprong is uitgevoerd.", ongeldig: "Een fase overslaan of niet volledig rechtkomen." },
+  wallsit_time_s: { uitvoering: ["Leun met je rug tegen de muur.", "Zak tot je knieën ongeveer 90 graden gebogen zijn.", "Houd de houding zo lang mogelijk vast; de score is in seconden."], aandacht: ["Houd de rug tegen de muur en de voeten stabiel.", "Steun niet met je handen op je bovenbenen."], geldig: "De houding blijft correct met ongeveer 90 graden kniebuiging.", ongeldig: "De heupen komen omhoog, de handen steunen op de benen of de houding wordt verlaten." },
+  table_pullup_invertedrow_60s: { uitvoering: ["Neem een stevige, veilige stang of tafelrand vast en hang eronder met het lichaam gestrekt.", "Trek je borst gecontroleerd richting stang of rand.", "Laat je terug zakken tot de armen gestrekt zijn; herhaal 60 seconden."], aandacht: ["Controleer vooraf de stabiliteit van het materiaal.", "Houd romp en heupen in lijn.", "Geplooide benen moeten afzonderlijk worden aangeduid."], geldig: "De borst bereikt de afgesproken hoogte en de armen strekken opnieuw.", ongeldig: "Halve trekbeweging, heupen laten zakken of onvoldoende armstrekking." },
+  plank_time_s: { uitvoering: ["Steun op je onderarmen en tenen, met ellebogen onder de schouders.", "Span buik en billen aan en houd je lichaam in één rechte lijn.", "Houd de positie zo lang mogelijk vast."], aandacht: ["Adem rustig door.", "Vermijd doorhangende of te hoog geheven heupen."], geldig: "Een stabiele rechte lijn van schouders tot hielen blijft behouden.", ongeldig: "Heupen zakken of stijgen duidelijk, of knieën raken de grond." },
+  box_jumps_60s: { uitvoering: ["Ga voor een stabiele box op de afgesproken hoogte staan.", "Spring met beide voeten op de box en kom volledig rechtop.", "Stap of spring veilig terug naar beneden en herhaal 60 seconden."], aandacht: ["Gebruik een antislipbox en zorg voor voldoende vrije ruimte.", "Land zacht met gebogen knieën."], geldig: "Beide voeten landen op de box en je staat bovenaan volledig recht.", ongeldig: "Niet volledig rechtstaan, de box missen of onveilig landen." },
+  dips_chairdips_60s: { uitvoering: ["Plaats je handen op een stevige bank of stoel achter je, met voeten voor je.", "Buig je ellebogen om je lichaam gecontroleerd te laten zakken.", "Duw omhoog tot je armen bijna gestrekt zijn; herhaal 60 seconden."], aandacht: ["Gebruik materiaal dat niet kan schuiven.", "Houd schouders laag en forceer geen pijnlijke bewegingsuitslag."], geldig: "Een duidelijke gecontroleerde neerwaartse en opwaartse beweging.", ongeldig: "Enkel korte veerbewegingen of afzetten met de benen in plaats van de armen." },
+  airsquats_60s: { uitvoering: ["Sta met voeten ongeveer op schouderbreedte.", "Buig knieën en heupen en zak tot de afgesproken diepte.", "Kom volledig rechtop en herhaal gedurende 60 seconden."], aandacht: ["Houd de hielen op de grond en knieën in de richting van de tenen.", "Houd de rug neutraal."], geldig: "De afgesproken squatdiepte wordt bereikt en heupen en knieën strekken bovenaan.", ongeldig: "Te ondiep zakken of niet volledig rechtkomen." },
+  handstand_hold_time_s: { uitvoering: ["Plaats je handen stevig op de grond, ongeveer schouderbreed.", "Kom gecontroleerd in handstand tegen een muur als steun volgens de afspraak.", "Houd de houding zo lang mogelijk vast."], aandacht: ["Gebruik een veilige ondergrond en laat waar nodig iemand beveiligen.", "Span de romp aan en voorkom overmatig holtrekken."], geldig: "De afgesproken handstandpositie blijft behouden zonder bijkomende steun.", ongeldig: "Voeten komen op de grond of de afgesproken handstandpositie wordt verlaten." }
+};
 function TestCard({
   def,
   value,
@@ -760,9 +786,13 @@ function TestCard({
   modificationLabel,
   onModificationChange,
   onRank,
+  readOnly = false,
+  loadingValue = false,
 }: {
   def: TestDef;
   onRank: () => void;
+  readOnly?: boolean;
+  loadingValue?: boolean;
   value: ScoreValue;
   onChange: (raw: string) => void;
   modificationChecked?: boolean;
@@ -770,6 +800,8 @@ function TestCard({
   onModificationChange?: (checked: boolean) => void;
 }) {
   const hasImg = Boolean(def.image);
+  const [showGuide, setShowGuide] = useState(false);
+  const guide = EXERCISE_GUIDES[def.key];
   return (
     <div style={{...styles.testCard,position:"relative"}}>
       <button type="button" onClick={onRank} title={`Klassement ${def.title}`} aria-label={`Klassement ${def.title}`} style={{position:"absolute",top:12,right:12,zIndex:3,border:"1px solid rgba(255,255,255,.2)",background:"#255971",color:"white",borderRadius:12,padding:"9px 11px",cursor:"pointer",fontSize:19}}>🏆</button>
@@ -780,6 +812,7 @@ function TestCard({
           <div style={styles.testDesc}>{def.desc}</div>
         </div>
       </div>
+      {guide ? <button type="button" onClick={() => setShowGuide(true)} style={{marginTop:12,padding:"9px 13px",borderRadius:12,border:"1px solid rgba(137,194,170,.45)",background:"rgba(37,89,113,.45)",color:"white",fontWeight:800,cursor:"pointer"}}>ⓘ Uitleg & aandachtspunten</button> : null}
       {hasImg ? (
         <div style={styles.imgWrap}>
           <div style={styles.imgPad}>
@@ -815,20 +848,23 @@ function TestCard({
           <input
             value={value === "" ? "" : String(value)}
             onChange={(e) => onChange(e.target.value)}
-            style={styles.input}
+            readOnly={readOnly}
+            style={{...styles.input,opacity:readOnly?0.8:1,cursor:readOnly?"not-allowed":undefined}}
             inputMode={def.inputMode ?? "numeric"}
             placeholder={`0 ${def.unit}`}
             step={def.step ?? 1}
             min={def.min}
             max={def.max}
           />
-          {def.hint ? <div style={styles.hint}>{def.hint}</div> : null}
+          {readOnly ? <div style={styles.hint}>{loadingValue ? "MAS-score laden uit Sportfolio…" : "Deze score wordt automatisch door de LO-leerkracht bevestigd in Sportfolio en kan hier niet worden aangepast."}</div> : null}
+        {def.hint ? <div style={styles.hint}>{def.hint}</div> : null}
         </div>
         <div style={styles.unitBox}>
           <div style={styles.smallLabel}>Eenheid</div>
           <div style={styles.unitText}>{def.unit}</div>
         </div>
       </div>
+      {showGuide && guide ? <div role="presentation" onMouseDown={(e) => {if(e.target===e.currentTarget)setShowGuide(false);}} style={{position:"fixed",inset:0,zIndex:10020,background:"rgba(0,0,0,.8)",display:"grid",placeItems:"center",padding:12}}><section role="dialog" aria-modal="true" aria-label={`Uitvoering ${def.title}`} style={{background:"#102638",color:"white",border:"1px solid #4B8E8D",borderRadius:20,padding:20,width:"min(100%,580px)",maxHeight:"85dvh",overflowY:"auto"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}><h2 style={{fontSize:19,fontWeight:900}}>{def.icon} {def.title}</h2><button type="button" onClick={() => setShowGuide(false)} aria-label="Sluiten" style={{padding:10,color:"white"}}>✕</button></div><h3 style={{fontWeight:900,marginTop:16}}>Uitvoering</h3><ol style={{paddingLeft:22,listStyle:"decimal",marginTop:6}}>{guide.uitvoering.map((item,i)=><li key={i} style={{marginBottom:6}}>{item}</li>)}</ol><h3 style={{fontWeight:900,marginTop:16}}>Aandachtspunten</h3><ul style={{paddingLeft:22,listStyle:"disc",marginTop:6}}>{guide.aandacht.map((item,i)=><li key={i} style={{marginBottom:6}}>{item}</li>)}</ul><h3 style={{fontWeight:900,marginTop:16,color:"#89C2AA"}}>✓ Geldige herhaling / houding</h3><p style={{marginTop:5}}>{guide.geldig}</p><h3 style={{fontWeight:900,marginTop:16,color:"#ffb4b4"}}>✕ Niet geldig</h3><p style={{marginTop:5}}>{guide.ongeldig}</p><button type="button" onClick={() => setShowGuide(false)} style={{marginTop:20,padding:"11px 18px",borderRadius:12,background:"#255971",color:"white",fontWeight:900}}>Begrepen</button></section></div> : null}
     </div>
   );
 }

@@ -1,9 +1,7 @@
 "use client";
-
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { createClient } from "@/lib/supabase/client";
-
 const supabase = createClient();
 const AUDIO = { muziek: "/beep-test/met-muziek-v2.mp3", beeps: "/beep-test/alleen-beeps-v2.mp3" } as const;
 const TIMING = "/beep-test/timing-v2.json";
@@ -70,7 +68,6 @@ function describeSyncError(error: unknown): string {
   }
   return "Onbekende synchronisatiefout. Probeer opnieuw en controleer de netwerkverbinding.";
 }
-
 // Serializeert alle lokale resultaatschrijfacties: twee snelle STOP-tikken overschrijven elkaar niet.
 let resultQueue: Promise<unknown> = Promise.resolve();
 function updateResults(mutator: (rows: Result[]) => Result[]): Promise<Result[]> {
@@ -83,20 +80,17 @@ function updateResults(mutator: (rows: Result[]) => Result[]): Promise<Result[]>
   resultQueue = operation.catch(() => undefined);
   return operation;
 }
-
 function currentSchoolYear(date = new Date()) {
   const year = date.getFullYear();
   const start = date.getMonth() >= 8 ? year : year - 1;
   return `${start}-${start + 1}`;
 }
-
 type ClassOverviewScore = {
   id: string;
   leerling_id: string;
   bevestigd_op: string | null;
   extra_data: Record<string, unknown> | null;
 };
-
 function sortByFirstName<T extends { volledige_naam?: string; naam?: string }>(rows: T[]): T[] {
   return [...rows].sort((a, b) => {
     const nameA = String(a.volledige_naam ?? a.naam ?? "").trim();
@@ -104,7 +98,6 @@ function sortByFirstName<T extends { volledige_naam?: string; naam?: string }>(r
     return nameA.localeCompare(nameB, "nl-BE", { sensitivity: "base", numeric: true });
   });
 }
-
 export default function BeepTestPage() {
   const [tab, setTab] = useState<"invoer" | "controle" | "historiek" | "klassen">("invoer");
   const [groups, setGroups] = useState<Group[]>([]);
@@ -270,7 +263,6 @@ export default function BeepTestPage() {
     if (running || review) return;
     setAttendance(old => ({ ...old, [studentKey(student)]: status }));
   }
-
   const syncResults = useCallback(async () => {
     if (syncBusy.current || !authorizedRef.current || !teacherRef.current || !navigator.onLine) return;
     syncBusy.current = true;
@@ -282,7 +274,6 @@ export default function BeepTestPage() {
       if (!auth.user || auth.user.id !== teacherRef.current) {
         throw new Error("Meld je opnieuw online aan om te synchroniseren.");
       }
-
       const rows = (await get<Result[]>("results")) ?? [];
       // Bewaar elke lokale score tot de server de rij met hetzelfde ID bevestigt.
       for (const row of rows.filter(r => r.confirmed && !r.archived && r.sync_status !== "synced")) {
@@ -325,7 +316,6 @@ export default function BeepTestPage() {
       setSyncing(false);
     }
   }, []);
-
   function validTiming(t: Timing | null | undefined): t is Timing {
     return !!t && t.protocol_id === EXPECTED_PROTOCOL &&
       t.stages.length === 21 &&
@@ -527,12 +517,10 @@ export default function BeepTestPage() {
     })();
     return () => { cancelled = true; };
   }, [groupId, authorized, teacherId]);
-
   useEffect(() => {
     if (!teacherId || !selectionReady || running || review) return;
     void put(`beep-selection:${teacherId}`, students).catch(() => setMessage("De deelnemerslijst kon niet lokaal bewaard worden."));
   }, [students, teacherId, running]);
-
   async function downloadAudio() {
     setDownloading(true); setReady(false);
     setMessage("Nieuwste audio en timing worden gedownload. Houd de pagina open.");
@@ -628,7 +616,7 @@ export default function BeepTestPage() {
       naam: student.volledige_naam,
       klas: student.klas_naam,
       group_id: student.group_id ?? null,
-      username: official?.leerling_username ?? student.leerling_username ?? "",
+      username: official?.leerling_username || student.leerling_username || "",
       schooljaar: official?.schooljaar ?? student.schooljaar ?? groups.find(g => g.id === student.group_id)?.schooljaar ?? "",
       level: completed.level,
       shuttle: completed.shuttle,
@@ -644,7 +632,6 @@ export default function BeepTestPage() {
       setMessage(`${student.volledige_naam}: lokaal bewaard. Bevestig na STOP ALL.`);
     } catch { stopLocks.current.delete(key); setMessage("LOKALE OPSLAG MISLUKT: noteer deze score onmiddellijk handmatig!"); }
   }
-
   async function stopAll() {
     if (!running || sessionClosingRef.current) return;
     sessionClosingRef.current = true;
@@ -670,7 +657,6 @@ export default function BeepTestPage() {
     }));
     applyResults(next);
   }
-
   async function loadHistory() {
     if (!authorized || !teacherId || (!historyClass && !historyGroup)) return;
     setHistoryLoading(true); setHistoryError(""); setHistoryLoaded(false);
@@ -722,8 +708,6 @@ export default function BeepTestPage() {
     } catch(error) {setHistoryError(describeSyncError(error));setHistoryRows([]);setNormInfo("");}
     finally {setHistoryLoading(false);}
   }
-
-
   const loadClassOverview = useCallback(async () => {
     if (!authorizedRef.current || !teacherRef.current) return;
     setClassOverviewLoading(true);
@@ -737,13 +721,11 @@ export default function BeepTestPage() {
       if (disciplineError || !discipline) {
         throw disciplineError ?? new Error("Beep-testdiscipline niet gevonden.");
       }
-
       // Koppel de officiële leerlingenlijst aan profiel-ID's. Zo tellen we een score
       // bij de huidige officiële klas en hoeven we de Historiek helemaal niet te laden.
       const emails = [...new Set(
         schoolStudents.map(student => student.leerling_email.trim().toLowerCase()).filter(Boolean)
       )];
-
       const pupilClass: Record<string, string> = {};
       for (let i = 0; i < emails.length; i += 100) {
         const { data: profiles, error: profileError } = await supabase
@@ -751,7 +733,6 @@ export default function BeepTestPage() {
           .select("id,email")
           .in("email", emails.slice(i, i + 100));
         if (profileError) throw profileError;
-
         for (const profile of profiles ?? []) {
           const email = String(profile.email ?? "").trim().toLowerCase();
           const official = schoolStudents.find(
@@ -760,7 +741,6 @@ export default function BeepTestPage() {
           if (official) pupilClass[String(profile.id)] = official.klas_naam;
         }
       }
-
       const ids = Object.keys(pupilClass);
       const scores: ClassOverviewScore[] = [];
       for (let i = 0; i < ids.length; i += 100) {
@@ -776,7 +756,6 @@ export default function BeepTestPage() {
         if (error) throw error;
         scores.push(...((data ?? []) as ClassOverviewScore[]));
       }
-
       setClassOverviewPupilClass(pupilClass);
       setClassOverviewScores(scores);
     } catch (error) {
@@ -787,13 +766,10 @@ export default function BeepTestPage() {
       setClassOverviewLoading(false);
     }
   }, [schoolStudents, schoolYear]);
-
   useEffect(() => {
     if (tab !== "klassen" || !authorized || !teacherId || !schoolStudents.length) return;
     void loadClassOverview();
   }, [tab, authorized, teacherId, schoolStudents.length, loadClassOverview]);
-
-
   // Een oude lokale registratie kan een ander ID hebben dan de bevestigde Sportfolio-score.
   // Verberg ze uitsluitend na een expliciete keuze én controle op een bestaande bevestigde score.
   // Dit schrijft niets naar Sportfolio en verwijdert geen lokale gegevens.
@@ -846,12 +822,10 @@ export default function BeepTestPage() {
     } catch (error) { setPublishError(describeSyncError(error)); }
     finally { setArchivingId(null); }
   }
-
   async function parkUnpublishableResult(row: Result, reason: string) {
     const updated = await updateResults(rows => rows.map(r => r.id === row.id ? { ...r, parked: true, parked_reason: reason } : r));
     applyResults(updated);
   }
-
   async function confirmAndPublish() {
     if (!timing || !teacherId || !navigator.onLine || !reviewRows.length || publishing) {
       setPublishError("Voor bevestigen is een internetverbinding en minstens één STOP-score nodig."); return;
@@ -860,11 +834,9 @@ export default function BeepTestPage() {
     try {
       const { data: auth, error: authError } = await supabase.auth.getUser();
       if (authError || auth.user?.id !== teacherId) throw new Error("Meld je opnieuw aan als LO-leerkracht.");
-
       const { data: discipline, error: disciplineError } = await supabase
         .from("sportfolio_disciplines").select("id").eq("slug", "beep_test").single();
       if (disciplineError || !discipline) throw new Error("Discipline beep_test niet gevonden.");
-
       const emails = [...new Set(reviewRows.map(r => r.email.trim().toLowerCase()).filter(Boolean))];
       const { data: profiles, error: profileError } = await supabase
         .from("profielen")
@@ -872,28 +844,23 @@ export default function BeepTestPage() {
         .in("email", emails);
       if (profileError) throw new Error(`Leerlingen opzoeken: ${describeSyncError(profileError)}`);
       const byEmail = new Map((profiles ?? []).map(p => [String(p.email).trim().toLowerCase(), p]));
-
       // Officiële Smartschool-identiteit blijft leidend voor leerlingen zonder profiel.
       // Gebruik eerst de metadata die bij STOP lokaal bewaard werd en vul ze,
       // indien nodig, aan vanuit de reeds voorbereide officiële leerlingenlijst.
       const officialByEmail = new Map(
         schoolStudents.map(s => [s.leerling_email.trim().toLowerCase(), s])
       );
-
       const problems: string[] = [];
       let publishedCount = 0;
       let pendingCount = 0;
-
       for (const r of reviewRows) {
         if (r.sportfolio_synced) continue;
-
         const stage = timing.stages.find(st => st.level === r.level);
         if (!stage || !Number.isInteger(r.shuttle) || r.shuttle < 0 || r.shuttle > stage.shuttles) {
           await parkUnpublishableResult(r, `Ongeldige score ${r.level}.${r.shuttle}.`);
           problems.push(`${r.naam}: ongeldige score`);
           continue;
         }
-
         const previousShuttles = timing.stages
           .filter(st => st.level < r.level)
           .reduce((sum, st) => sum + st.shuttles, 0);
@@ -901,7 +868,6 @@ export default function BeepTestPage() {
         const durationSeconds = r.shuttle === 0
           ? stage.start_s - timing.audio_start_s
           : stage.start_s + r.shuttle * (stage.end_s - stage.start_s) / stage.shuttles - timing.audio_start_s;
-
         const extraData = {
           bron: "lo_beeptest",
           lokaal_resultaat_id: r.id,
@@ -914,10 +880,8 @@ export default function BeepTestPage() {
           testduur_seconden: Number(durationSeconds.toFixed(3)),
           testdatum: r.saved_at,
         };
-
         const emailKey = r.email.trim().toLowerCase();
         const profile = byEmail.get(emailKey);
-
         try {
           if (profile?.id && profile.schooljaar) {
             // Bestaand profiel: onmiddellijk als definitieve Sportfolio-score bewaren.
@@ -939,7 +903,6 @@ export default function BeepTestPage() {
               geslacht_snapshot: profile.geslacht,
               naam_snapshot: profile.volledige_naam ?? r.naam,
             };
-
             const { data: existing, error: lookupError } = await supabase
               .from("sportfolio_scores")
               .select("id,leerling_id,discipline_id")
@@ -953,7 +916,6 @@ export default function BeepTestPage() {
               const { error } = await supabase.from("sportfolio_scores").insert(payload);
               if (error && error.code !== "23505") throw new Error(describeSyncError(error));
             }
-
             const next = await updateResults(rows => rows.map(x =>
               x.id === r.id
                 ? { ...x, confirmed: true, sportfolio_synced: true, parked: false, parked_reason: undefined }
@@ -963,21 +925,18 @@ export default function BeepTestPage() {
             publishedCount++;
             continue;
           }
-
           // Nog geen profiel: bewaar dezelfde score voorlopig op Smartschool-identiteit.
           // Zodra het leerlingprofiel bestaat, sportfolio_link_pending_for_profile()
           // zet deze rij automatisch om naar een definitieve Sportfolio-score.
           const official = officialByEmail.get(emailKey);
-          const username = String(r.username ?? official?.leerling_username ?? "").trim().toLowerCase();
-          const schooljaar = String(r.schooljaar ?? official?.schooljaar ?? "").trim();
-
+          const username = String(official?.leerling_username || r.username || "").trim().toLowerCase();
+          const schooljaar = String(official?.schooljaar || r.schooljaar || "").trim();
           if (!schooljaar) {
             throw new Error("schooljaar ontbreekt in de officiële leerlingenlijst");
           }
           if (!username && !r.email) {
             throw new Error("Smartschool-identiteit ontbreekt");
           }
-
           const { error: pendingError } = await supabase.rpc("sportfolio_save_pending_score", {
             p_email: r.email,
             p_username: username,
@@ -991,7 +950,6 @@ export default function BeepTestPage() {
             p_extra_data: extraData,
           });
           if (pendingError) throw new Error(describeSyncError(pendingError));
-
           const next = await updateResults(rows => rows.map(x =>
             x.id === r.id
               ? { ...x, confirmed: true, sportfolio_synced: true, parked: false, parked_reason: undefined }
@@ -1003,7 +961,6 @@ export default function BeepTestPage() {
           problems.push(`${r.naam}: ${describeSyncError(error)}`);
         }
       }
-
       const latest = (await get<Result[]>("results")) ?? [];
       applyResults(latest);
       const remaining = latest.filter(r =>
@@ -1013,7 +970,6 @@ export default function BeepTestPage() {
         !r.archived &&
         !r.parked
       );
-
       if (!remaining.length) {
         setReview(false);
         setStudents([]);
@@ -1026,13 +982,10 @@ export default function BeepTestPage() {
         setPosition(0);
         await put(`beep-selection:${teacherId}`, []);
       }
-
       setHistoryLoaded(false);
-
       const successParts: string[] = [];
       if (publishedCount) successParts.push(`${publishedCount} rechtstreeks in Sportfolio`);
       if (pendingCount) successParts.push(`${pendingCount} voorlopig bewaard tot het leerlingprofiel bestaat`);
-
       if (problems.length) {
         setPublishError(
           `${successParts.length ? successParts.join(" · ") + ". " : ""}` +
@@ -1045,7 +998,6 @@ export default function BeepTestPage() {
             : "Bevestigde Beep-testresultaten staan in Sportfolio."
         );
       }
-
       void syncResults();
     } catch (error) {
       setPublishError(describeSyncError(error));
@@ -1053,7 +1005,6 @@ export default function BeepTestPage() {
       setPublishing(false);
     }
   }
-
   async function deleteHistoryScores(rowsToDelete: typeof historyRows, label: string) {
     if (!teacherId || !authorized || !navigator.onLine || !rowsToDelete.length) return;
     const ok = window.confirm(`${label}\n\nJe verwijdert ${rowsToDelete.length} bevestigde Beep-testscore(s). Dit kan niet ongedaan worden gemaakt. Doorgaan?`);
@@ -1082,7 +1033,6 @@ export default function BeepTestPage() {
       setMessage(`${rowsToDelete.length} Beep-testscore(s) definitief verwijderd.`);
     } catch(error){ setHistoryError(describeSyncError(error)); } finally { setHistoryLoading(false); }
   }
-
   function backup() {
     const blob = new Blob([JSON.stringify({ exported_at: new Date().toISOString(), results: pending }, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob); const link = document.createElement("a");
@@ -1091,7 +1041,6 @@ export default function BeepTestPage() {
   }
   return <AppShell title="LO App" subtitle="Beep Test">
     <div style={panel}><h1 style={{ fontSize: 24, fontWeight: 900 }}>🏃 Beep Test</h1>
-
       <p role="status">{message}</p></div>
     <nav aria-label="Beep-test tabbladen" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
       {([
@@ -1293,7 +1242,6 @@ export default function BeepTestPage() {
                 .map(score => String(score.extra_data?.testdatum ?? score.bevestigd_op ?? "").slice(0, 10))
                 .filter(Boolean)
             )].sort().reverse();
-
             return <tr key={c}>
               <td style={{ padding: 10 }}>{c}</td>
               <td style={{ padding: 10 }}>{members.length}</td>
