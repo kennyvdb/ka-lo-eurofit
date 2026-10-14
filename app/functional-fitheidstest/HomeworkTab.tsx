@@ -1349,121 +1349,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
         </div>
       </div>
 
-      {teacherMode && showAllRubrics ? (
-        <div style={styles.panel}>
-          <div style={styles.sectionTitle}>
-            📊 Alle rubrics — {mode === "2e" ? "2e graad" : "3e graad"}
-          </div>
-
-          {mode === "2e" ? (
-            <>
-              <div style={{ ...styles.small, marginTop: 8 }}>
-                De evaluatie van het huiswerk 2e graad gebruikt geen punten op 10.
-                De code controleert <b style={{ color: ui.text }}>14 concrete onderdelen</b>.
-                Het aantal onderdelen dat correct/controleerbaar aanwezig is, bepaalt de rubric.
-              </div>
-
-              <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-                {[
-                  {
-                    level: "++",
-                    title: "Zeer goed",
-                    range: "12–14 van de 14 onderdelen aanwezig",
-                    text: "Het huiswerk is zeer volledig. De leerling gebruikt de MAS persoonlijk, plant de training concreet, meet de hartslag logisch, gebruikt praattest en RPE en reflecteert voldoende uitgebreid.",
-                    color: rubricColors["++"],
-                  },
-                  {
-                    level: "+",
-                    title: "In orde",
-                    range: "10–11 van de 14 onderdelen aanwezig",
-                    text: "Het huiswerk is logisch en voldoende volledig om de training te kunnen beoordelen. Er ontbreken nog enkele details of onderdelen voor een ++.",
-                    color: rubricColors["+"],
-                  },
-                  {
-                    level: "+/-",
-                    title: "Basis aanwezig",
-                    range: "7–9 van de 14 onderdelen aanwezig",
-                    text: "Een belangrijk deel van het huiswerk is ingevuld, maar meerdere onderdelen ontbreken of zijn onvoldoende duidelijk. De leerling toont de basis, maar het geheel is nog niet volledig controleerbaar.",
-                    color: rubricColors["+/-"],
-                  },
-                  {
-                    level: "-",
-                    title: "Onvoldoende / onvolledig",
-                    range: "0–6 van de 14 onderdelen aanwezig",
-                    text: "Te veel verplichte onderdelen ontbreken. Daardoor kan de uitvoering, intensiteit en reflectie van de training onvoldoende beoordeeld worden.",
-                    color: rubricColors["-"],
-                  },
-                ].map((r) => (
-                  <div key={r.level} style={{ ...styles.rubricCard, borderColor: r.color }}>
-                    <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                      <span style={{
-                        display: "inline-flex",
-                        minWidth: 48,
-                        justifyContent: "center",
-                        borderRadius: 999,
-                        padding: "6px 10px",
-                        fontWeight: 1000,
-                        background: r.color,
-                        color: "#081018",
-                      }}>
-                        {r.level}
-                      </span>
-                      <b style={{ color: ui.text }}>{r.title}</b>
-                      <span style={styles.pill}>{r.range}</span>
-                    </div>
-                    <div style={{ ...styles.small, marginTop: 8 }}>{r.text}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ ...styles.infoBox, marginTop: 14 }}>
-                <b style={{ color: ui.text }}>De 14 controlepunten</b>
-                <div style={{ marginTop: 10, display: "grid", gap: 7 }}>
-                  {[
-                    "1. MAS is correct ingevuld en groter dan 0.",
-                    "2. Geslacht is beschikbaar in het profiel.",
-                    "3. Trainingsvorm is gekozen: duurloop, tempoloop of intervaltraining.",
-                    "4. Persoonlijk trainingsdoel is gekozen.",
-                    "5. Vooraf zijn zowel verwachte RPE (1–10) als verwachte praattest ingevuld.",
-                    "6. Opwarming bevat een geldige duur in minuten.",
-                    "7. De kern van de training is ingevuld.",
-                    "8. Cooling-down bevat een geldige duur in minuten.",
-                    "9. De kern verwijst concreet naar MAS, %, km/u, tempo, minuten, rust of herhalingen.",
-                    "10. Rusthartslag, piekhartslag en herstelhartslag na 1 minuut zijn alle drie ingevuld.",
-                    "11. De hartslagwaarden zijn logisch: piek > rust en herstel na 1 minuut < piek.",
-                    "12. Praattest is gekozen én kort uitgelegd.",
-                    "13. RPE na de training is geldig ingevuld van 1 tot 10.",
-                    "14. Reflectie bevat minstens 2 duidelijke zinnen en minstens 80 tekens.",
-                  ].map((x) => (
-                    <div key={x} style={styles.rubricCard}>{x}</div>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ ...styles.small, marginTop: 12 }}>
-                Belangrijk: de rubric beoordeelt hier vooral of het huiswerk
-                <b style={{ color: ui.text }}> volledig, logisch en controleerbaar </b>
-                is ingevuld. De MAS-prestatie zelf wordt daarnaast apart weergegeven en bepaalt
-                niet rechtstreeks de huiswerkrubric.
-              </div>
-            </>
-          ) : (
-            <>
-              <div style={{ ...styles.small, marginTop: 8 }}>
-                De leerling krijgt geen cijfer op 10. De evaluatie gebruikt
-                <b style={{ color: ui.text }}> - / +/- / + / ++</b>.
-              </div>
-              <div style={{ marginTop: 12, display: "grid", gap: 8 }}>
-                {RUBRIC_EXPLANATION[mode].map((criterion, index) => (
-                  <div key={criterion} style={styles.rubricCard}>
-                    <b style={{ color: ui.text }}>{index + 1}. {criterion}</b>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      ) : null}
+      {teacherMode && showAllRubrics ? <TeacherRubricGuide mode={mode} /> : null}
 
       {error && (
         <div style={styles.errorBox}>
@@ -1542,6 +1428,55 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
       `}</style>
     </div>
   );
+}
+
+const SECOND_CHECK_DETAILS = [
+  ["MAS ingevuld", "MAS is een getal groter dan 0.", "MAS = 11,5 → geslaagd; leeg of 0 → niet geslaagd."],
+  ["Geslacht beschikbaar", "Geslacht is als jongen of meisje herkend vanuit het profiel of Smartschool.", "Ontbrekend profielgegeven → niet geslaagd; dit is geen fout van de leerling."],
+  ["Trainingsvorm", "Duur, tempo of interval is geselecteerd.", "Een keuze volstaat; geschiktheid wordt niet inhoudelijk nagekeken."],
+  ["Trainingsdoel", "Basisconditie, langer lopen of MAS verbeteren is geselecteerd.", "Een keuze volstaat; de samenhang met de trainingsvorm wordt niet gecontroleerd."],
+  ["Voorspelling vooraf", "Verwachte RPE is een getal van 1 t.e.m. 10 én een verwachte praattest is geselecteerd.", "RPE 6 + oranje → geslaagd; ontbreekt één van beide → niet geslaagd."],
+  ["Opwarming", "Opwarmingsduur is een geldig getal groter dan 0 minuten.", "10 minuten → geslaagd; 0 of leeg → niet geslaagd."],
+  ["Kern ingevuld", "Het tekstvak met de trainingskern bevat tekst.", "Ook een zeer korte tekst telt: de inhoudelijke kwaliteit wordt niet automatisch gecontroleerd."],
+  ["Cooling-down", "Cooling-downduur is een geldig getal groter dan 0 minuten.", "5 minuten → geslaagd; leeg → niet geslaagd."],
+  ["Kern met trainingsbegrip", "De kern bevat ergens 'mas', '%', 'km/u', 'tempo', 'min', 'rust', 'x' of '×'.", "'3 x 5 min' → geslaagd; dit bewijst nog niet dat het trainingsschema juist is."],
+  ["Drie hartslagen", "Rust-, piek- en herstelhartslag zijn alle drie als getal ingevuld.", "60 / 170 / 120 → geslaagd; ontbreekt één waarde → niet geslaagd."],
+  ["Hartslagen logisch", "Alle drie de getallen zijn aanwezig, piekhartslag > rusthartslag en herstelhartslag < piekhartslag.", "60 / 170 / 120 → geslaagd; 60 / 150 / 160 → niet geslaagd. Geen medische beoordeling."],
+  ["Praattest uitgelegd", "Een praattestkleur is geselecteerd én het uitlegveld bevat tekst.", "'Oranje' + 'ik kon korte zinnen spreken' → geslaagd; alleen een kleur → niet geslaagd."],
+  ["RPE achteraf", "De ingevulde RPE is een getal van 1 t.e.m. 10.", "RPE 7 → geslaagd; 11 → niet geslaagd."],
+  ["Reflectie", "De reflectie telt minstens 80 tekens én minstens twee tekststukken gescheiden door . ! of ?.", "De code controleert lengte en zinsindeling, niet of de reflectie inhoudelijk sterk is."],
+] as const;
+const THIRD_CHECK_DETAILS = [
+  ["Dagregistratie", "De automatische rubric controleert geen volledige dag in Virtuafood. Ze telt registratievelden: datum, app, kcal-inname, kcal-verbruik, bron, drie macro's, aantal maaltijden en grootste maaltijd (10 checks).", "Een ingevulde datum of standaard gekozen app telt mee; de daadwerkelijke dagregistratie wordt niet geverifieerd."],
+  ["Kcal-inname en verbruik", "Beide waarden moeten groter dan 0 zijn. De bron is standaard TDEE Calculator en de app standaard Virtuafood.", "De berekende balans is inname min verbruik; de juistheid van de externe berekeningen wordt niet gecontroleerd."],
+  ["Macronutriënten", "Eiwitten, koolhydraten en vetten moeten geldige getallen van 0 of meer zijn.", "0 gram telt technisch als ingevuld. De app berekent 4 kcal/g eiwit, 4 kcal/g koolhydraten en 9 kcal/g vet."],
+  ["Energiebalans uitleg", "De tekstvelden samen worden gezocht op 'overschot', 'tekort', 'balans', 'inname' of 'verbruik'.", "Het noemen van zo'n woord telt als signaal, maar bewijst geen correcte interpretatie."],
+  ["Macro's en langetermijninzicht", "Voor ++ zoekt de code ook trefwoorden over lange termijn en macro's in de gezamenlijke tekst.", "De trefwoorden mogen in om het even welk uitleg- of reflectieveld staan."],
+  ["Persoonlijke conclusie", "Voor ++ moet de tekst ook een actie- of verbeterwoord bevatten, en de vier tekstvelden samen minstens 360 tekens.", "Een realistisch verbeterpunt wordt niet inhoudelijk bewezen door enkel een trefwoord."],
+] as const;
+function TeacherRubricGuide({ mode }: { mode: GradeMode }) {
+  const second = mode === "2e";
+  return <div style={styles.panel}>
+    <div style={styles.sectionTitle}>📊 Evaluatiehandleiding — {second ? "2e" : "3e"} graad</div>
+    <p style={styles.small}>Dit is de exacte werking van de automatische rubric in de huidige app. Een geslaagde technische controle betekent niet automatisch dat de inhoud pedagogisch correct is. De AI-beoordeling is afzonderlijk en kan afwijken. De LO-leerkracht controleert de inhoud en beslist over de uiteindelijke beoordeling.</p>
+    <div style={{...styles.infoBox,marginTop:12}}><b>Betekenis van de symbolen</b><div style={{marginTop:8}}>− = onvoldoende · +/− = gedeeltelijk · + = goed · ++ = zeer goed. Er worden geen punten op 10 toegekend.</div></div>
+    {second ? <>
+      <div style={{...styles.sectionTitle,marginTop:18}}>Hoe wordt de totaalscore berekend?</div>
+      <p style={styles.small}>Elk van de 14 controlepunten levert precies 1 punt op wanneer de voorwaarde slaagt, anders 0. De som bepaalt automatisch het niveau. Er is geen weging of verplichte minimumscore op een afzonderlijk punt.</p>
+      {[["−","0–6 / 14","Onvoldoende technische controles geslaagd"],["+/−","7–9 / 14","Gedeeltelijk ingevuld"],["+","10–11 / 14","Grotendeels ingevuld"],["++","12–14 / 14","Bijna alle of alle controles geslaagd"]].map(([level,range,explanation])=><div key={level} style={{...styles.rubricCard,marginTop:8}}><b style={{color:ui.text}}>{level} — {range}</b><div style={styles.small}>{explanation}</div></div>)}
+      <div style={{...styles.sectionTitle,marginTop:18}}>Alle 14 controlepunten — met concrete voorbeelden</div>
+      {SECOND_CHECK_DETAILS.map(([title,check,example],i)=><details key={title} style={{...styles.rubricCard,marginTop:8}}><summary style={{cursor:"pointer",fontWeight:900,color:ui.text}}>{i+1}. {title} <span style={{fontSize:12,fontWeight:500}}>· 1 punt</span></summary><p style={styles.small}><b>Automatische controle:</b> {check}</p><p style={styles.small}><b>Voorbeeld / beperking:</b> {example}</p></details>)}
+      <div style={{...styles.warnBox,marginTop:14}}><b>Let op bij de MAS-prestatie</b><div style={styles.small}>De MAS-prestatie heeft een aparte rubric op basis van MAS en geslacht en telt niet mee in de 14 punten voor huiswerk. Bij ontbrekende gegevens toont de huidige code standaard een −, ook wanneer de score niet berekend kan worden. Interpreteer dat niet als een bewezen onvoldoende prestatie.</div></div>
+    </> : <>
+      <div style={{...styles.sectionTitle,marginTop:18}}>Hoe ontstaan de vier niveaus?</div>
+      <p style={styles.small}>De 3e graad gebruikt geen score op zes punten: de zes hieronder zijn pedagogische aandachtspunten. De automatische code telt 10 registratiechecks, zoekt trefwoorden in de uitleg, telt teksttekens en signaleert opvallende getallen. De voorwaarden worden in onderstaande volgorde toegepast.</p>
+      {[["−","Minder dan 7 van 10 registratiechecks, óf ontbrekende/ongeldige kcal-inname, kcal-verbruik of één van de drie macro's."],["+/−","Anders: minder dan 9 van 10 registratiechecks, óf minder dan 180 tekens uitleg in totaal, óf geen energiebalans-trefwoord, óf minstens 3 waarschuwingen."],["++","Anders: minstens 360 tekens uitleg, trefwoorden voor energiebalans, lange termijn, macro's en verbetering, én hoogstens 1 waarschuwing."],["+","Alle overige gevallen die de bovenstaande − en +/− voorwaarden voorbij zijn, maar niet aan alle ++ voorwaarden voldoen."]].map(([level,explanation])=><div key={level} style={{...styles.rubricCard,marginTop:8}}><b style={{color:ui.text}}>{level}</b><div style={styles.small}>{explanation}</div></div>)}
+      <div style={{...styles.sectionTitle,marginTop:18}}>De zes inhoudelijke aandachtspunten uitgelegd</div>
+      {THIRD_CHECK_DETAILS.map(([title,check,example],i)=><details key={title} style={{...styles.rubricCard,marginTop:8}}><summary style={{cursor:"pointer",fontWeight:900,color:ui.text}}>{i+1}. {title}</summary><p style={styles.small}><b>Wat de code doet:</b> {check}</p><p style={styles.small}><b>Voorbeeld / beperking:</b> {example}</p></details>)}
+      <div style={{...styles.warnBox,marginTop:14}}><b>Waarschuwingen zijn controlesignalen, geen bewijs van fouten</b><div style={styles.small}>De code signaleert kcal-inname of -verbruik buiten 1000–6000, eiwitten/kg buiten 0,6–3, koolhydraten buiten 50–700 g, vetten buiten 20–220 g en een groot verschil tussen macro-kcal en totale kcal. Controleer zulke signalen inhoudelijk; een schatting of registratiedag kan afwijken.</div></div>
+    </>}
+    <div style={{...styles.infoBox,marginTop:14}}><b>Praktische afspraak voor alle LO-leerkrachten</b><div style={styles.small}>Bekijk bij een ingediende taak eerst de automatische rubric en de afzonderlijke AI-beoordeling. Controleer vervolgens zelf de trainingslogica of voedingsinterpretatie, de geloofwaardigheid van de ingevulde gegevens en de persoonlijke reflectie. Behandel technische trefwoorden, tekengrenzen en ontbrekende profielgegevens niet als een definitief inhoudelijk oordeel.</div></div>
+  </div>;
 }
 
 /* =========================
