@@ -233,6 +233,7 @@ type SavedRow = {
   total_points: number;
   note: string | null;
   created_at: string;
+  status?: "in_uitvoering" | "afgerond";
   modifications?: {
     pushups_on_knees?: boolean;
     table_pullup_bent_legs?: boolean;
@@ -249,7 +250,10 @@ export default function FunctionalFitheidstestPage() {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [loadingLatest, setLoadingLatest] = useState(false);
+  const [activeMeasurement, setActiveMeasurement] = useState<SavedRow | null>(null);
+  const [measurementReady, setMeasurementReady] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
+  const [draftEnabled, setDraftEnabled] = useState(true);
   const [masInfo, setMasInfo] = useState<string | null>(null);
   const [masLoading, setMasLoading] = useState(false);
   const [confirmedMas, setConfirmedMas] = useState<number | null>(null);
@@ -339,7 +343,7 @@ export default function FunctionalFitheidstestPage() {
         const draft = JSON.parse(saved) as { date?: string; note?: string; scores?: Partial<Record<TestKey, ScoreValue>>; modifications?: { pushups_on_knees?: boolean; table_pullup_bent_legs?: boolean } };
         if (draft.date) setDate(draft.date);
         if (typeof draft.note === "string") setNote(draft.note);
-        if (draft.scores) { const { vma_kmu: _ignoredMas, ...otherScores } = draft.scores; setScores((old) => ({ ...old, ...otherScores, vma_kmu: "" })); }
+        if (draft.scores) { const otherScores = { ...draft.scores }; delete otherScores.vma_kmu; setScores((old) => ({ ...old, ...otherScores, vma_kmu: "" })); }
         if (draft.modifications) setModifications({ pushups_on_knees: Boolean(draft.modifications.pushups_on_knees), table_pullup_bent_legs: Boolean(draft.modifications.table_pullup_bent_legs) });
       }
     } catch {
@@ -349,9 +353,9 @@ export default function FunctionalFitheidstestPage() {
     }
   }, [uid]);
   useEffect(() => {
-    if (!uid || !draftReady) return;
+    if (!uid || !draftReady || !measurementReady || !draftEnabled) return;
     localStorage.setItem(`functional-fitheidstest-draft:${uid}`, JSON.stringify({ date, note, scores: { ...scores, vma_kmu: "" }, modifications }));
-  }, [uid, draftReady, date, note, scores, modifications]);
+  }, [uid, draftReady, measurementReady, draftEnabled, date, note, scores, modifications]);
   useEffect(() => {
     if (!uid || !draftReady || !profiel?.schooljaar) return;
     let cancelled = false;
@@ -384,6 +388,34 @@ export default function FunctionalFitheidstestPage() {
     void loadMas();
     return () => { cancelled = true; };
   }, [uid, draftReady, profiel?.schooljaar]);
+  useEffect(() => {
+    if (!uid || !draftReady) return;
+    let cancelled = false;
+    const loadOpenMeasurement = async () => {
+      setMeasurementReady(false);
+      const { data, error } = await supabase.from("functional_fitheidstest_submissions").select("id,user_id,schooljaar,date,scores,points,total_points,modifications,note,created_at,status").eq("user_id",uid).eq("status","in_uitvoering").order("created_at",{ascending:false}).limit(1).maybeSingle();
+      if (cancelled) return;
+      if (error) setError(error.message);
+      else if (data) {
+        const row = data as SavedRow;
+        setActiveMeasurement(row);
+        setDate(row.date);
+        setNote(row.note ?? "");
+        setModifications({pushups_on_knees:Boolean(row.modifications?.pushups_on_knees),table_pullup_bent_legs:Boolean(row.modifications?.table_pullup_bent_legs)});
+        setScores(old => {
+          const next = {...old};
+          for (const t of TESTS) if (t.key !== "vma_kmu") {
+            const value = row.scores?.[t.key];
+            next[t.key] = typeof value === "number" && Number.isFinite(value) ? value : "";
+          }
+          return next;
+        });
+      }
+      setMeasurementReady(true);
+    };
+    void loadOpenMeasurement();
+    return () => { cancelled = true; };
+  },[uid,draftReady]);
   const setOne = (k: TestKey, raw: string) => {
     if (k === "vma_kmu") return;
     setInfo(null);
@@ -418,74 +450,89 @@ export default function FunctionalFitheidstestPage() {
     setMasInfo(null);
     setError(null);
   };
-  const handleSave = async () => {
-    if (!uid) return;
+  const handleSave = async (finish = false) => {
+    if (!uid || !measurementReady || saving) return;
     setSaving(true);
     setError(null);
     setInfo(null);
     try {
-      const payload = {
-        user_id: uid,
-        schooljaar: profiel?.schooljaar ?? null,
-        date,
-        scores: Object.fromEntries(TESTS.filter((t) => t.key !== "vma_kmu").map((t) => [t.key, computed.numeric[t.key]])),
-        // Oude databasekolommen behouden voor compatibiliteit.
-        // De app gebruikt geen arbitraire punten op 10 meer.
-        points: {},
-        total_points: 0,
-        modifications,
-        note: note.trim() ? note.trim() : null,
-      };
-      const { error } = await supabase.from("functional_fitheidstest_submissions").insert(payload);
-      if (error) throw new Error(error.message);
-      localStorage.removeItem(`functional-fitheidstest-draft:${uid}`);
-      setInfo("✅ Opgeslagen!");
-      window.location.href = "/functional-fitheidstest/resultaten";
-    } catch (e: any) {
-      setError(e?.message ?? "Opslaan mislukt.");
-    } finally {
-      setSaving(false);
-    }
+      const currentScores: Record<string,number> = {...(activeMeasurement?.scores ?? {})};
+      for (const t of TESTS) {
+        if (t.key === "vma_kmu") continue;
+        const raw = scores[t.key];
+        if (String(raw).trim() === "") continue;
+        const value = Number(String(raw).replace(",","."));
+        if (!Number.isFinite(value) || value < (t.min ?? 0) || value > (t.max ?? Infinity)) throw new Error(`Ongeldige score voor ${t.title}.`);
+        currentScores[t.key] = value;
+      }
+      if (!Object.keys(currentScores).length) throw new Error("Vul eerst minstens één oefening in.");
+      if (finish && !window.confirm("Wil je deze meting definitief afronden? Nadien kun je de scores niet meer zelf aanpassen.")) return;
+      const now = new Date().toISOString();
+      const basePayload = {schooljaar:activeMeasurement?.schooljaar ?? profiel?.schooljaar ?? null,date:activeMeasurement?.date ?? date,scores:currentScores,points:{},total_points:0,modifications,note:note.trim() || null,bijgewerkt_op:now};
+      let currentId = activeMeasurement?.id ?? null;
+      if (!currentId) {
+        const {data:existing,error:findError} = await supabase.from("functional_fitheidstest_submissions").select("id,user_id,schooljaar,date,scores,points,total_points,modifications,note,created_at,status").eq("user_id",uid).eq("status","in_uitvoering").limit(1).maybeSingle();
+        if (findError) throw findError;
+        if (existing) throw new Error("Er bestaat intussen een openstaande meting. Herlaad de pagina om deze te openen; je scores zijn lokaal bewaard.");
+        const {data,error} = await supabase.from("functional_fitheidstest_submissions").insert({...basePayload,user_id:uid,status:"in_uitvoering"}).select("id,user_id,schooljaar,date,scores,points,total_points,modifications,note,created_at,status").single();
+        if (error) throw error;
+        currentId = data.id;
+        setActiveMeasurement(data as SavedRow);
+      } else {
+        const {data,error} = await supabase.from("functional_fitheidstest_submissions").update(basePayload).eq("id",currentId).eq("user_id",uid).eq("status","in_uitvoering").select("id,user_id,schooljaar,date,scores,points,total_points,modifications,note,created_at,status").maybeSingle();
+        if (error) throw error;
+        if (!data) throw new Error("Deze meting is intussen afgesloten. Herlaad de pagina.");
+        setActiveMeasurement(data as SavedRow);
+      }
+      if (finish) {
+        const {data,error} = await supabase.from("functional_fitheidstest_submissions").update({status:"afgerond",afgerond_op:new Date().toISOString(),bijgewerkt_op:new Date().toISOString()}).eq("id",currentId).eq("user_id",uid).eq("status","in_uitvoering").select("id").maybeSingle();
+        if (error) throw error;
+        if (!data) throw new Error("De meting kon niet definitief worden afgerond. Ze is wel tussentijds opgeslagen; herlaad de pagina.");
+        setDraftEnabled(false);
+        localStorage.removeItem(`functional-fitheidstest-draft:${uid}`);
+        setActiveMeasurement(null);
+        setDate(toYMD());
+        setNote("");
+        setModifications({pushups_on_knees:false,table_pullup_bent_legs:false});
+        setScores(() => {
+          const empty = {} as Record<TestKey,ScoreValue>;
+          for (const t of TESTS) empty[t.key] = t.key === "vma_kmu" && confirmedMas !== null ? String(confirmedMas).replace(".",",") : "";
+          return empty;
+        });
+        window.location.href = "/functional-fitheidstest/resultaten";
+      } else {
+        setInfo("Tussentijds opgeslagen. Je kunt later verderwerken aan dezelfde meting.");
+      }
+    } catch (e: any) { setError(e?.message ?? "Opslaan mislukt."); }
+    finally { setSaving(false); }
   };
   const handleLoadLatest = async () => {
+    if (activeMeasurement) { setInfo("Je openstaande meting is al automatisch geladen."); return; }
     if (!uid) return;
     setLoadingLatest(true);
     setError(null);
     setInfo(null);
     try {
-      const { data, error } = await supabase
-        .from("functional_fitheidstest_submissions")
-        .select("id, user_id, schooljaar, date, scores, points, total_points, modifications, note, created_at")
-        .eq("user_id", uid)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (error) throw new Error(error.message);
-      const row = (data?.[0] as SavedRow | undefined) ?? null;
-      if (!row) {
-        setInfo("Geen vorige meting gevonden.");
-        return;
-      }
-      setDate(row.date ?? toYMD());
+      const {data,error} = await supabase.from("functional_fitheidstest_submissions").select("id,user_id,schooljaar,date,scores,points,total_points,modifications,note,created_at,status").eq("user_id",uid).eq("status","in_uitvoering").order("created_at",{ascending:false}).limit(1).maybeSingle();
+      if (error) throw error;
+      if (!data) { setInfo("Geen openstaande meting gevonden. Je kunt een nieuwe meting starten."); return; }
+      const row = data as SavedRow;
+      setActiveMeasurement(row);
+      setDate(row.date);
       setNote(row.note ?? "");
-      setModifications({
-        pushups_on_knees: Boolean(row.modifications?.pushups_on_knees),
-        table_pullup_bent_legs: Boolean(row.modifications?.table_pullup_bent_legs),
-      });
-      setScores(() => {
-        const obj = {} as Record<TestKey, ScoreValue>;
-        for (const t of TESTS) {
-          const v = (row.scores as any)?.[t.key];
-          obj[t.key] = t.key === "vma_kmu" ? (confirmedMas !== null ? String(confirmedMas).replace(".", ",") : "") : typeof v === "number" ? v : "";
+      setModifications({pushups_on_knees:Boolean(row.modifications?.pushups_on_knees),table_pullup_bent_legs:Boolean(row.modifications?.table_pullup_bent_legs)});
+      setScores(old => {
+        const next = {...old};
+        for (const t of TESTS) if (t.key !== "vma_kmu") {
+          const v = row.scores?.[t.key];
+          next[t.key] = typeof v === "number" && Number.isFinite(v) ? v : "";
         }
-        return obj;
+        return next;
       });
-      setInfo("Laatste meting geladen.");
+      setInfo("Openstaande meting geladen.");
       setActiveTab("invullen");
-    } catch (e: any) {
-      setError(e?.message ?? "Laden mislukt.");
-    } finally {
-      setLoadingLatest(false);
-    }
+    } catch (e: any) { setError(e?.message ?? "Laden mislukt."); }
+    finally { setLoadingLatest(false); }
   };
   if (loading) {
     return (
@@ -612,22 +659,23 @@ export default function FunctionalFitheidstestPage() {
           <div style={styles.actionRow}>
             <button
               onClick={handleLoadLatest}
-              disabled={loadingLatest}
+              disabled={loadingLatest || !measurementReady}
               style={{ ...styles.blackBtn, opacity: loadingLatest ? 0.7 : 1 }}
             >
-              {loadingLatest ? "Laden..." : "Laatste meting laden"}
+              {loadingLatest ? "Laden..." : "Openstaande meting laden"}
             </button>
             <button onClick={resetAll} style={styles.ghostBtn}>
               Alles leegmaken
             </button>
             <button
-              onClick={handleSave}
-              disabled={saving}
+              onClick={() => void handleSave(false)}
+              disabled={saving || !measurementReady}
               style={{ ...styles.primaryBtn, opacity: saving ? 0.7 : 1 }}
-              title="Slaat je meting op in Supabase"
+              title="Bewaar je huidige scores en werk later verder"
             >
-              {saving ? "Opslaan..." : "Alles opslaan"}
+              {saving ? "Opslaan..." : "Tussentijds opslaan"}
             </button>
+            <button type="button" onClick={() => void handleSave(true)} disabled={saving || !measurementReady} style={{...styles.primaryBtn,opacity:saving || !measurementReady ? .6 : 1}}>Test definitief afronden</button>
           </div>
                     <section style={{ marginTop: 14 }}>
             <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 950, color: ui.text }}>Onderdelen</div>
@@ -668,11 +716,11 @@ export default function FunctionalFitheidstestPage() {
           </section>
           <div style={{ marginTop: 20, display: "flex", justifyContent: "center" }}>
             <button
-              onClick={handleSave}
-              disabled={saving}
+              onClick={() => void handleSave(false)}
+              disabled={saving || !measurementReady}
               style={{ ...styles.primaryBtn, opacity: saving ? 0.7 : 1 }}
             >
-              {saving ? "Opslaan..." : "Alles opslaan"}
+              {saving ? "Opslaan..." : "Tussentijds opslaan"}
             </button>
           </div>
         </>
