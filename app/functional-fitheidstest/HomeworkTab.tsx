@@ -1019,6 +1019,8 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
   const [submissionLoading, setSubmissionLoading] = useState(!teacherMode);
   const [submitted, setSubmitted] = useState(false);
   const [reopened, setReopened] = useState(false);
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const [hasDraft, setHasDraft] = useState(false);
 
   const initialGender =
     normalizeGender(profiel?.geslacht ?? profiel?.gender) ||
@@ -1140,14 +1142,19 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
       if (!data) {
         setSubmitted(false);
         setReopened(false);
+        setDraftId(null);
+        setHasDraft(false);
         setSubmissionLoading(false);
         return;
       }
       const form = (data as any).payload?.form;
       if (studentMode === "2e" && form) setF2((prev) => ({ ...prev, ...form, gender: form.gender || prev.gender }));
       if (studentMode === "3e" && form) setF3((prev) => ({ ...prev, ...form }));
-      setSubmitted(true);
+      const isDraft = (data as any).payload?.status === "concept";
+      setSubmitted(!isDraft);
       setReopened((data as any).payload?.reopen_allowed === true);
+      setDraftId(isDraft ? (data as any).id : null);
+      setHasDraft(isDraft);
       setSubmissionLoading(false);
     }
     loadExistingSubmission();
@@ -1166,7 +1173,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
     else setF3(initThird());
   };
 
-  const handleSave = async () => {
+  const handleSave = async (finalSubmit: boolean) => {
     if (locked || submissionLoading) return;
     setSaving(true);
     setInfo(null);
@@ -1183,7 +1190,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
         criteria: [],
       };
 
-      try {
+      if (finalSubmit) try {
         const { data: sessionData } = await supabase.auth.getSession();
         const accessToken = sessionData.session?.access_token;
 
@@ -1260,6 +1267,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
               rubrics: rub2,
               aiAssessment,
               reopen_allowed: false,
+              status: finalSubmit ? "definitief" : "concept",
             }
           : {
               grade: "3e",
@@ -1269,6 +1277,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
               flags: rub3.flags,
               aiAssessment,
               reopen_allowed: false,
+              status: finalSubmit ? "definitief" : "concept",
             };
 
       const row = {
@@ -1281,14 +1290,35 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
         created_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase
-        .from("eurofit_huiswerk_submissions")
-        .insert(row);
-      if (error) throw new Error(error.message);
-
-      setSubmitted(true);
-      setReopened(false);
-      setInfo("✅ Huiswerk opgeslagen — je huistaak is ingediend en kan niet meer aangepast worden.");
+      if (draftId) {
+        const { data, error } = await supabase
+          .from("eurofit_huiswerk_submissions")
+          .update({ payload, date: row.date, klas_naam: row.klas_naam })
+          .eq("id", draftId)
+          .eq("user_id", uid)
+          .eq("payload->>status", "concept")
+          .select("id")
+          .single();
+        if (error || !data) throw new Error(error?.message || "Concept kon niet bijgewerkt worden.");
+      } else {
+        const { data, error } = await supabase
+          .from("eurofit_huiswerk_submissions")
+          .insert(row)
+          .select("id")
+          .single();
+        if (error || !data) throw new Error(error?.message || "Opslaan mislukt.");
+        if (!finalSubmit) setDraftId(data.id);
+      }
+      if (finalSubmit) {
+        setSubmitted(true);
+        setHasDraft(false);
+        setDraftId(null);
+        setReopened(false);
+        setInfo("✅ Huistaak definitief ingediend. Je hoeft niets meer te doen.");
+      } else {
+        setHasDraft(true);
+        setInfo("✅ Concept bewaard. Je kan later verder werken en definitief indienen.");
+      }
     } catch (e: any) {
       setError(e?.message ?? "Opslaan mislukt.");
     } finally {
@@ -1396,21 +1426,19 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
             Alles leegmaken
           </button>
         ) : null}
-        <button
-          onClick={handleSave}
-          disabled={saving || submissionLoading || locked}
-          style={{ ...styles.primaryBtn, opacity: saving || submissionLoading || locked ? 0.55 : 1 }}
-        >
-          {saving ? "Opslaan..." : reopened ? "Opnieuw indienen" : "Opslaan"}
+        {!locked && <button onClick={() => handleSave(false)} disabled={saving || submissionLoading} style={styles.ghostBtn}>Tussentijds opslaan</button>}
+        <button onClick={() => handleSave(true)} disabled={saving || submissionLoading || locked} style={{ ...styles.primaryBtn, opacity: saving || submissionLoading || locked ? 0.55 : 1 }}>
+          {saving ? "Bezig..." : reopened ? "Opnieuw definitief indienen" : "Definitief indienen"}
         </button>
       </div>
 
+      {!teacherMode && hasDraft && !submitted ? <div style={styles.infoBox}>📝 Je werkt aan een concept. Vergeet niet op ‘Definitief indienen’ te klikken wanneer je klaar bent.</div> : null}
       {!teacherMode && submitted ? (
         <div style={reopened ? styles.warnBox : styles.okBox}>
           <b>{reopened ? "🔓 Huistaak éénmalig opnieuw opengesteld" : "✅ Huiswerk opgeslagen"}</b>
           <div style={{ ...styles.small, marginTop: 6, color: ui.text }}>
             {reopened
-              ? "Een LO-leerkracht heeft je huistaak opnieuw opengesteld. Pas aan wat nodig is en klik daarna op ‘Opnieuw indienen’. Daarna wordt je huistaak automatisch opnieuw vergrendeld."
+              ? "Een LO-leerkracht heeft je huistaak opnieuw opengesteld. Pas aan wat nodig is en klik daarna op ‘Definitief indienen’. Daarna wordt je huistaak automatisch opnieuw vergrendeld."
               : "Je huistaak is ingediend en kan niet meer aangepast worden. Als er iets fout liep, neem contact op met je LO-leerkracht."}
           </div>
         </div>
