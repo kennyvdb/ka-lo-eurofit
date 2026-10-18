@@ -1,5 +1,4 @@
 "use client";
-
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import { BaseTile } from "@/components/tiles/BaseTile";
@@ -7,9 +6,7 @@ import { TileGrid } from "@/components/tiles/TileGrid";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import React, { useEffect, useMemo, useState } from "react";
-
 const supabase = createClient();
-
 type Profiel = {
   id: string;
   volledige_naam: string | null;
@@ -19,17 +16,14 @@ type Profiel = {
   schooljaar: string | null;
   schooljaar_bevestigd_op: string | null;
 };
-
 type RealRole =
   | "leerling"
   | "leerkracht"
   | "lo_leerkracht"
   | "admin";
-
 /* ===============================
    ROLE HELPERS
 ================================ */
-
 function normalizeRole(value: unknown) {
   return String(value ?? "")
     .trim()
@@ -37,55 +31,45 @@ function normalizeRole(value: unknown) {
     .replace(/\s+/g, "_")
     .replace(/-/g, "_");
 }
-
 function mapProfileRole(
   rol: unknown,
   role: unknown
 ): RealRole | null {
   const dbRol = normalizeRole(rol);
   const dbRole = normalizeRole(role);
-
   if (dbRol === "admin" || dbRole === "admin") {
     return "admin";
   }
-
   if (
     dbRol === "lo_leerkracht" ||
     dbRol === "loleerkracht"
   ) {
     return "lo_leerkracht";
   }
-
   if (
     dbRol === "leerkracht" ||
     dbRole === "teacher"
   ) {
     return "leerkracht";
   }
-
   if (
     dbRol === "leerling" ||
     dbRole === "student"
   ) {
     return "leerling";
   }
-
   return null;
 }
-
 function getShownRoleLabel(role: RealRole | null) {
   if (role === "admin") return "Admin";
   if (role === "lo_leerkracht") return "LO-leerkracht";
   if (role === "leerkracht") return "Leerkracht";
   if (role === "leerling") return "Leerling";
-
   return "Gebruiker";
 }
-
 /* ===============================
    UI
 ================================ */
-
 const ui = {
   text: "rgba(234,240,255,0.92)",
   muted: "rgba(234,240,255,0.72)",
@@ -97,11 +81,9 @@ const ui = {
   errorBg: "rgba(255,85,112,0.15)",
   errorBorder: "rgba(255,85,112,0.28)",
 };
-
 /* ===============================
    QUOTE
 ================================ */
-
 function quoteOfMonth(d = new Date()) {
   const quotes = [
     {
@@ -153,55 +135,41 @@ function quoteOfMonth(d = new Date()) {
       a: "Sport",
     },
   ];
-
   return quotes[d.getMonth() % quotes.length];
 }
-
 /* ===============================
    PAGE
 ================================ */
-
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(
     null
   );
-
   const [uid, setUid] = useState<string | null>(
     null
   );
-
   const [profiel, setProfiel] =
     useState<Profiel | null>(null);
-
   const [signingOut, setSigningOut] =
     useState(false);
-
   const [confirmingYear, setConfirmingYear] =
     useState(false);
-
   const [realRole, setRealRole] =
     useState<RealRole | null>(null);
-
   /* ===============================
      SCHOOLJAAR
   ================================ */
-
   const suggestedSchooljaar = useMemo(() => {
     const now = new Date();
-
     const y = now.getFullYear();
     const m = now.getMonth() + 1;
-
     return m >= 9
       ? `${y}-${y + 1}`
       : `${y - 1}-${y}`;
   }, []);
-
   /* ===============================
      PROFILE
   ================================ */
-
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
       .from("profielen")
@@ -210,107 +178,79 @@ export default function DashboardPage() {
       )
       .eq("id", userId)
       .maybeSingle();
-
     if (error) {
       setError(error.message);
       setProfiel(null);
       setRealRole(null);
-
       return null;
     }
-
     const p = (data as Profiel) ?? null;
-
     if (!p) {
       window.location.replace("/login");
       return null;
     }
-
     const appRole = mapProfileRole(
       p.rol,
       p.role
     );
-
     if (!appRole) {
       setError(
         "Je profiel heeft geen geldige rol. Contacteer een beheerder."
       );
-
       setProfiel(p);
       setRealRole(null);
-
       return null;
     }
-
     setProfiel(p);
     setRealRole(appRole);
-
     return p;
   };
-
   /* ===============================
      LOAD
   ================================ */
-
   useEffect(() => {
     const run = async () => {
       setLoading(true);
       setError(null);
-
       const {
         data: { user },
         error: userError,
       } = await supabase.auth.getUser();
-
       if (userError || !user) {
         await supabase.auth.signOut({
           scope: "local",
         });
-
         window.location.replace("/login");
         return;
       }
-
       setUid(user.id);
-
       await fetchProfile(user.id);
-
       setLoading(false);
     };
-
     run();
   }, []);
-
   /* ===============================
      LOGOUT
   ================================ */
-
   const handleSignOut = async () => {
     setSigningOut(true);
     setError(null);
-
     await supabase.auth.signOut({
       scope: "local",
     });
-
     window.location.replace("/login");
   };
-
   /* ===============================
      SCHOOLJAAR BEVESTIGEN
   ================================ */
-
   const handleConfirmSchooljaar = async () => {
     if (!uid) return;
-
     if (!profiel) {
       setError("Profiel niet gevonden.");
       return;
     }
-
     setConfirmingYear(true);
     setError(null);
-
     const { error } = await supabase
       .from("profielen")
       .update({
@@ -320,23 +260,17 @@ export default function DashboardPage() {
           .slice(0, 10),
       })
       .eq("id", uid);
-
     if (error) {
       setError(error.message);
       setConfirmingYear(false);
-
       return;
     }
-
     await fetchProfile(uid);
-
     setConfirmingYear(false);
   };
-
   /* ===============================
      LOADING
   ================================ */
-
   if (loading) {
     return (
       <main className="grid min-h-dvh place-items-center px-6">
@@ -346,29 +280,22 @@ export default function DashboardPage() {
       </main>
     );
   }
-
   /* ===============================
      DATA VOOR UI
   ================================ */
-
   const shownRoleLabel =
     getShownRoleLabel(realRole);
-
   const greetingName =
     profiel?.volledige_naam
       ?.split(" ")
       ?.[0] ?? "Welkom";
-
   const showSchooljaarBanner =
     !profiel?.schooljaar ||
     !profiel?.schooljaar_bevestigd_op;
-
   const q = quoteOfMonth();
-
   /* ===============================
      RENDER
   ================================ */
-
   return (
     <AppShell
       title="LO App"
@@ -380,7 +307,6 @@ export default function DashboardPage() {
       {/* ===========================
           HERO
       ============================ */}
-
       <BaseHero
         label="GO! ATHENEUM AVELGEM"
         title={
@@ -394,7 +320,6 @@ export default function DashboardPage() {
         description={
           <>
             <span>{shownRoleLabel}</span>
-
             {realRole === "leerling" &&
             profiel?.klas_naam ? (
               <span className="opacity-85">
@@ -402,7 +327,6 @@ export default function DashboardPage() {
                 • {profiel.klas_naam}
               </span>
             ) : null}
-
             <span className="opacity-85">
               {" "}
               • Alles voor LO op één plaats.
@@ -423,11 +347,9 @@ export default function DashboardPage() {
           </Link>
         }
       />
-
       {/* ===========================
           GEBRUIKER / UITLOGGEN
       ============================ */}
-
       <div
         style={{
           ...styles.headerRow,
@@ -447,7 +369,6 @@ export default function DashboardPage() {
               {greetingName}
             </b>{" "}
             👋 • {shownRoleLabel}
-
             {realRole === "leerling" &&
             profiel?.klas_naam ? (
               <span style={{ color: ui.muted }}>
@@ -457,7 +378,6 @@ export default function DashboardPage() {
             ) : null}
           </div>
         </div>
-
         <button
           onClick={handleSignOut}
           disabled={signingOut}
@@ -471,21 +391,17 @@ export default function DashboardPage() {
             : "Uitloggen"}
         </button>
       </div>
-
       {/* ===========================
           ERROR
       ============================ */}
-
       {error ? (
         <div style={styles.errorBox}>
           <b>Oeps:</b> {error}
         </div>
       ) : null}
-
       {/* ===========================
           SCHOOLJAAR
       ============================ */}
-
       {showSchooljaarBanner ? (
         <div style={styles.banner}>
           <div>
@@ -497,7 +413,6 @@ export default function DashboardPage() {
             >
               Bevestig je schooljaar
             </div>
-
             <div
               style={{
                 marginTop: 3,
@@ -511,7 +426,6 @@ export default function DashboardPage() {
               </b>
             </div>
           </div>
-
           <button
             onClick={
               handleConfirmSchooljaar
@@ -530,16 +444,13 @@ export default function DashboardPage() {
           </button>
         </div>
       ) : null}
-
       {/* ===========================
           TRAININGSHUB
       ============================ */}
-
       <section className="mt-[18px]">
         <div className="mb-3 text-[13px] font-black text-white/85">
           Trainingshub
         </div>
-
         <TileGrid>
           <BaseTile
             href="/eurofittest"
@@ -547,49 +458,42 @@ export default function DashboardPage() {
             title="Eurofittest"
             desc="Test & resultaten"
           />
-
           <BaseTile
             href="/functional-fitheidstest"
             icon="🏋️"
             title="Functional fitheidstest"
             desc="Fitheid & progressie"
           />
-
           <BaseTile
             href="/challenges"
             icon="🎯"
             title="Challenges"
             desc="Opdrachten & doelen"
           />
-
           <BaseTile
             href="/sportfolio"
             icon="📸"
             title="Sportfolio"
             desc="Bewijzen & reflecties"
           />
-
           <BaseTile
             href="/workouts"
             icon="💪"
             title="Workouts"
             desc="Ab • Home • Fitness • Running"
           />
-
           <BaseTile
             href="/hall-of-fame"
             icon="🏆"
             title="Hall of Fame"
             desc="Topprestaties & records"
           />
-
           <BaseTile
             href="/les-lo"
             icon="🏃‍♂️"
             title="Les LO"
             desc="Lesinhoud & planning"
           />
-
           {(realRole === "lo_leerkracht" ||
             realRole === "admin") && (
             <BaseTile
@@ -599,28 +503,38 @@ export default function DashboardPage() {
               desc="Dashboard voor LO-leerkrachten"
             />
           )}
-
+          {(realRole === "lo_leerkracht" || realRole === "admin") && (
+            <BaseTile
+              href="/leerkrachten-lo/berichtencentrum"
+              icon="📨"
+              title="Berichtencentrum"
+              desc="Berichten versturen"
+            />
+          )}
           <BaseTile
             href="/reservaties"
             icon="📅"
             title="Reservaties"
             desc="Zalen, materiaal & planning"
           />
-
           <BaseTile
             href="/extramurale-sportactiviteiten"
             icon="🚴"
             title="Extramuros activiteiten"
             desc="Activiteiten buiten de school"
           />
-
           <BaseTile
             href="/links"
             icon="🔗"
             title="Links"
             desc="Handige bronnen"
           />
-
+          <BaseTile
+            href="/berichten"
+            icon="✉️"
+            title="Mijn berichten"
+            desc="Berichten & meldingen"
+          />
           <BaseTile
             href="/dashboard/profiel"
             icon="👤"
@@ -632,11 +546,9 @@ export default function DashboardPage() {
     </AppShell>
   );
 }
-
 /* ===============================
    STYLES
 ================================ */
-
 const styles: Record<
   string,
   React.CSSProperties
@@ -651,7 +563,6 @@ const styles: Record<
     background: ui.panel,
     border: `1px solid ${ui.border}`,
   },
-
   blackBtn: {
     height: 50,
     padding: "0 18px",
@@ -663,7 +574,6 @@ const styles: Record<
     cursor: "pointer",
     whiteSpace: "nowrap",
   },
-
   banner: {
     marginTop: 14,
     padding: 14,
@@ -675,7 +585,6 @@ const styles: Record<
     alignItems: "center",
     gap: 12,
   },
-
   errorBox: {
     marginTop: 12,
     padding: 12,
