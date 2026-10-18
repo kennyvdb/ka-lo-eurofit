@@ -434,6 +434,14 @@ export default function SportfolioBeheerPage() {
       });
   }, [rubrics, rubricDisciplineId]);
 
+  const geordendeExistingScores = useMemo(() => {
+    if (doelType !== "klasgroep") return existingScores;
+    const positiePerId = new Map(targetLeerlingen.map((leerling, index) => [leerling.id, index]));
+    const positiePerEmail = new Map(targetLeerlingen.map((leerling, index) => [leerling.email?.trim().toLowerCase() ?? "", index]));
+    const positie = (score: ExistingScore) => positiePerId.get(score.leerling_id) ?? positiePerEmail.get(score.leerling_email?.trim().toLowerCase() ?? "") ?? Number.MAX_SAFE_INTEGER;
+    return [...existingScores].sort((a, b) => positie(a) - positie(b) || String(b.aangemaakt_op ?? "").localeCompare(String(a.aangemaakt_op ?? "")));
+  }, [existingScores, targetLeerlingen, doelType]);
+
   function clearMessages() {
     setError(null);
     setSuccess(null);
@@ -738,7 +746,7 @@ export default function SportfolioBeheerPage() {
         const positiePerEmail = new Map(
           leden.map((row, index) => [
             getEmail(row),
-            Number(getValue(row, ["positie"])) || index,
+            Number(getValue(row, ["positie"])) || 0,
           ])
         );
         leerlingen.sort(
@@ -2225,7 +2233,7 @@ export default function SportfolioBeheerPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-white/10">
-                    {existingScores.map((score) => {
+                    {geordendeExistingScores.map((score) => {
                       const leerling = targetLeerlingen.find(
                         (l) => l.id === score.leerling_id
                       );
