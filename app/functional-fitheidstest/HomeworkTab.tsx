@@ -21,15 +21,6 @@ type ProfielLite = {
 
 type RubricLevel = "-" | "+/-" | "+" | "++";
 
-type RubricItem = {
-  key: string;
-  title: string;
-  level: RubricLevel;
-  color: string;
-  description: string;
-  autoFeedback: string;
-};
-
 type GradeMode = "2e" | "3e";
 
 type Props = {
@@ -52,47 +43,6 @@ function mkId() {
 function toNum(v: string) {
   const n = Number(String(v).replace(",", "."));
   return Number.isFinite(n) ? n : NaN;
-}
-
-function countSentencesApprox(s: string) {
-  const t = (s || "").trim();
-  if (!t) return 0;
-  return t
-    .split(/[.!?]+/)
-    .map((x) => x.trim())
-    .filter(Boolean).length;
-}
-
-function hasAnyWord(s: string, words: string[]) {
-  const t = (s || "").toLowerCase();
-  return words.some((w) => t.includes(w.toLowerCase()));
-}
-
-function hasActionKeyword(s: string) {
-  const t = (s || "").toLowerCase();
-  return (
-    t.includes("volgende") ||
-    t.includes("aanpassen") ||
-    t.includes("plan") ||
-    t.includes("ik ga") ||
-    t.includes("extra") ||
-    t.includes("zodat") ||
-    t.includes("omdat") ||
-    t.includes("daarom")
-  );
-}
-
-function levelText(
-  level: RubricLevel,
-  minus: string,
-  pm: string,
-  plus: string,
-  pp: string,
-) {
-  if (level === "-") return minus;
-  if (level === "+/-") return pm;
-  if (level === "+") return plus;
-  return pp;
 }
 
 const ui = {
@@ -470,272 +420,6 @@ function getMasSpeedText(masRaw: string) {
   return `Jouw MAS = ${mas.toFixed(1)} km/u (${speedToPace(mas)}). ${zone(0.70)} • ${zone(0.80)} • ${zone(0.90)} • ${zone(1.00)}`;
 }
 
-function getMasPerformanceEvaluation(f: SecondGradeForm): RubricItem {
-  const mas = toNum(f.mas);
-  const gender = f.gender;
-
-  let level: RubricLevel = "-";
-  let description =
-    "Vul je MAS in. Het geslacht wordt automatisch uit Supabase opgehaald.";
-  let autoFeedback =
-    "Geen volledige automatische MAS-evaluatie mogelijk zolang MAS of geslacht ontbreekt.";
-
-  if (Number.isFinite(mas) && mas > 0 && gender) {
-    if (gender === "Meisje") {
-      if (mas < 8.9) {
-        level = "-";
-        description = "Prestatie: MAS < 8,8 km/u (meisjes).";
-        autoFeedback =
-          "Je MAS-score zit nog onder de richtwaarde. Blijf regelmatig en rustig duurwerk opbouwen.";
-      } else if (mas <= 10) {
-        level = "+/-";
-        description = "Prestatie: MAS 8,9–10 km/u (meisjes).";
-        autoFeedback =
-          "Je hebt de basis. Met regelmatige duurtraining kan je verder groeien.";
-      } else if (mas <= 12) {
-        level = "+";
-        description = "Prestatie: MAS 10–12 km/u (meisjes).";
-        autoFeedback =
-          "Goed uitgevoerd: je MAS-score toont een goede duurprestatie.";
-      } else {
-        level = "++";
-        description = "Prestatie: MAS > 12 km/u (meisjes).";
-        autoFeedback =
-          "Sterk: je onderscheidt je met een zeer goede MAS-score.";
-      }
-    }
-
-    if (gender === "Jongen") {
-      if (mas < 10) {
-        level = "-";
-        description = "Prestatie: MAS < 10 km/u (jongens).";
-        autoFeedback =
-          "Je MAS-score zit nog onder de richtwaarde. Blijf regelmatig en rustig duurwerk opbouwen.";
-      } else if (mas < 11) {
-        level = "+/-";
-        description = "Prestatie: MAS 10–10,9 km/u (jongens).";
-        autoFeedback =
-          "Je hebt de basis. Met regelmatige duurtraining kan je verder groeien.";
-      } else if (mas < 14.5) {
-        level = "+";
-        description = "Prestatie: MAS 11–14,4 km/u (jongens).";
-        autoFeedback =
-          "Goed uitgevoerd: je MAS-score toont een goede duurprestatie.";
-      } else {
-        level = "++";
-        description = "Prestatie: MAS > 14,5 km/u (jongens).";
-        autoFeedback =
-          "Sterk: je onderscheidt je met een zeer goede MAS-score.";
-      }
-    }
-  }
-
-  return {
-    key: "mas_prestatie",
-    title: "Automatische MAS-evaluatie",
-    level,
-    color: rubricColors[level],
-    description,
-    autoFeedback,
-  };
-}
-
-function getMasPerformanceText(f: SecondGradeForm) {
-  const item = getMasPerformanceEvaluation(f);
-  if (!f.gender || !Number.isFinite(toNum(f.mas)) || toNum(f.mas) <= 0) {
-    return "Vul je MAS in. Het geslacht wordt automatisch uit je profiel gehaald.";
-  }
-  return `${item.level} — ${item.description} ${item.autoFeedback}`;
-}
-
-function getSecondConclusion(f: SecondGradeForm) {
-  const rest = toNum(f.hrRest);
-  const peak = toNum(f.hrPeak);
-  const rec = toNum(f.hrRec1);
-  const rpe = toNum(f.rpe);
-  const drop = Number.isFinite(peak) && Number.isFinite(rec) ? peak - rec : NaN;
-
-  const parts: string[] = [];
-
-  const masItem = getMasPerformanceEvaluation(f);
-  if (f.gender && Number.isFinite(toNum(f.mas)) && toNum(f.mas) > 0) {
-    parts.push(`MAS-evaluatie: ${masItem.level}. ${masItem.description}`);
-  }
-
-  if (Number.isFinite(rest) && Number.isFinite(peak) && Number.isFinite(rec)) {
-    if (peak <= rest) {
-      parts.push(
-        "Je hartslaggegevens lijken niet logisch: je hoogste hartslag moet hoger zijn dan je rusthartslag. Controleer je meting of je ingevulde waarden.",
-      );
-    } else if (rec >= peak) {
-      parts.push(
-        "Je herstelhartslag is niet lager dan je piekhartslag. Meet na de kern exact 1 minuut rustig herstel en noteer dan opnieuw.",
-      );
-    } else if (drop >= 25) {
-      parts.push(
-        "Je herstel is zeer goed: je hartslag daalt sterk na 1 minuut. Dat wijst op een vlotte recuperatie na de inspanning.",
-      );
-    } else if (drop >= 15) {
-      parts.push(
-        "Je herstel is goed: je hartslag daalt duidelijk na 1 minuut. Je lichaam recupereert normaal na deze inspanning.",
-      );
-    } else {
-      parts.push(
-        "Je herstel is beperkt: je hartslag blijft nog vrij hoog na 1 minuut. Volgende keer kan je iets rustiger starten, je rust langer nemen of beter doseren.",
-      );
-    }
-  } else {
-    parts.push(
-      "Vul rusthartslag, hoogste hartslag en herstelhartslag na 1 minuut in voor een automatische conclusie over je herstel.",
-    );
-  }
-
-  if (f.talk === "Groen")
-    parts.push(
-      "De praattest was groen: je intensiteit was rustig tot matig en past goed bij een duurtraining.",
-    );
-  if (f.talk === "Oranje")
-    parts.push(
-      "De praattest was oranje: je intensiteit was stevig maar controleerbaar. Dit past goed bij een stevige kern of interval.",
-    );
-  if (f.talk === "Rood")
-    parts.push(
-      "De praattest was rood: je intensiteit was zeer hoog. Dit kan kort bij interval, maar is te zwaar voor een volledige duurtraining.",
-    );
-
-  if (Number.isFinite(rpe)) {
-    if (rpe <= 4)
-      parts.push("Je RPE is laag: de training voelde eerder gemakkelijk aan.");
-    else if (rpe <= 7)
-      parts.push("Je RPE is passend: de training voelde matig tot stevig aan.");
-    else
-      parts.push(
-        "Je RPE is hoog: de training voelde zwaar aan. Let op dat je de intensiteit goed doseert en voldoende herstelt.",
-      );
-  }
-
-  return parts.join(" ");
-}
-
-function rubricsSecond(f: SecondGradeForm): RubricItem[] {
-  const mas = toNum(f.mas);
-  const hasMas = Number.isFinite(mas) && mas > 0;
-  const hasGender = Boolean(f.gender);
-  const hasType = Boolean(f.trainingType);
-  const hasGoal = Boolean(f.trainingGoal);
-  const expectedRpe = toNum(f.expectedRpe);
-  const hasPrediction =
-    Number.isFinite(expectedRpe) &&
-    expectedRpe >= 1 &&
-    expectedRpe <= 10 &&
-    Boolean(f.expectedTalk);
-  const hasWarm =
-    Boolean(f.warmupMin.trim()) &&
-    Number.isFinite(toNum(f.warmupMin)) &&
-    toNum(f.warmupMin) > 0;
-  const hasCore = Boolean(f.coreText.trim());
-  const hasCool =
-    Boolean(f.cooldownMin.trim()) &&
-    Number.isFinite(toNum(f.cooldownMin)) &&
-    toNum(f.cooldownMin) > 0;
-  const coreMentionsMas = hasAnyWord(f.coreText, [
-    "mas",
-    "%",
-    "km/u",
-    "tempo",
-    "min",
-    "rust",
-    "x",
-    "×",
-  ]);
-
-  const rest = toNum(f.hrRest);
-  const peak = toNum(f.hrPeak);
-  const rec = toNum(f.hrRec1);
-  const hrComplete =
-    Number.isFinite(rest) && Number.isFinite(peak) && Number.isFinite(rec);
-  const hrLogical = hrComplete && peak > rest && rec < peak;
-
-  const hasTalk = Boolean(f.talk) && Boolean(f.talkExplain.trim());
-  const rpe = toNum(f.rpe);
-  const hasRpe = Number.isFinite(rpe) && rpe >= 1 && rpe <= 10;
-  const refl = (f.reflection || "").trim();
-  const hasReflection = countSentencesApprox(refl) >= 2 && refl.length >= 80;
-
-  const checks = [
-    hasMas,
-    hasGender,
-    hasType,
-    hasGoal,
-    hasPrediction,
-    hasWarm,
-    hasCore,
-    hasCool,
-    coreMentionsMas,
-    hrComplete,
-    hrLogical,
-    hasTalk,
-    hasRpe,
-    hasReflection,
-  ];
-  const score = checks.filter(Boolean).length;
-
-  let level: RubricLevel = "-";
-  if (score >= 12) level = "++";
-  else if (score >= 10) level = "+";
-  else if (score >= 7) level = "+/-";
-
-  const missing: string[] = [];
-  if (!hasMas) missing.push("vul je MAS correct in");
-  if (!hasGender)
-    missing.push("geslacht werd niet automatisch gevonden in profielen.geslacht (M/V)");
-  if (!hasType) missing.push("kies duurloop, tempoloop of intervaltraining");
-  if (!hasGoal) missing.push("kies wat je met deze training wil verbeteren");
-  if (!hasPrediction) missing.push("voorspel vóór de training je RPE en praattest");
-  if (!hasWarm || !hasCore || !hasCool)
-    missing.push("maak je plan volledig: opwarming, kern en cooling-down");
-  if (hasCore && !coreMentionsMas)
-    missing.push("koppel je kern duidelijk aan je MAS of tempo");
-  if (!hrComplete) missing.push("vul rust, piek en herstel na 1 minuut in");
-  else if (!hrLogical)
-    missing.push(
-      "controleer je hartslag: piek hoger dan rust, herstel lager dan piek",
-    );
-  if (!hasTalk) missing.push("vul de praattest met korte uitleg in");
-  if (!hasRpe) missing.push("vul RPE 1–10 correct in");
-  if (!hasReflection)
-    missing.push("schrijf minstens 2 duidelijke reflectiezinnen");
-
-  return [
-    getMasPerformanceEvaluation(f),
-    {
-      key: "huiswerk_2e_totaal",
-      title: "Evaluatie huiswerk 2e graad",
-      level,
-      color: rubricColors[level],
-      description: levelText(
-        level,
-        "Onvoldoende: meerdere verplichte onderdelen ontbreken of zijn niet controleerbaar.",
-        "Bijna in orde: de basis is aanwezig, maar minstens één belangrijk onderdeel ontbreekt of is onduidelijk.",
-        "In orde: het huiswerk is volledig genoeg, logisch en controleerbaar ingevuld.",
-        "Zeer goed: het huiswerk is volledig, persoonlijk met MAS uitgewerkt, logisch gemeten en sterk gereflecteerd.",
-      ),
-      autoFeedback:
-        level === "++"
-          ? "Klaar: je huiswerk is volledig, duidelijk en sterk onderbouwd."
-          : level === "+"
-            ? "Goed: je huiswerk is in orde. Werk nog kleine details bij voor ++."
-            : missing.length
-              ? `Nog aanpassen: ${missing.join("; ")}.`
-              : "Controleer je ingevulde gegevens nog eens.",
-    },
-  ];
-}
-
-/* =========================
-   3E GRAAD
-========================= */
-
 type MealChoice = "Ontbijt" | "Lunch" | "Avondeten" | "Tussendoortje" | "Drank" | "";
 type IntakeAppChoice = "Virtuafood";
 
@@ -806,7 +490,6 @@ function proteinAdviceText(proteinPerKg: number | null) {
 }
 
 function rubricsThird(f: ThirdGradeForm): {
-  items: RubricItem[];
   totals: {
     kcalBalance: number | null;
     proteinPerKg: number | null;
@@ -865,66 +548,7 @@ function rubricsThird(f: ThirdGradeForm): {
 
   // Gewicht is optioneel: het telt niet mee voor de volledigheid van de huistaak.
   // Als gewicht wél wordt ingevuld, berekent de app automatisch eiwitten per kg lichaamsgewicht.
-  const registrationCount = [
-    f.date.trim(),
-    hasApp,
-    hasIntake,
-    hasBurn,
-    hasBurnSource,
-    hasProtein,
-    hasCarbs,
-    hasFat,
-    hasMeals,
-    hasHighestMeal,
-  ].filter(Boolean).length;
-
-  const balanceText = (f.balanceExplain || "").trim();
-  const longText = (f.longTermExplain || "").trim();
-  const macroText = (f.macroExplain || "").trim();
-  const reflText = (f.reflection || "").trim();
-  const allText = `${balanceText} ${longText} ${macroText} ${reflText}`.toLowerCase();
-  const textLen = balanceText.length + longText.length + macroText.length + reflText.length;
-
-  const mentionsBalance = hasAnyWord(allText, ["overschot", "tekort", "balans", "inname", "verbruik"]);
-  const mentionsLongTerm = hasAnyWord(allText, ["lange termijn", "weken", "maanden", "blijft", "gewicht", "aankomen", "afvallen", "stabiel"]);
-  const mentionsMacros = hasAnyWord(allText, ["eiwit", "eiwitten", "koolhydraat", "koolhydraten", "vet", "vetten", "macro"]);
-  const mentionsImprovement = hasActionKeyword(allText) || hasAnyWord(allText, ["verbeter", "aanpassing", "meer", "minder", "volgende keer", "realistisch"]);
-
-  let level: RubricLevel = "-";
-  if (registrationCount < 7 || !hasIntake || !hasBurn || !hasProtein || !hasCarbs || !hasFat) {
-    level = "-";
-  } else if (registrationCount < 9 || textLen < 180 || !mentionsBalance || flags.length >= 3) {
-    level = "+/-";
-  } else if (textLen >= 360 && mentionsBalance && mentionsLongTerm && mentionsMacros && mentionsImprovement && flags.length <= 1) {
-    level = "++";
-  } else {
-    level = "+";
-  }
-
-  const item: RubricItem = {
-    key: "energiebalans_voeding",
-    title: "Huistaak 3e graad: energiebalans, macro's en reflectie",
-    level,
-    color: rubricColors[level],
-    description: levelText(
-      level,
-      "De opdracht is onvolledig of bevat weinig geloofwaardige gegevens. De leerling toont onvoldoende inzicht in de relatie tussen energie-inname, energieverbruik en voeding.",
-      "De opdracht is grotendeels ingevuld. De basis van energiebalans is aanwezig, maar de analyse of reflectie blijft oppervlakkig of bevat onduidelijkheden.",
-      "De opdracht is volledig en correct uitgevoerd. De leerling interpreteert energiebalans en voedingsgegevens correct en formuleert een duidelijke persoonlijke conclusie.",
-      "De opdracht is volledig, zorgvuldig en realistisch uitgevoerd. De leerling toont sterk inzicht in energie-inname, energieverbruik en macronutriënten en formuleert een goed onderbouwde reflectie met realistisch verbeterpunt.",
-    ),
-    autoFeedback:
-      level === "++"
-        ? "Uitstekend: je registreerde zorgvuldig, analyseerde kritisch en toont sterk inzicht in energiebalans en voeding."
-        : level === "+"
-          ? "Goed gewerkt: je gegevens zijn volledig en je conclusie toont dat je energiebalans begrijpt."
-          : level === "+/-"
-            ? "Je bent goed gestart. Controleer je gegevens en werk je analyse/conclusie concreter uit."
-            : "Vul alle verplichte gegevens in: kcal-inname uit Virtuafood, kcal-verbruik uit de TDEE Calculator, macro's, maaltijdinfo en reflectie.",
-  };
-
   return {
-    items: [item],
     totals: {
       kcalBalance,
       proteinPerKg,
@@ -977,29 +601,6 @@ type TeacherSubmission = {
   created_at: string;
   leerling_naam?: string;
 };
-
-const RUBRIC_EXPLANATION = {
-  "2e": [
-    "MAS/VMA correct ingevuld en gekoppeld aan de training.",
-    "Persoonlijk trainingsdoel gekozen.",
-    "Bewuste keuze tussen duurloop (zone 2), tempoloop en intervaltraining.",
-    "Vooraf voorspelling van RPE en praattest.",
-    "Volledig plan: opwarming, kern en cooling-down.",
-    "Kern concreet gekoppeld aan MAS, tempo, tijd en/of herstel.",
-    "Rust-, piek- en herstelhartslag volledig en logisch.",
-    "Praattest ingevuld én kort verklaard.",
-    "RPE na de training correct ingevuld.",
-    "Reflectie koppelt minstens twee gegevens aan elkaar: MAS/tempo, hartslag, praattest of RPE.",
-  ],
-  "3e": [
-    "Volledige dagregistratie van eten en drinken in Virtuafood.",
-    "Kcal-inname uit Virtuafood en geschat kcal-verbruik uit de TDEE Calculator ingevuld.",
-    "Eiwitten, koolhydraten en vetten geregistreerd.",
-    "Energiebalans correct geïnterpreteerd.",
-    "Macroverdeling besproken in functie van het gekozen doel in Virtuafood.",
-    "Persoonlijke conclusie en realistisch verbeterpunt geformuleerd.",
-  ],
-} satisfies Record<GradeMode, string[]>;
 
 /* =========================
    HOOFDCOMPONENT
@@ -1173,7 +774,6 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
     return () => { active = false; };
   }, [uid, teacherMode, studentMode, profiel?.schooljaar]);
   const locked = !teacherMode && submitted && !reopened;
-  const rub2 = useMemo(() => rubricsSecond(f2), [f2]);
   const rub3 = useMemo(() => rubricsThird(f3), [f3]);
 
   const reset = () => {
@@ -1275,7 +875,6 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
           ? {
               grade: "2e",
               form: f2,
-              rubrics: rub2,
               aiAssessment,
               reopen_allowed: false,
               status: finalSubmit ? "definitief" : "concept",
@@ -1283,7 +882,6 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
           : {
               grade: "3e",
               form: f3,
-              rubrics: rub3.items,
               totals: rub3.totals,
               flags: rub3.flags,
               aiAssessment,
@@ -1415,7 +1013,6 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
       {mode === "2e" ? (
         <>
           <SecondGradePanel value={f2} onChange={setF2} />
-          {teacherMode ? <RubricPanel title="Evaluatie (2e graad)" items={rub2} /> : null}
         </>
       ) : (
         <>
@@ -1425,15 +1022,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
             derived={rub3.totals}
             flags={rub3.flags}
           />
-          {teacherMode ? <RubricPanel
-            title="Rubrics (3e graad)"
-            items={rub3.items}
-            extraRight={`Energiebalans: ${
-              rub3.totals.kcalBalance === null
-                ? "—"
-                : `${Math.round(rub3.totals.kcalBalance)} kcal`
-            }`}
-          /> : null}
+
         </>
       )}
       </fieldset>
@@ -1565,69 +1154,6 @@ function TeacherRubricGuide({ mode }: { mode: GradeMode }) {
    RUBRIC PANEL
 ========================= */
 
-function RubricPanel({
-  title,
-  items,
-  extraRight,
-}: {
-  title: string;
-  items: RubricItem[];
-  extraRight?: string;
-}) {
-  return (
-    <div style={styles.panel}>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          gap: 12,
-          alignItems: "flex-start",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <div style={styles.sectionTitle}>🎯 {title}</div>
-          <div style={{ ...styles.small, marginTop: 6 }}>
-            Score: <b style={{ color: ui.text }}>- / +/- / + / ++</b> met kleur
-            en uitleg.
-          </div>
-        </div>
-        {extraRight ? <div style={styles.pill}>{extraRight}</div> : null}
-      </div>
-
-      <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-        {items.map((it) => (
-          <div
-            key={it.key}
-            style={{
-              ...styles.rubricCard,
-              borderColor: ui.border,
-              background: it.color,
-            }}
-          >
-            <div style={styles.rubricTop}>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 980, color: ui.text }}>
-                  {it.title}
-                </div>
-                <div style={{ ...styles.small, marginTop: 6 }}>
-                  {it.description}
-                </div>
-                <div style={{ ...styles.small, marginTop: 10 }}>
-                  <b style={{ color: ui.text }}>Auto-feedback:</b>{" "}
-                  {it.autoFeedback}
-                </div>
-              </div>
-
-              <div style={styles.rubricBadge}>{it.level}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 /* =========================
    2E GRAAD UI
 ========================= */
@@ -1642,8 +1168,6 @@ function SecondGradePanel({
   const set = (patch: Partial<SecondGradeForm>) =>
     onChange({ ...value, ...patch });
   const masText = getMasSpeedText(value.mas);
-  const masPerformanceText = getMasPerformanceText(value);
-  const conclusion = getSecondConclusion(value);
 
   return (
     <>
@@ -1746,9 +1270,6 @@ function SecondGradePanel({
               ongeveer <b style={{ color: ui.text }}>90–100%</b> van je MAS.
             </div>
             <div style={{ ...styles.infoBox, marginTop: 10 }}>{masText}</div>
-            <div style={{ ...styles.okBox, marginTop: 10 }}>
-              <b>Automatische MAS-evaluatie:</b> {masPerformanceText}
-            </div>
           </div>
 
           <div style={{ marginTop: 12 }}>
@@ -1990,12 +1511,6 @@ function SecondGradePanel({
         </div>
       </div>
 
-      <div style={styles.panel}>
-        <div style={styles.sectionTitle}>
-          📌 Automatische conclusie over je resultaten
-        </div>
-        <div style={{ ...styles.small, marginTop: 8 }}>{conclusion}</div>
-      </div>
 
       <div style={styles.panel}>
         <div
