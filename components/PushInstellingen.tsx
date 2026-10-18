@@ -83,8 +83,9 @@ export default function PushInstellingen() {
      body: JSON.stringify({ action: "subscribe", subscription: subscription.toJSON() })
     });
     if (!response.ok) {
+     const result = await response.json().catch(() => ({}));
      await subscription.unsubscribe();
-     throw new Error("Het pushabonnement kon niet worden opgeslagen.");
+     throw new Error(`Opslaan mislukt (${response.status}): ${result.error || "Onbekende serverfout"}`);
     }
     setActive(true);
     setMessage("Pushmeldingen zijn ingeschakeld op dit toestel.");
