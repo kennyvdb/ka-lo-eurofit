@@ -1,14 +1,10 @@
 // app/(auth)/auth/callback/page.tsx
-
 "use client";
-
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { normalizeEmail } from "@/lib/auth/roles";
 import { getKlasMeta } from "@/shared/klassen/klassen";
-
 const supabase = createClient();
-
 type SmartschoolRaw = {
   sex?: string | null;
   role?: string | null;
@@ -24,7 +20,6 @@ type SmartschoolRaw = {
     "smsc.internalNumber"?: string | null;
   };
 };
-
 type ClassStudent = {
   class_name?: string | null;
   given_name?: string | null;
@@ -35,12 +30,10 @@ type ClassStudent = {
   primary_class?: boolean | null;
   schooljaar?: string | null;
 };
-
 type TeacherLoginEmail = {
   school_email: string;
   smartschool_username: string;
 };
-
 type SmartschoolUser = {
   sourced_id?: string | null;
   sourcedId?: string | null;
@@ -53,15 +46,12 @@ type SmartschoolUser = {
   birth_date?: string | null;
   raw?: SmartschoolRaw | null;
 };
-
 function currentSchoolYear() {
   const d = new Date();
   const y = d.getFullYear();
   const m = d.getMonth() + 1;
-
   return m >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`;
 }
-
 /**
  * Echte klasnamen beginnen met een cijfer.
  *
@@ -71,71 +61,57 @@ function currentSchoolYear() {
 function startsWithNumber(value: string | null | undefined) {
   return /^[1-7]/.test(String(value ?? "").trim());
 }
-
 function cleanClassName(value: string | null | undefined) {
   return String(value ?? "")
     .trim()
     .replace(/\s+/g, " ");
 }
-
 function normalizeUsername(value: string | null | undefined) {
   return String(value ?? "")
     .trim()
     .toLowerCase();
 }
-
 function usernameFromEmail(email: string) {
   return normalizeUsername(email.split("@")[0]);
 }
-
 function mapSex(value: string | null | undefined): "M" | "V" | null {
   const sex = String(value ?? "")
     .trim()
     .toLowerCase();
-
   if (sex === "male") return "M";
   if (sex === "female") return "V";
-
   return null;
 }
-
 function getLoGroep(classRows: ClassStudent[] | null | undefined) {
   const match = classRows?.find((row) => {
     const name = cleanClassName(row.class_name).toUpperCase();
     return name === "LOJON" || name === "LOMEI";
   });
-
   return match
     ? cleanClassName(match.class_name).toUpperCase()
     : null;
 }
-
 function fullName(
   user: SmartschoolUser | null,
   student: ClassStudent | null
 ) {
   const smartFull = String(user?.full_name ?? "").trim();
-
   if (smartFull) return smartFull;
-
   const first =
     user?.given_name ??
     user?.raw?.givenName ??
     student?.given_name ??
     "";
-
   const last =
     user?.family_name ??
     user?.raw?.familyName ??
     student?.family_name ??
     "";
-
   return [first, last]
     .filter(Boolean)
     .join(" ")
     .trim();
 }
-
 function hasValue(value: unknown) {
   return (
     value !== null &&
@@ -143,7 +119,6 @@ function hasValue(value: unknown) {
     String(value).trim() !== ""
   );
 }
-
 function keepExisting<T>(
   existingValue: T | null | undefined,
   newValue: T | null | undefined
@@ -152,56 +127,44 @@ function keepExisting<T>(
     ? existingValue
     : newValue ?? null;
 }
-
 export default function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null);
-
   useEffect(() => {
     let cancelled = false;
-
     const finishLogin = async () => {
       try {
         /* =========================================
            1. GOOGLE / SUPABASE LOGIN AFRONDEN
-        ========================================= */
-
+        \========================================= */
         const url = new URL(window.location.href);
         const code = url.searchParams.get("code");
-
+        const requestedNext = url.searchParams.get("next");
+        const next = requestedNext && requestedNext.startsWith("/") && !requestedNext.startsWith("//") && !requestedNext.includes("\\") && !/[\r\n]/.test(requestedNext) ? requestedNext : "/dashboard";
         if (!code) {
           throw new Error("Geen login-code gevonden.");
         }
-
         const { error: exchangeError } =
           await supabase.auth.exchangeCodeForSession(code);
-
         if (exchangeError) {
           throw new Error(exchangeError.message);
         }
-
         const {
           data: { user: authUser },
           error: userError,
         } = await supabase.auth.getUser();
-
         if (userError) {
           throw new Error(userError.message);
         }
-
         if (!authUser) {
           throw new Error("Geen gebruiker gevonden.");
         }
-
         const email = normalizeEmail(authUser.email);
-
         if (!email) {
           throw new Error("Geen e-mailadres gevonden.");
         }
-
         /* =========================================
            2. BESTAAND PROFIEL OPHALEN
-        ========================================= */
-
+        \========================================= */
         const {
           data: existingProfile,
           error: existingProfileError,
@@ -210,13 +173,10 @@ export default function AuthCallbackPage() {
           .select("*")
           .eq("id", authUser.id)
           .maybeSingle();
-
         if (existingProfileError) {
           throw new Error(existingProfileError.message);
         }
-
         const actueelSchooljaar = currentSchoolYear();
-
         /*
          * Username die we kunnen gebruiken als fallback.
          *
@@ -227,16 +187,12 @@ export default function AuthCallbackPage() {
         const loginUsername =
           normalizeUsername(existingProfile?.username) ||
           usernameFromEmail(email);
-
         /* =========================================
            3. KLASGEGEVENS ZOEKEN
-
            Eerst op e-mail.
            Indien geen resultaat: fallback op username.
-        ========================================= */
-
+        \========================================= */
         let classRows: ClassStudent[] = [];
-
         const {
           data: classRowsByEmail,
           error: classByEmailError,
@@ -245,13 +201,10 @@ export default function AuthCallbackPage() {
           .select("*")
           .eq("email", email)
           .eq("schooljaar", actueelSchooljaar);
-
         if (classByEmailError) {
           throw new Error(classByEmailError.message);
         }
-
         classRows = (classRowsByEmail ?? []) as ClassStudent[];
-
         /*
          * Geen match op e-mail?
          *
@@ -270,19 +223,15 @@ export default function AuthCallbackPage() {
             .select("*")
             .ilike("username", loginUsername)
             .eq("schooljaar", actueelSchooljaar);
-
           if (classByUsernameError) {
             throw new Error(classByUsernameError.message);
           }
-
           classRows =
             (classRowsByUsername ?? []) as ClassStudent[];
         }
-
         /* =========================================
            4. ECHTE KLAS SELECTEREN
-        ========================================= */
-
+        \========================================= */
         const selectedClass: ClassStudent | null =
           classRows.find(
             (row) =>
@@ -299,23 +248,17 @@ export default function AuthCallbackPage() {
             startsWithNumber(row.class_name)
           ) ??
           null;
-
         const klasNaam = selectedClass?.class_name
           ? cleanClassName(selectedClass.class_name)
           : null;
-
         const loGroep = getLoGroep(classRows);
-
         const klasMeta = klasNaam
           ? getKlasMeta(klasNaam)
           : undefined;
-
         /* =========================================
            5. SMARTSCHOOL USER ZOEKEN
-        ========================================= */
-
+        \========================================= */
         let smartschoolUser: SmartschoolUser | null = null;
-
         /*
          * Eerst op Google-loginmail.
          */
@@ -327,13 +270,10 @@ export default function AuthCallbackPage() {
           .select("*")
           .eq("email", email)
           .limit(1);
-
         if (userByEmailError) {
           throw new Error(userByEmailError.message);
         }
-
         smartschoolUser = userByEmail?.[0] ?? null;
-
         /*
          * Geen match op e-mail?
          *
@@ -346,7 +286,6 @@ export default function AuthCallbackPage() {
           normalizeUsername(selectedClass?.username) ||
           normalizeUsername(existingProfile?.username) ||
           loginUsername;
-
         if (!smartschoolUser && smartschoolUsername) {
           const {
             data: userByUsername,
@@ -356,19 +295,15 @@ export default function AuthCallbackPage() {
             .select("*")
             .ilike("username", smartschoolUsername)
             .limit(1);
-
           if (userByUsernameError) {
             throw new Error(userByUsernameError.message);
           }
-
           smartschoolUser =
             userByUsername?.[0] ?? null;
         }
-
         /* =========================================
            6. LEERKRACHT-LOGINMAPPING
-        ========================================= */
-
+        \========================================= */
         if (!smartschoolUser) {
           const {
             data: teacherLinks,
@@ -380,14 +315,11 @@ export default function AuthCallbackPage() {
             )
             .eq("school_email", email)
             .limit(1);
-
           if (teacherLinkError) {
             throw new Error(teacherLinkError.message);
           }
-
           const teacherLink = (teacherLinks?.[0] ??
             null) as TeacherLoginEmail | null;
-
           if (teacherLink?.smartschool_username) {
             const {
               data: teacherUsers,
@@ -400,39 +332,31 @@ export default function AuthCallbackPage() {
                 teacherLink.smartschool_username
               )
               .limit(1);
-
             if (teacherUserError) {
               throw new Error(
                 teacherUserError.message
               );
             }
-
             smartschoolUser =
               teacherUsers?.[0] ?? null;
           }
         }
-
         /* =========================================
            7. TOEGANG ZONDER SMARTSCHOOL
-
            Een bestaand LO-leerkracht- of adminprofiel
            heeft rechtstreeks toegang tot de app.
-
            Dit is o.a. nodig voor directie/beheerders
            die bewust toegang kregen maar niet in
            smartschool_users voorkomen.
-        ========================================= */
-
+        \========================================= */
         const bestaandeRol = String(
           existingProfile?.rol ?? ""
         )
           .trim()
           .toLowerCase();
-
         const heeftAppToegangZonderSmartschool =
           bestaandeRol === "lo_leerkracht" ||
           bestaandeRol === "admin";
-
         if (
           !smartschoolUser &&
           !selectedClass &&
@@ -441,16 +365,13 @@ export default function AuthCallbackPage() {
           await supabase.auth.signOut({
             scope: "local",
           });
-
           throw new Error(
             "Je account staat niet in Smartschool."
           );
         }
-
         /* =========================================
            8. ROL BEPALEN
-        ========================================= */
-
+        \========================================= */
         const rawRole = String(
           smartschoolUser?.role ??
             smartschoolUser?.raw?.role ??
@@ -459,7 +380,6 @@ export default function AuthCallbackPage() {
         )
           .trim()
           .toLowerCase();
-
         /*
          * Als er geen Smartschool-record is maar wel
          * expliciete app-toegang als LO/admin, behandelen
@@ -469,19 +389,15 @@ export default function AuthCallbackPage() {
           !heeftAppToegangZonderSmartschool &&
           (rawRole === "student" ||
             rawRole === "leerling");
-
         const defaultRole = isStudent
           ? "student"
           : "teacher";
-
         const defaultRol = isStudent
           ? "leerling"
           : "leerkracht";
-
         /* =========================================
            9. PROFIELGEGEVENS
-        ========================================= */
-
+        \========================================= */
         const smartschoolName =
           fullName(
             smartschoolUser,
@@ -491,16 +407,13 @@ export default function AuthCallbackPage() {
             authUser.user_metadata?.full_name ?? ""
           ).trim() ||
           email;
-
         const smartschoolGeslacht = mapSex(
           smartschoolUser?.raw?.sex
         );
-
         const smartschoolGeboortedatum =
           smartschoolUser?.birth_date ??
           smartschoolUser?.raw?.birthDate ??
           null;
-
         /*
          * BELANGRIJK:
          *
@@ -514,12 +427,10 @@ export default function AuthCallbackPage() {
         const profielPayload = {
           id: authUser.id,
           email,
-
           volledige_naam: keepExisting(
             existingProfile?.volledige_naam,
             smartschoolName
           ),
-
           /*
            * Bestaande rollen nooit overschrijven bij login.
            */
@@ -527,16 +438,13 @@ export default function AuthCallbackPage() {
             existingProfile?.role,
             defaultRole
           ),
-
           rol: keepExisting(
             existingProfile?.rol,
             defaultRol
           ),
-
           rol_bevestigd:
             existingProfile?.rol_bevestigd ??
             true,
-
           username: keepExisting(
             existingProfile?.username,
             smartschoolUser?.username ??
@@ -545,7 +453,6 @@ export default function AuthCallbackPage() {
               loginUsername ??
               null
           ),
-
           smartschool_sourced_id: keepExisting(
             existingProfile?.smartschool_sourced_id,
             smartschoolUser?.sourced_id ??
@@ -553,7 +460,6 @@ export default function AuthCallbackPage() {
               smartschoolUser?.raw?.sourcedId ??
               null
           ),
-
           given_name: keepExisting(
             existingProfile?.given_name,
             smartschoolUser?.given_name ??
@@ -561,7 +467,6 @@ export default function AuthCallbackPage() {
               selectedClass?.given_name ??
               null
           ),
-
           family_name: keepExisting(
             existingProfile?.family_name,
             smartschoolUser?.family_name ??
@@ -569,7 +474,6 @@ export default function AuthCallbackPage() {
               selectedClass?.family_name ??
               null
           ),
-
           full_name: keepExisting(
             existingProfile?.full_name,
             fullName(
@@ -577,7 +481,6 @@ export default function AuthCallbackPage() {
               selectedClass
             )
           ),
-
           /*
            * Persoonlijke profielvelden nooit
            * leegmaken bij Google-login.
@@ -586,17 +489,14 @@ export default function AuthCallbackPage() {
             existingProfile?.geslacht,
             smartschoolGeslacht
           ),
-
           geboortedatum: keepExisting(
             existingProfile?.geboortedatum,
             smartschoolGeboortedatum
           ),
-
           birth_date: keepExisting(
             existingProfile?.birth_date,
             smartschoolGeboortedatum
           ),
-
           /*
            * Actuele schoolgegevens mogen wel
            * bijgewerkt worden.
@@ -604,11 +504,9 @@ export default function AuthCallbackPage() {
           klas_naam: isStudent
             ? klasNaam
             : existingProfile?.klas_naam ?? null,
-
           lo_groep: isStudent
             ? loGroep
             : existingProfile?.lo_groep ?? null,
-
           class_info:
             smartschoolUser?.raw?.metadata?.[
               "smsc.classInfo"
@@ -617,43 +515,35 @@ export default function AuthCallbackPage() {
               ? klasNaam
               : existingProfile?.class_info ??
                 null),
-
           class_year:
             smartschoolUser?.raw?.metadata?.[
               "smsc.classYear"
             ] ??
             existingProfile?.class_year ??
             null,
-
           class_level:
             smartschoolUser?.raw?.metadata?.[
               "smsc.classLevel"
             ] ??
             existingProfile?.class_level ??
             null,
-
           internal_number:
             smartschoolUser?.raw?.metadata?.[
               "smsc.internalNumber"
             ] ??
             existingProfile?.internal_number ??
             null,
-
           graad: isStudent
             ? klasMeta?.graad ?? null
             : existingProfile?.graad ?? null,
-
           leerjaar: isStudent
             ? klasMeta?.leerjaar ?? null
             : existingProfile?.leerjaar ?? null,
-
           finaliteit: isStudent
             ? klasMeta?.finaliteit ?? null
             : existingProfile?.finaliteit ??
               null,
-
           schooljaar: actueelSchooljaar,
-
           schooljaar_bevestigd_op:
             existingProfile?.schooljaar ===
             actueelSchooljaar
@@ -665,34 +555,27 @@ export default function AuthCallbackPage() {
               : new Date()
                   .toISOString()
                   .slice(0, 10),
-
           updated_at: new Date().toISOString(),
         };
-
         /* =========================================
            10. PROFIEL OPSLAAN
-        ========================================= */
-
+        \========================================= */
         const { error: profielError } =
           await supabase
             .from("profielen")
             .upsert(profielPayload, {
               onConflict: "id",
             });
-
         if (profielError) {
           throw new Error(profielError.message);
         }
-
         /* =========================================
            11. NAAR DASHBOARD
-        ========================================= */
-
+        \========================================= */
         if (!cancelled) {
           await supabase.auth.getSession();
-
           window.setTimeout(() => {
-            window.location.href = "/dashboard";
+            window.location.replace(next);
           }, 300);
         }
       } catch (err: unknown) {
@@ -705,14 +588,11 @@ export default function AuthCallbackPage() {
         }
       }
     };
-
     finishLogin();
-
     return () => {
       cancelled = true;
     };
   }, []);
-
   return (
     <main className="min-h-dvh grid place-items-center px-6 bg-neutral-950">
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-6 text-white">
