@@ -749,11 +749,11 @@ export default function SportfolioBeheerPage() {
             Number(getValue(row, ["positie"])) || 0,
           ])
         );
-        leerlingen.sort(
-          (a, b) =>
-            (positiePerEmail.get(a.email ?? "") ?? 9999) -
-            (positiePerEmail.get(b.email ?? "") ?? 9999)
-        );
+        leerlingen.sort((a, b) => {
+          const klasVergelijking = (a.klas_naam ?? "Onbekend").localeCompare(b.klas_naam ?? "Onbekend", "nl-BE", { numeric: true });
+          if (klasVergelijking !== 0) return klasVergelijking;
+          return (positiePerEmail.get(a.email ?? "") ?? 9999) - (positiePerEmail.get(b.email ?? "") ?? 9999);
+        });
       }
 
       setTargetLeerlingen(leerlingen);
@@ -2312,12 +2312,15 @@ export default function SportfolioBeheerPage() {
             {targetLeerlingen.length === 0 ? (
               <div className="p-5 text-sm text-white/60">Kies eerst een klas of klasgroep.</div>
             ) : (
-              <div className="overflow-x-auto p-4">
-                <div
-                  className="grid min-w-max gap-2"
-                  style={{ gridTemplateColumns: `repeat(${targetLeerlingen.length}, minmax(120px, 150px))` }}
-                >
-                  {targetLeerlingen.map((leerling) => {
+              <div className="space-y-5 p-4">
+                {(doelType === "klasgroep" ? Array.from(new Set(targetLeerlingen.map((leerling) => leerling.klas_naam ?? "Onbekend"))) : [selectedKlasNaam]).map((klas) => {
+                  const klasLeerlingen = doelType === "klasgroep" ? targetLeerlingen.filter((leerling) => (leerling.klas_naam ?? "Onbekend") === klas) : targetLeerlingen;
+                  return (
+                    <div key={klas}>
+                      {doelType === "klasgroep" ? <div className="mb-3 text-sm font-black text-white">{klas}</div> : null}
+                      <div className="overflow-x-auto">
+                        <div className="grid min-w-max gap-2" style={{ gridTemplateColumns: `repeat(${klasLeerlingen.length}, minmax(120px, 150px))` }}>
+                  {klasLeerlingen.map((leerling) => {
                     const scores = existingScores.filter((score) => score.leerling_id === leerling.id);
                     const best = [...scores]
                       .filter((score) => score.score_nummer != null)
@@ -2368,7 +2371,11 @@ export default function SportfolioBeheerPage() {
                       </div>
                     );
                   })}
-                </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>
