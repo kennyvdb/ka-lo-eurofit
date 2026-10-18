@@ -18,6 +18,7 @@ export default function BerichtencentrumPage() {
  const [inhoud, setInhoud] = useState("");
  const [link, setLink] = useState("");
  const [busy, setBusy] = useState(false);
+ const [aanvraagId, setAanvraagId] = useState(() => crypto.randomUUID());
  const [result, setResult] = useState("");
  const [search, setSearch] = useState("");
  const classes = useMemo(() => [...new Set(people.filter(p => p.rol === "leerling").map(p => p.klas_naam).filter((x): x is string => Boolean(x)))].sort(), [people]);
@@ -41,10 +42,11 @@ export default function BerichtencentrumPage() {
   setBusy(true);
   setResult("");
   try {
-   const response = await fetch("/api/lo-berichten/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ onderwerp, inhoud, link, doelgroep: audience, selectie: selection, bevestigSchoolbreed: schoolWide }) });
+   const response = await fetch("/api/lo-berichten/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ onderwerp, inhoud, link, doelgroep: audience, selectie: selection, bevestigSchoolbreed: schoolWide, aanvraag_id: aanvraagId }) });
    const data = await response.json();
    if (!response.ok) throw new Error(data.error ?? "Verzenden mislukt");
-   setResult(`Verzonden naar ${data.ontvangers} ontvangers. ${data.push_verzonden} pushmeldingen afgeleverd aan de pushdienst.`);
+   setResult(`Opgeslagen voor ${data.ontvangers} ontvangers. ${data.push_uitgesteld ? "Push voor grote groepen is nog niet geactiveerd." : `${data.push_verzonden} pushmeldingen aangeboden aan de pushdienst.`}`);
+   setAanvraagId(crypto.randomUUID());
    setOnderwerp(""); setInhoud(""); setLink("");
   } catch (e: unknown) { setResult(e instanceof Error ? e.message : "Verzenden mislukt"); }
   finally { setBusy(false); }

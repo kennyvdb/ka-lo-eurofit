@@ -22,8 +22,8 @@ export default function PushInstellingen() {
    const registration = await navigator.serviceWorker.getRegistration("/");
    const sub = await registration?.pushManager.getSubscription();
    if (!sub) return;
-   const { data } = await supabase.from("lo_push_abonnementen").select("id").eq("gebruiker_id", user.id).eq("endpoint", sub.endpoint).maybeSingle();
-   setActive(Boolean(data));
+   const response = await fetch(`/api/lo-berichten/push?endpoint=${encodeURIComponent(sub.endpoint)}`, { cache: "no-store" });
+   if (response.ok) { const data = await response.json(); setActive(Boolean(data.active)); }
   };
   void check();
  }, []);
