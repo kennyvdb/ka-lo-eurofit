@@ -972,7 +972,18 @@ export default function LeerkrachtenLOKlasgroepenPage() {
                   </button>
                 </div>
               </div>
-              <div className="student-grid" style={styles.studentGrid}>
+              <div style={{ marginBottom: 16 }}>
+  <label htmlFor="leerling-zoeken" style={{ display: "block", marginBottom: 8, fontWeight: 800, color: ui.text }}>Zoek leerling op naam</label>
+  <input
+    id="leerling-zoeken"
+    type="search"
+    value={zoekterm}
+    onChange={(e) => setZoekterm(e.target.value)}
+    placeholder="Zoek op voornaam, achternaam of e-mailadres..."
+    style={{ width: "100%", padding: "12px 14px", borderRadius: 12, background: "#171717", color: "#fff", border: "1px solid rgba(255,255,255,0.25)" }}
+  />
+</div>
+<div className="student-grid" style={styles.studentGrid}>
                 {gefilterdeLeerlingen.map((leerling) => {
                   const key = leerlingKey(leerling);
                   const checked = selectedKeys.has(key);
