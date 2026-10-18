@@ -1021,6 +1021,7 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
   const [reopened, setReopened] = useState(false);
   const [draftId, setDraftId] = useState<string | null>(null);
   const [hasDraft, setHasDraft] = useState(false);
+  const [publicatie, setPublicatie] = useState<{level:string;summary:string;criteria:{name?:string;level?:string;feedback?:string}[];gepubliceerd_op:string}|null>(null);
 
   const initialGender =
     normalizeGender(profiel?.geslacht ?? profiel?.gender) ||
@@ -1161,6 +1162,16 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
     return () => { cancelled = true; };
   }, [teacherMode, uid, studentMode, profiel?.schooljaar]);
 
+  useEffect(() => {
+    if (teacherMode || !uid) return;
+    let active = true;
+    const load = async () => {
+      const { data, error } = await supabase.from("huiswerk_publicaties").select("level,summary,criteria,gepubliceerd_op").eq("user_id", uid).eq("schooljaar", profiel?.schooljaar ?? "").eq("grade", studentMode).order("gepubliceerd_op", { ascending: false }).limit(1).maybeSingle();
+      if (active && !error) setPublicatie(data as typeof publicatie);
+    };
+    void load();
+    return () => { active = false; };
+  }, [uid, teacherMode, studentMode, profiel?.schooljaar]);
   const locked = !teacherMode && submitted && !reopened;
   const rub2 = useMemo(() => rubricsSecond(f2), [f2]);
   const rub3 = useMemo(() => rubricsThird(f3), [f3]);
@@ -1380,6 +1391,13 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
       </div>
 
       {teacherMode && showAllRubrics ? <TeacherRubricGuide mode={mode} /> : null}
+      {!teacherMode && publicatie ? <div style={styles.panel}>
+        <div style={styles.sectionTitle}>🔔 Je beoordeling is gepubliceerd</div>
+        <div style={{ ...styles.small, marginTop: 8 }}>Eindbeoordeling: <strong>{publicatie.level}</strong></div>
+        <div style={{ ...styles.small, marginTop: 8 }}>{publicatie.summary}</div>
+        {Array.isArray(publicatie.criteria) && publicatie.criteria.map((c, i) => <div key={i} style={{ ...styles.small, marginTop: 10 }}><strong>{c.name ?? `Criterium ${i + 1}`} ({c.level ?? "—"})</strong><div>{c.feedback}</div></div>)}
+      </div> : null}
+
 
       {error && (
         <div style={styles.errorBox}>

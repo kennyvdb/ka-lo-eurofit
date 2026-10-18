@@ -1,5 +1,6 @@
 "use client";
 import AppShell from "@/components/AppShell";
+import PushInstellingen from "@/components/PushInstellingen";
 import BaseHero from "@/components/heroes/BaseHero";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -465,7 +466,8 @@ export default function ProfielPage() {
               </div>
             )}
           </section>
-          {isStudent ? (
+          <div className="mt-5"><PushInstellingen /></div>
+        {isStudent ? (
             <>
               <section className="mt-5 rounded-[24px] border border-white/10 bg-white/5 p-5">
               <SectionHeader

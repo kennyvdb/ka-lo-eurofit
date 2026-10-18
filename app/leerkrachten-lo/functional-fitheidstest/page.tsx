@@ -294,6 +294,8 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
   const [loadingOverview, setLoadingOverview] = useState(false);
   const [detail, setDetail] = useState<{ leerling: Leerling; submission: HomeworkSubmission } | null>(null);
   const [reopeningId, setReopeningId] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishInfo, setPublishInfo] = useState<string | null>(null);
   const klassen = useMemo(() => {
     const wantedYears = grade === "2e" ? [3, 4] : [5, 6];
     return [...new Set(
@@ -413,7 +415,24 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
       setReopeningId(null);
     }
   }
-
+  async function publishHomework() {
+    if (!selectedKlasgroepId || publishing) return;
+    const group = klasgroepen.find((g) => g.id === selectedKlasgroepId);
+    if (!window.confirm(`Beoordelingen voor ${group?.naam ?? "deze klasgroep"} publiceren? Leerlingen kunnen hun beoordeling daarna bekijken.`)) return;
+    setPublishing(true);
+    setPublishInfo(null);
+    setError(null);
+    try {
+      const { data, error } = await supabase.rpc("lo_publiceer_huiswerk", { p_klasgroep_id: selectedKlasgroepId, p_schooljaar: schooljaar, p_grade: grade });
+      if (error) throw new Error(readableError(error, "Publiceren is mislukt."));
+      setPublishInfo(`${Number(data ?? 0)} nieuwe beoordeling(en) gepubliceerd.`);
+      await loadOverview();
+    } catch (e: any) {
+      setError(e?.message ?? "Publiceren is mislukt.");
+    } finally {
+      setPublishing(false);
+    }
+  }
   async function loadOverview() {
     setLoadingOverview(true);
     setError(null);
@@ -717,7 +736,14 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
             </div>
           </div>
         </div>
-        {leerlingen.length === 0 ? (
+        {doelType === "klasgroep" && selectedKlasgroepId ? (
+        <div className="border-b border-white/10 p-4">
+          <button type="button" onClick={() => void publishHomework()} disabled={publishing || loadingOverview} className="rounded-xl border border-sky-400/30 bg-sky-400/15 px-4 py-3 text-sm font-black text-sky-100 disabled:opacity-50">{publishing ? "Publiceren…" : "Publiceer beoordelingen voor deze klasgroep"}</button>
+          <p className="mt-2 text-xs text-white/60">Alleen definitief ingediende huistaken met een geslaagde AI-beoordeling. Eerder gepubliceerde beoordelingen worden niet opnieuw gepubliceerd.</p>
+          {publishInfo ? <p className="mt-2 text-sm text-emerald-200">{publishInfo}</p> : null}
+        </div>
+      ) : null}
+      {leerlingen.length === 0 ? (
           <div className="p-5 text-sm text-white/55">
             {loadingOverview ? "Overzicht laden…" : "Kies een klas of klasgroep."}
           </div>
