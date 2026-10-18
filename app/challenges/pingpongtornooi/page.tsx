@@ -1,71 +1,141 @@
 "use client";
+
 import AppShell from "@/components/AppShell";
+
 import BaseHero from "@/components/heroes/BaseHero";
+
 import Link from "next/link";
+
 import React,{useCallback,useEffect,useMemo,useState} from "react";
+
 import {createClient} from "@/lib/supabase/client";
+
 const supabase=createClient();
+
 type Tornooi={id:string;naam:string;schooljaar:string;status:string;inschrijven_tot:string|null;tornooivorm:string|null};
+
 type Profiel={id:string;volledige_naam:string|null;klas_naam:string|null};
+
 type Inschrijving={id:string;leerling_id:string;tornooi_id:string};
+
 type Poule={id:string;naam:string;tornooi_id:string};
+
 type Lid={poule_id:string;inschrijving_id:string};
+
 type Wedstrijd={id:string;tornooi_id:string;poule_id:string|null;ronde:string;speler1_id:string;speler2_id:string;status:string;speelslot_id:string|null;score1:number|null;score2:number|null;winnaar_id:string|null;score_ingediend_door:string|null;score_bevestigd_op:string|null};
+
 type Slot={id:string;speeldatum:string;pauze:string;tafel:number;volgnummer:number};
+
 type Voorstel={id:string;wedstrijd_id:string;speelslot_id:string;status:string;speler1_akkoord:boolean|null;speler2_akkoord:boolean|null;vervalt_op:string};
+
 type Beschikbaarheid={id:string;pauze:string;beschikbaar:boolean};
+
 type Afwezigheid={id:string;van_datum:string;tot_datum:string;reden:string|null};
+
 type Melding={id:string;bericht:string;gelezen_op:string|null;aangemaakt_op:string};
+
 type Stand={poule_id:string;leerling_id:string;gespeeld:number;gewonnen:number;verloren:number;punten:number};
+
 const pauzes=[{id:"ochtend",naam:"Ochtendspeeltijd",aantal:4},{id:"voormiddag",naam:"Voormiddagspeeltijd",aantal:2},{id:"middag",naam:"Middagspeeltijd",aantal:4},{id:"namiddag",naam:"Namiddagspeeltijd",aantal:2}];
+
 const paneel:React.CSSProperties={padding:18,borderRadius:24,background:"linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.045))",border:"1px solid rgba(255,255,255,.12)",boxShadow:"0 14px 34px rgba(0,0,0,.18)"};
+
 const knop:React.CSSProperties={borderRadius:13,padding:"10px 14px",background:"rgba(137,194,170,.14)",border:"1px solid rgba(137,194,170,.35)",color:"#eaf0ff",fontWeight:850,cursor:"pointer"};
+
 const muted:React.CSSProperties={color:"rgba(234,240,255,.73)",fontSize:13,lineHeight:1.6};
+
 const datum=(v:string)=>new Date(v+"T12:00:00").toLocaleDateString("nl-BE",{weekday:"short",day:"numeric",month:"short"});
+
 const fouttekst=(e:unknown)=>e instanceof Error?e.message:String(e);
+
 function Sectie({titel,children}: {titel:string;children:React.ReactNode}){return <section style={paneel}><h2 style={{fontSize:20,fontWeight:950,color:"#eaf0ff",margin:"0 0 15px"}}>{titel}</h2>{children}</section>}
+
 export default function PingpongtornooiPage(){
+
 const [uid,setUid]=useState<string|null>(null),[profiel,setProfiel]=useState<Profiel|null>(null),[tornooi,setTornooi]=useState<Tornooi|null>(null),[inschrijvingen,setInschrijvingen]=useState<Inschrijving[]>([]),[namen,setNamen]=useState<Record<string,Profiel>>({}),[poules,setPoules]=useState<Poule[]>([]),[leden,setLeden]=useState<Lid[]>([]),[wedstrijden,setWedstrijden]=useState<Wedstrijd[]>([]),[slots,setSlots]=useState<Slot[]>([]),[voorstellen,setVoorstellen]=useState<Voorstel[]>([]),[beschikbaarheid,setBeschikbaarheid]=useState<Beschikbaarheid[]>([]),[afwezigheden,setAfwezigheden]=useState<Afwezigheid[]>([]),[meldingen,setMeldingen]=useState<Melding[]>([]),[stand,setStand]=useState<Stand[]>([]);
+
 const [tab,setTab]=useState("poules"),[loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(""),[info,setInfo]=useState(""),[nietPauzes,setNietPauzes]=useState<string[]>([]),[scores,setScores]=useState<Record<string,{a:string;b:string}>>({}),[afVan,setAfVan]=useState(""),[afTot,setAfTot]=useState(""),[afReden,setAfReden]=useState("");
+
 const load=useCallback(async()=>{setLoading(true);setError("");try{
-const {data:auth,error:authError}=await supabase.auth.getUser();if(authError)throw authError;const user=auth.user;setUid(user?.id??null);
+
+const {data:auth,error:authError}=await supabase.auth.getUser();const missingSession=authError?.name==="AuthSessionMissingError"||authError?.message?.toLowerCase().includes("auth session missing");if(authError&&!missingSession)throw authError;const user=missingSession?null:auth.user;setUid(user?.id??null);if(!user){setProfiel(null);setTornooi(null);setInschrijvingen([]);setPoules([]);setLeden([]);setWedstrijden([]);setVoorstellen([]);setStand([]);setSlots([]);setNamen({});setBeschikbaarheid([]);setAfwezigheden([]);setMeldingen([]);return;}
+
 if(user){const {data,error}=await supabase.from("profielen").select("id,volledige_naam,klas_naam").eq("id",user.id).maybeSingle();if(error)throw error;setProfiel(data as Profiel|null)}else setProfiel(null);
+
 const {data:ts,error:te}=await supabase.from("pingpong_tornooien").select("id,naam,schooljaar,status,inschrijven_tot,tornooivorm").order("aangemaakt_op",{ascending:false}).limit(1);if(te)throw te;const t=(ts?.[0]??null) as Tornooi|null;setTornooi(t);
+
 if(!t){setInschrijvingen([]);setPoules([]);setWedstrijden([]);return}
+
 const {data:ins,error:ie}=await supabase.from("pingpong_inschrijvingen").select("id,leerling_id,tornooi_id").eq("tornooi_id",t.id);if(ie)throw ie;const ii=(ins??[]) as Inschrijving[];setInschrijvingen(ii);
+
 const deelnemer=!!user&&ii.some(x=>x.leerling_id===user.id);if(!deelnemer){setPoules([]);setLeden([]);setWedstrijden([]);setVoorstellen([]);setStand([]);setSlots([]);setNamen({});setBeschikbaarheid([]);setAfwezigheden([]);setMeldingen([]);return}
+
 const [pr,po,wed,sl,li,kl,be,af,me]=await Promise.all([supabase.from("profielen").select("id,volledige_naam,klas_naam").in("id",ii.map(x=>x.leerling_id)),supabase.from("pingpong_poules").select("id,naam,tornooi_id").eq("tornooi_id",t.id),supabase.from("pingpong_wedstrijden").select("*").eq("tornooi_id",t.id),supabase.from("pingpong_speelslots").select("id,speeldatum,pauze,tafel,volgnummer").eq("tornooi_id",t.id),supabase.from("pingpong_poule_leden").select("poule_id,inschrijving_id"),supabase.from("pingpong_klassement").select("poule_id,leerling_id,gespeeld,gewonnen,verloren,punten").eq("tornooi_id",t.id),supabase.from("pingpong_beschikbaarheid").select("id,pauze,beschikbaar").eq("tornooi_id",t.id).eq("leerling_id",user.id),supabase.from("pingpong_afwezigheden").select("id,van_datum,tot_datum,reden").eq("tornooi_id",t.id).eq("leerling_id",user.id),supabase.from("pingpong_meldingen").select("id,bericht,gelezen_op,aangemaakt_op").eq("tornooi_id",t.id).eq("ontvanger_id",user.id).order("aangemaakt_op",{ascending:false}).limit(30)]);
+
 for(const r of [pr,po,wed,sl,li,kl,be,af,me])if(r.error)throw r.error;
+
 setNamen(Object.fromEntries(((pr.data??[]) as Profiel[]).map(p=>[p.id,p])));setPoules((po.data??[]) as Poule[]);setWedstrijden((wed.data??[]) as Wedstrijd[]);setSlots((sl.data??[]) as Slot[]);setLeden((li.data??[]) as Lid[]);setStand((kl.data??[]) as Stand[]);setBeschikbaarheid((be.data??[]) as Beschikbaarheid[]);setAfwezigheden((af.data??[]) as Afwezigheid[]);setMeldingen((me.data??[]) as Melding[]);
+
 const eigen=((wed.data??[]) as Wedstrijd[]).filter(w=>w.speler1_id===user.id||w.speler2_id===user.id).map(w=>w.id);if(eigen.length){const {data,error}=await supabase.from("pingpong_voorstellen").select("id,wedstrijd_id,speelslot_id,status,speler1_akkoord,speler2_akkoord,vervalt_op").in("wedstrijd_id",eigen).eq("status","open");if(error)throw error;setVoorstellen((data??[]) as Voorstel[])}else setVoorstellen([]);
+
 }catch(e){setError(fouttekst(e))}finally{setLoading(false)}},[]);
+
 useEffect(()=>{void load()},[load]);
+
 const deelnemer=!!uid&&inschrijvingen.some(i=>i.leerling_id===uid);const eigen=useMemo(()=>wedstrijden.filter(w=>w.speler1_id===uid||w.speler2_id===uid),[wedstrijden,uid]);
+
 const naam=(id:string)=>namen[id]?.volledige_naam||"Deelnemer";const slot=(id:string|null)=>slots.find(s=>s.id===id);const slotTekst=(id:string|null)=>{const s=slot(id);return s?`${datum(s.speeldatum)} · ${pauzes.find(p=>p.id===s.pauze)?.naam??s.pauze} · tafel ${s.tafel} · beurt ${s.volgnummer}`:"Nog niet gepland"};
+
 const actie=async(fn:()=>Promise<void>)=>{setBusy(true);setError("");setInfo("");try{await fn();await load()}catch(e){setError(fouttekst(e))}finally{setBusy(false)}};
+
 const inschrijven=()=>actie(async()=>{if(!uid||!tornooi)throw Error("Niet aangemeld");const {error}=await supabase.from("pingpong_inschrijvingen").insert({tornooi_id:tornooi.id,leerling_id:uid});if(error)throw error;setInfo("Je bent ingeschreven!")});
+
 const uitschrijven=()=>actie(async()=>{if(!uid||!tornooi||!confirm("Wil je je echt uitschrijven?"))return;const {error}=await supabase.from("pingpong_inschrijvingen").delete().eq("tornooi_id",tornooi.id).eq("leerling_id",uid);if(error)throw error;setInfo("Je bent uitgeschreven.")});
+
 const antwoord=(v:Voorstel,ok:boolean)=>actie(async()=>{const {error}=await supabase.rpc("pingpong_antwoord_voorstel",{p_voorstel_id:v.id,p_akkoord:ok,p_niet_beschikbaar:ok?[]:nietPauzes});if(error)throw error;setNietPauzes([]);setInfo(ok?"Antwoord opgeslagen.":"We zoeken een ander wedstrijdmoment.")});
+
 const scoreIndienen=(w:Wedstrijd)=>actie(async()=>{const s=scores[w.id];if(!s||s.a===""||s.b==="")throw Error("Vul beide scores in");const {error}=await supabase.rpc("pingpong_score_indienen",{p_wedstrijd_id:w.id,p_score1:Number(s.a),p_score2:Number(s.b)});if(error)throw error;setInfo("Score ingediend. Je tegenstander moet bevestigen.")});
+
 const scoreBevestigen=(w:Wedstrijd,ok:boolean)=>actie(async()=>{const {error}=await supabase.rpc("pingpong_score_bevestigen",{p_wedstrijd_id:w.id,p_akkoord:ok});if(error)throw error;setInfo(ok?"Uitslag bevestigd.":"Uitslag betwist. Een leerkracht kijkt dit na.")});
+
 const pauzeWijzigen=(id:string,beschikbaar:boolean)=>actie(async()=>{if(!uid||!tornooi)throw Error("Niet aangemeld");const {error}=await supabase.from("pingpong_beschikbaarheid").upsert({tornooi_id:tornooi.id,leerling_id:uid,pauze:id,beschikbaar},{onConflict:"tornooi_id,leerling_id,pauze"});if(error)throw error;setInfo("Beschikbaarheid opgeslagen.")});
+
 const afwezig=()=>actie(async()=>{if(!uid||!tornooi||!afVan||!afTot||afTot<afVan)throw Error("Kies geldige datums");const {error}=await supabase.from("pingpong_afwezigheden").insert({tornooi_id:tornooi.id,leerling_id:uid,van_datum:afVan,tot_datum:afTot,reden:afReden||null});if(error)throw error;setAfVan("");setAfTot("");setAfReden("");setInfo("Afwezigheid geregistreerd.")});
+
 const tabs=[{id:"poules",titel:"Poules"},{id:"uitslagen",titel:"Uitslagen"},{id:"planning",titel:"Planning"},{id:"eindronde",titel:"Eindronde"},{id:"mijn",titel:"Mijn wedstrijden"}];
+
 return <AppShell title="LO App" subtitle="Pingpongtornooi" userName={profiel?.volledige_naam??null}><div style={{display:"grid",gap:15,color:"#eaf0ff"}}>
+
 <BaseHero label="CHALLENGES · PINGPONGTORNOOI" title={<>Word jij de <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">PingpongCHAMP</span> van den Athenee?</>} description="Schrijf je in, daag andere leerlingen uit en speel voor de titel van schoolkampioen!" imageSrc="/challenges/pingpongchamp-poster.png" imageAlt="PingpongCHAMP van den Athenee" quoteTitle="PingpongCHAMP" quote="Word jij de PingpongCHAMP van den Athenee?" quoteAuthor="Atheneum Avelgem" actions={<div style={{display:"flex",gap:10,flexWrap:"wrap"}}><Link href="/challenges" style={{...knop,textDecoration:"none"}}>← Terug naar challenges</Link><a href="#pingpong-inschrijven" style={{...knop,textDecoration:"none"}}>🏓 Naar inschrijven ↓</a></div>}/>
+
 {error&&<div role="alert" style={{...paneel,borderColor:"#fb7185"}}>{error}</div>}{info&&<div role="status" style={{...paneel,borderColor:"#89C2AA"}}>{info}</div>}
+
 <Sectie titel="🏓 Het tornooi"><p style={muted}>Iedereen kan deelnemen. De tornooivorm wordt na de inschrijvingen bepaald. Wedstrijden duren één set tot 11 punten, met minstens twee punten verschil. Beide spelers keuren het voorgestelde moment goed.</p><div className="ping-grid">{pauzes.map(p=><div key={p.id} style={{...paneel,padding:13}}><strong>{p.aantal} wedstrijden</strong><div style={muted}>{p.naam}</div></div>)}</div><p style={muted}>In totaal 12 wedstrijden per schooldag, verdeeld over 2 tafels (6 per tafel).</p></Sectie>
-<div id="pingpong-inschrijven" style={{scrollMarginTop:100}}><Sectie titel="Inschrijven">{loading?<p>Gegevens laden...</p>:!uid?<p>Log in met je schoolaccount om je in te schrijven.</p>:!tornooi?<p>Het tornooi is nog niet aangemaakt door de LO-leerkracht. Inschrijven is binnenkort mogelijk.</p>:<><p style={muted}>{tornooi.naam} · {tornooi.schooljaar} · {inschrijvingen.length} ingeschreven deelnemers · Status: {tornooi.status}</p>{deelnemer?<><strong>✅ Je bent ingeschreven!</strong>{tornooi.status==="inschrijvingen"&&<div style={{marginTop:12}}><button disabled={busy} style={knop} onClick={uitschrijven}>Uitschrijven</button></div>}</>:tornooi.status==="inschrijvingen"&&(!tornooi.inschrijven_tot||new Date(tornooi.inschrijven_tot)>new Date())?<button disabled={busy} style={knop} onClick={inschrijven}>🏓 Schrijf mij in</button>:<p>Inschrijven is momenteel niet mogelijk.</p>}</>}</Sectie></div>
+
+<div id="pingpong-inschrijven" style={{scrollMarginTop:100}}><Sectie titel="Inschrijven">{loading?<p>Gegevens laden...</p>:!uid?<div style={{display:"grid",gap:12}}><p style={muted}>Meld je aan met je Google-schoolaccount om je in te schrijven.</p><Link href="/login?next=%2Fchallenges%2Fpingpongtornooi" style={{...knop,textDecoration:"none",display:"inline-block",width:"fit-content"}}>Inloggen met Google-schoolaccount →</Link></div>:!tornooi?<p>Het tornooi is nog niet aangemaakt door de LO-leerkracht. Inschrijven is binnenkort mogelijk.</p>:<><p style={muted}>{tornooi.naam} · {tornooi.schooljaar} · {inschrijvingen.length} ingeschreven deelnemers · Status: {tornooi.status}</p>{deelnemer?<><strong>✅ Je bent ingeschreven!</strong>{tornooi.status==="inschrijvingen"&&<div style={{marginTop:12}}><button disabled={busy} style={knop} onClick={uitschrijven}>Uitschrijven</button></div>}</>:tornooi.status==="inschrijvingen"&&(!tornooi.inschrijven_tot||new Date(tornooi.inschrijven_tot)>new Date())?<button disabled={busy} style={knop} onClick={inschrijven}>🏓 Schrijf mij in</button>:<p>Inschrijven is momenteel niet mogelijk.</p>}</>}</Sectie></div>
+
 <Sectie titel="Spelregels"><div style={{display:"grid",gap:9,...muted}}><div>1. Eén set tot 11 punten. Bij 10–10 speel je door tot iemand 2 punten voorsprong heeft.</div><div>2. De opslag wisselt na elke 2 punten; vanaf 10–10 na elk punt.</div><div>3. Bij opslag botst de bal eerst op je eigen helft en daarna op die van de tegenstander.</div><div>4. Een correcte opslag die het net raakt, wordt opnieuw gespeeld.</div><div>5. Een bal op de bovenrand van de tafel is geldig.</div><div>6. De winnaar geeft de uitslag in. De tegenstander bevestigt of betwist die.</div><div>7. Meld tijdig als een voorgesteld moment niet past of als je afwezig bent.</div></div></Sectie>
+
 {deelnemer&&<><div style={{display:"flex",flexWrap:"wrap",gap:8}}>{tabs.map(t=><button key={t.id} onClick={()=>setTab(t.id)} style={{...knop,background:tab===t.id?"rgba(137,194,170,.25)":"rgba(0,0,0,.22)"}}>{t.titel}</button>)}</div>
+
 {tab==="poules"&&<Sectie titel="🏆 Poules en klassementen">{poules.length===0?<p style={muted}>De poules verschijnen zodra de inschrijvingen afgesloten zijn.</p>:poules.map(p=><div key={p.id} style={{marginBottom:20}}><h3>{p.naam}</h3><div style={{overflowX:"auto"}}><table className="ping-table"><thead><tr><th>Speler</th><th>G</th><th>W</th><th>V</th><th>Ptn</th></tr></thead><tbody>{stand.filter(s=>s.poule_id===p.id).sort((a,b)=>b.punten-a.punten||b.gewonnen-a.gewonnen).map(s=><tr key={s.leerling_id}><td>{naam(s.leerling_id)}</td><td>{s.gespeeld}</td><td>{s.gewonnen}</td><td>{s.verloren}</td><td><strong>{s.punten}</strong></td></tr>)}</tbody></table></div></div>)}</Sectie>}
+
 {tab==="uitslagen"&&<Sectie titel="📊 Bevestigde uitslagen">{wedstrijden.filter(w=>w.status==="gespeeld").length===0?<p style={muted}>Er zijn nog geen definitieve uitslagen.</p>:wedstrijden.filter(w=>w.status==="gespeeld").map(w=><div className="ping-row" key={w.id}><span>{naam(w.speler1_id)} – {naam(w.speler2_id)}</span><strong>{w.score1} – {w.score2}</strong></div>)}</Sectie>}
+
 {tab==="planning"&&<Sectie titel="📅 Wedstrijdplanning">{wedstrijden.filter(w=>["bevestigd","gespeeld"].includes(w.status)&&w.speelslot_id).length===0?<p style={muted}>Er zijn nog geen bevestigde wedstrijdmomenten.</p>:wedstrijden.filter(w=>["bevestigd","gespeeld"].includes(w.status)&&w.speelslot_id).sort((a,b)=>String(slot(a.speelslot_id)?.speeldatum).localeCompare(String(slot(b.speelslot_id)?.speeldatum))).map(w=><div className="ping-row" key={w.id}><span>{naam(w.speler1_id)} – {naam(w.speler2_id)}</span><span style={muted}>{slotTekst(w.speelslot_id)}</span></div>)}</Sectie>}
+
 {tab==="eindronde"&&<Sectie titel="🏅 Eindronde">{wedstrijden.filter(w=>w.ronde!=="poule").length===0?<p style={muted}>De eindronde verschijnt wanneer de poulefase is afgerond.</p>:wedstrijden.filter(w=>w.ronde!=="poule").map(w=><div className="ping-row" key={w.id}><span>{w.ronde}: {naam(w.speler1_id)} – {naam(w.speler2_id)}</span><span>{w.status==="gespeeld"?`${w.score1} – ${w.score2}`:slotTekst(w.speelslot_id)}</span></div>)}</Sectie>}
+
 {tab==="mijn"&&<><Sectie titel="🎯 Mijn wedstrijden">{eigen.length===0?<p style={muted}>Je wedstrijden verschijnen zodra de poules zijn samengesteld.</p>:eigen.map(w=>{const v=voorstellen.find(x=>x.wedstrijd_id===w.id);const eigenAkkoord=uid===w.speler1_id?v?.speler1_akkoord:v?.speler2_akkoord;const s=scores[w.id]??{a:"",b:""};return <div key={w.id} style={{...paneel,marginBottom:12,padding:14}}><strong>{naam(w.speler1_id)} – {naam(w.speler2_id)}</strong><p style={muted}>Status: {w.status} · {v?slotTekst(v.speelslot_id):slotTekst(w.speelslot_id)}</p>{v&&eigenAkkoord===null&&<><p style={muted}>Antwoord vóór {new Date(v.vervalt_op).toLocaleString("nl-BE")}</p><p style={muted}>Welke pauzes passen doorgaans niet? (alleen nodig bij weigering)</p><div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:12}}>{pauzes.map(p=><label key={p.id} style={muted}><input type="checkbox" checked={nietPauzes.includes(p.id)} onChange={e=>setNietPauzes(old=>e.target.checked?[...old,p.id]:old.filter(x=>x!==p.id))}/> {p.naam}</label>)}</div><div style={{display:"flex",gap:9}}><button disabled={busy} style={knop} onClick={()=>antwoord(v,true)}>✓ OK</button><button disabled={busy} style={knop} onClick={()=>antwoord(v,false)}>✕ Niet OK</button></div></>}{v&&eigenAkkoord===true&&<p style={muted}>Je hebt goedgekeurd. We wachten op je tegenstander.</p>}{w.status==="bevestigd"&&w.score_ingediend_door===null&&<><p style={muted}>De winnaar vult de score in, in de volgorde van de namen hierboven.</p><div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}><input className="ping-input ping-score" type="number" min="0" placeholder="Score 1" value={s.a} onChange={e=>setScores(o=>({...o,[w.id]:{...s,a:e.target.value}}))}/><span>–</span><input className="ping-input ping-score" type="number" min="0" placeholder="Score 2" value={s.b} onChange={e=>setScores(o=>({...o,[w.id]:{...s,b:e.target.value}}))}/><button disabled={busy} style={knop} onClick={()=>scoreIndienen(w)}>Score indienen</button></div></>}{w.status==="bevestigd"&&w.score_ingediend_door&&<><p style={muted}>Ingediende score: {w.score1} – {w.score2}</p>{w.score_ingediend_door!==uid?<div style={{display:"flex",gap:9}}><button disabled={busy} style={knop} onClick={()=>scoreBevestigen(w,true)}>Score bevestigen</button><button disabled={busy} style={knop} onClick={()=>scoreBevestigen(w,false)}>Betwisten</button></div>:<p style={muted}>Wacht op bevestiging door je tegenstander.</p>}</>}{w.status==="gespeeld"&&<strong>Definitief: {w.score1} – {w.score2}</strong>}{w.status==="betwist"&&<p style={muted}>De uitslag wordt nagekeken door een LO-leerkracht.</p>}</div>})}</Sectie>
+
 <Sectie titel="⏰ Mijn beschikbaarheid"><p style={muted}>Duid de pauzes aan waarop je doorgaans kunt spelen. Niet-beschikbare pauzes worden overgeslagen bij nieuwe voorstellen.</p>{pauzes.map(p=><label key={p.id} style={{display:"flex",gap:12,alignItems:"center",margin:"12px 0"}}><input disabled={busy} type="checkbox" checked={beschikbaarheid.find(x=>x.pauze===p.id)?.beschikbaar!==false} onChange={e=>pauzeWijzigen(p.id,e.target.checked)}/>{p.naam}</label>)}</Sectie>
+
 <Sectie titel="🗓️ Afwezigheid melden"><div style={{display:"flex",gap:10,flexWrap:"wrap"}}><label style={muted}>Van <input className="ping-input" type="date" value={afVan} onChange={e=>setAfVan(e.target.value)}/></label><label style={muted}>Tot <input className="ping-input" type="date" value={afTot} onChange={e=>setAfTot(e.target.value)}/></label><input className="ping-input" placeholder="Reden (optioneel)" value={afReden} onChange={e=>setAfReden(e.target.value)}/><button style={knop} disabled={busy} onClick={afwezig}>Melden</button></div>{afwezigheden.map(a=><div className="ping-row" key={a.id}><span>{datum(a.van_datum)} t.e.m. {datum(a.tot_datum)}</span><button disabled={busy} style={knop} onClick={()=>actie(async()=>{const {error}=await supabase.from("pingpong_afwezigheden").delete().eq("id",a.id);if(error)throw error})}>Verwijderen</button></div>)}</Sectie>
+
 <Sectie titel="🔔 Mijn meldingen">{meldingen.length===0?<p style={muted}>Nog geen meldingen.</p>:meldingen.map(m=><div className="ping-row" key={m.id}><span>{!m.gelezen_op&&"● "}{m.bericht}</span><small style={muted}>{new Date(m.aangemaakt_op).toLocaleDateString("nl-BE")}</small></div>)}</Sectie></>}
+
 </>}
+
 <style jsx>{`.ping-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:15px}.ping-table{width:100%;border-collapse:collapse;text-align:left;font-size:13px}.ping-table th,.ping-table td{padding:10px;border-bottom:1px solid rgba(255,255,255,.12)}.ping-row{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.1)}.ping-input{background:rgba(0,0,0,.3);color:#eaf0ff;border:1px solid rgba(255,255,255,.2);border-radius:10px;padding:9px;max-width:220px}.ping-score{width:90px}@media(max-width:800px){.ping-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:450px){.ping-grid{grid-template-columns:1fr}}`}</style>
+
 </div></AppShell>}
