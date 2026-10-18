@@ -1558,7 +1558,6 @@ function TeacherRubricGuide({ mode }: { mode: GradeMode }) {
       <div style={{...styles.small,marginTop:8}}><b>Rekenvoorbeeld:</b> +, ++, +/− en + geven 2 + 3 + 1 + 2 = 8 punten. 8 ÷ 4 = 2, dus het eindniveau is <b>+</b>.</div>
       <div style={{...styles.small,marginTop:8}}>De persoonlijke AI-feedback hoort per criterium aan te geven welke elementen uit het ingediende huiswerk het niveau onderbouwen en wat eventueel beter kan.</div>
     </div>
-    <div style={{...styles.warnBox,marginTop:14}}><b>Let op bij gebruik</b><div style={{...styles.small,marginTop:8}}>Dit is de uitleg voor leerkrachten, geen bewijs dat de AI op de server al exact zo beoordeelt. De beoordelingslogica in <code>app/api/huiswerk/ai-beoordeling/route.ts</code> moet afzonderlijk gecontroleerd worden. AI-feedback blijft een hulpmiddel; controleer opvallende of onjuiste beoordelingen voordat je ze gebruikt.</div></div>
   </div>;
 }
 
