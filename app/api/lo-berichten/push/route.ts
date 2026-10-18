@@ -3,18 +3,20 @@ import { createServerClient } from "@supabase/ssr";
 import { createClient as createAdmin } from "@supabase/supabase-js";
 import { cookies } from "next/headers";
 export const runtime = "nodejs";
-async function context() {
+async function context(req: NextRequest) {
  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
  const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
  if (!url || !anon || !secret) return null;
  const jar = await cookies();
  const client = createServerClient(url, anon, { cookies: { getAll: () => jar.getAll(), setAll: () => {} } });
- const { data: { user } } = await client.auth.getUser();
+ const authorization = req.headers.get("authorization") || "";
+ const token = /^Bearer ([^\s]+)$/.exec(authorization)?.[1];
+ const { data: { user } } = token ? await client.auth.getUser(token) : await client.auth.getUser();
  return { user, admin: createAdmin(url, secret, { auth: { persistSession: false } }) };
 }
 export async function GET(req: NextRequest) {
- const ctx = await context();
+ const ctx = await context(req);
  if (!ctx) return NextResponse.json({ error: "Configuratie ontbreekt" }, { status: 500 });
  if (!ctx.user) return NextResponse.json({ error: "Niet aangemeld" }, { status: 401 });
  const endpoint = req.nextUrl.searchParams.get("endpoint");
@@ -26,7 +28,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
  try {
   if (Number(req.headers.get("content-length") || 0) > 10000) return NextResponse.json({ error: "Aanvraag te groot" }, { status: 413 });
-  const ctx = await context();
+  const ctx = await context(req);
   if (!ctx) return NextResponse.json({ error: "Configuratie ontbreekt" }, { status: 500 });
   if (!ctx.user) return NextResponse.json({ error: "Niet aangemeld" }, { status: 401 });
   const body = await req.json();
