@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import PushWelkomstvenster from "@/components/PushWelkomstvenster";
 
 type AppShellProps = {
   title?: string;
@@ -257,9 +258,9 @@ export default function AppShell({
       </Link>
     );
   };
-
   return (
     <div className="min-h-dvh bg-neutral-950 text-white">
+      <PushWelkomstvenster />
       <header
         className="sticky top-0 z-50 border-b border-white/10 bg-neutral-950/60 backdrop-blur-xl"
         style={{
