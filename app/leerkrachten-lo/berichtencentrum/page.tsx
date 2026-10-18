@@ -42,10 +42,12 @@ export default function BerichtencentrumPage() {
   setBusy(true);
   setResult("");
   try {
-   const response = await fetch("/api/lo-berichten/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ onderwerp, inhoud, link, doelgroep: audience, selectie: selection, bevestigSchoolbreed: schoolWide, aanvraag_id: aanvraagId }) });
-   const data = await response.json();
-   if (!response.ok) throw new Error(data.error ?? "Verzenden mislukt");
-   setResult(`Opgeslagen voor ${data.ontvangers} ontvangers. ${data.push_uitgesteld ? "Push voor grote groepen is nog niet geactiveerd." : `${data.push_verzonden} pushmeldingen aangeboden aan de pushdienst.`}`);
+   const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+   if (sessionError || !session?.access_token) throw new Error("Je sessie is verlopen. Meld je opnieuw aan.");
+   const response = await fetch("/api/lo-berichten/send", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ onderwerp, inhoud, link, doelgroep: audience, selectie: selection, bevestigSchoolbreed: schoolWide, aanvraag_id: aanvraagId }) });
+   const data = await response.json().catch(() => ({}));
+   if (!response.ok) throw new Error(data.error ?? `Verzenden mislukt (${response.status})`);
+   setResult(`Bericht opgeslagen voor ${data.ontvangers} ontvanger(s). Pushmeldingen worden via de wachtrij verwerkt.`);
    setAanvraagId(crypto.randomUUID());
    setOnderwerp(""); setInhoud(""); setLink("");
   } catch (e: unknown) { setResult(e instanceof Error ? e.message : "Verzenden mislukt"); }

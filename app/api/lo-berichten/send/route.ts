@@ -1,4 +1,3 @@
-
 import { NextRequest, NextResponse } from "next/server";
 import { createClient as createAdmin } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
@@ -15,7 +14,9 @@ export async function POST(req: NextRequest) {
   const secret = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !anon || !secret) return NextResponse.json({ error: "Serverconfiguratie ontbreekt" }, { status: 500 });
   const client = createServerClient(url, anon, { cookies: { getAll: () => jar.getAll(), setAll: () => {} } });
-  const { data: { user }, error: authError } = await client.auth.getUser();
+  const authorization = req.headers.get("authorization") ?? "";
+  const token = /^Bearer ([^\s]+)$/.exec(authorization)?.[1];
+  const { data: { user }, error: authError } = token ? await client.auth.getUser(token) : await client.auth.getUser();
   if (authError || !user) return NextResponse.json({ error: "Niet aangemeld" }, { status: 401 });
   const admin = createAdmin(url, secret, { auth: { persistSession: false } });
   const { data: sender, error: senderError } = await admin.from("profielen").select("rol").eq("id", user.id).single();
