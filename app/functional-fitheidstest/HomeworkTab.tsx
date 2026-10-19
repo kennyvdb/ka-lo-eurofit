@@ -980,15 +980,18 @@ export default function HomeworkTab({ uid, profiel, defaultMas }: Props) {
                 </button>
               </>
             ) : (
-              <span style={styles.pill}>
-                {studentMode === "2e" ? "2e graad" : "3e graad"}
-              </span>
+              <>
+                <span style={styles.pill}>{studentMode === "2e" ? "2e graad" : "3e graad"}</span>
+                <button type="button" onClick={() => setShowAllRubrics((v) => !v)} style={styles.ghostBtn} aria-expanded={showAllRubrics}>
+                  {showAllRubrics ? "Beoordelingscriteria sluiten" : "📊 Beoordelingscriteria"}
+                </button>
+              </>
             )}
           </div>
         </div>
       </div>
 
-      {teacherMode && showAllRubrics ? <TeacherRubricGuide mode={mode} /> : null}
+      {showAllRubrics ? <TeacherRubricGuide mode={mode} studentView={!teacherMode} /> : null}
       {!teacherMode && publicatie ? <div style={styles.panel}>
         <div style={styles.sectionTitle}>🔔 Je beoordeling is gepubliceerd</div>
         <div style={{ ...styles.small, marginTop: 8 }}>Eindbeoordeling: <strong>{publicatie.level}</strong></div>
@@ -1104,7 +1107,7 @@ const AI_RUBRICS: Record<GradeMode, AiRubricCriterion[]> = {
     { title: "Persoonlijke reflectie en verbeterpunt", descriptions: { "-": "Een persoonlijke conclusie of bruikbaar inzicht ontbreekt.", "+/-": "De conclusie is algemeen of bevat geen voldoende concreet en realistisch verbeterpunt.", "+": "De leerling trekt een onderbouwde persoonlijke conclusie en formuleert een haalbaar verbeterpunt.", "++": "De leerling reflecteert kritisch en genuanceerd op de eigen gegevens en motiveert een concreet, realistisch en duurzaam verbeterpunt." } },
   ],
 };
-function TeacherRubricGuide({ mode }: { mode: GradeMode }) {
+function TeacherRubricGuide({ mode, studentView = false }: { mode: GradeMode; studentView?: boolean }) {
   const criteria = AI_RUBRICS[mode];
   const levels: RubricLevel[] = ["-", "+/-", "+", "++"];
   const labels: Record<RubricLevel, string> = { "-": "Onvoldoende", "+/-": "Gedeeltelijk", "+": "Goed", "++": "Uitstekend" };
@@ -1124,8 +1127,8 @@ function TeacherRubricGuide({ mode }: { mode: GradeMode }) {
   };
   const help = teacherHelp[mode];
   return <div style={styles.panel}>
-    <div style={styles.sectionTitle}>🤖 AI-beoordelingsrubrics — {mode === "2e" ? "2e" : "3e"} graad</div>
-    <p style={{...styles.small,marginTop:8}}>Deze handleiding verduidelijkt hoe LO-leerkrachten de vier afgesproken inhoudelijke criteria moeten lezen. Per criterium beoordeel je wat de leerling <b>begrijpt, uitlegt en onderbouwt</b>, niet alleen of een invulvak ingevuld is.</p>
+    <div style={styles.sectionTitle}>{studentView ? "📊 Beoordelingscriteria" : "🤖 AI-beoordelingsrubrics"} — {mode === "2e" ? "2e" : "3e"} graad</div>
+    <p style={{...styles.small,marginTop:8}}>{studentView ? "Hier zie je vooraf waarop je huistaak beoordeeld wordt. Bij elk criterium telt wat je begrijpt, uitlegt en onderbouwt, niet alleen of je iets hebt ingevuld." : "Deze handleiding verduidelijkt hoe LO-leerkrachten de vier afgesproken inhoudelijke criteria moeten lezen. Per criterium beoordeel je wat de leerling begrijpt, uitlegt en onderbouwt, niet alleen of een invulvak ingevuld is."}</p>
     <div style={{...styles.infoBox,marginTop:12}}>
       <b>Hoe lees je deze rubrics?</b>
       <div style={{...styles.small,marginTop:8}}>Elk van de vier criteria telt even zwaar (25%). De niveaus lopen van <b>−</b> (onvoldoende), via <b>+/−</b> (gedeeltelijk) en <b>+</b> (goed), tot <b>++</b> (uitstekend). Een leerling hoeft niet letterlijk de voorbeeldzinnen te gebruiken: de inhoud en de redenering zijn doorslaggevend.</div>
@@ -1145,7 +1148,7 @@ function TeacherRubricGuide({ mode }: { mode: GradeMode }) {
       <b>Hoe wordt het eindniveau berekend?</b>
       <div style={{...styles.small,marginTop:8}}>− = 0 punten · +/− = 1 punt · + = 2 punten · ++ = 3 punten. Tel de vier puntenwaarden op, deel door vier en rond af naar het dichtstbijzijnde gehele getal (vanaf 0,5 naar boven). Zet dit resultaat opnieuw om naar een niveau.</div>
       <div style={{...styles.small,marginTop:8}}><b>Rekenvoorbeeld:</b> +, ++, +/− en + geven 2 + 3 + 1 + 2 = 8 punten. 8 ÷ 4 = 2, dus het eindniveau is <b>+</b>.</div>
-      <div style={{...styles.small,marginTop:8}}>De persoonlijke AI-feedback hoort per criterium aan te geven welke elementen uit het ingediende huiswerk het niveau onderbouwen en wat eventueel beter kan.</div>
+      <div style={{...styles.small,marginTop:8}}>{studentView ? "Na publicatie van je beoordeling lees je per criterium je persoonlijke feedback en wat eventueel beter kan." : "De persoonlijke AI-feedback hoort per criterium aan te geven welke elementen uit het ingediende huiswerk het niveau onderbouwen en wat eventueel beter kan."}</div>
     </div>
   </div>;
 }
