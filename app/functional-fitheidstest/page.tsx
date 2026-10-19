@@ -262,6 +262,7 @@ export default function FunctionalFitheidstestPage() {
   const [rankGender, setRankGender] = useState("M");
   const [rankGrade, setRankGrade] = useState(1);
   const [rankAllTime, setRankAllTime] = useState(false);
+  const [rankModified, setRankModified] = useState(false);
   const [rankRows, setRankRows] = useState<RankRow[]>([]);
   const [rankBusy, setRankBusy] = useState(false);
   const [rankError, setRankError] = useState<string | null>(null);
@@ -270,14 +271,14 @@ export default function FunctionalFitheidstestPage() {
     let alive = true;
     setRankBusy(true);
     setRankError(null);
-    supabase.rpc("functional_fitheidstest_klassement", { p_test_key: rankTest.key, p_graad: teacherMode ? rankGrade : null, p_geslacht: teacherMode ? rankGender : null, p_aller_tijden: teacherMode && rankAllTime }).then(({data,error}) => {
+    supabase.rpc("functional_fitheidstest_klassement", { p_test_key: rankTest.key, p_graad: teacherMode ? rankGrade : null, p_geslacht: teacherMode ? rankGender : null, p_aller_tijden: teacherMode && rankAllTime, p_aangepast: rankModified }).then(({data,error}) => {
       if (!alive) return;
       setRankRows((data ?? []) as RankRow[]);
       setRankError(error?.message ?? null);
       setRankBusy(false);
     });
     return () => { alive = false; };
-  }, [rankTest,rankGrade,rankGender,rankAllTime,teacherMode]);
+  }, [rankTest,rankGrade,rankGender,rankAllTime,rankModified,teacherMode]);
   const [scores, setScores] = useState<Record<TestKey, ScoreValue>>(() => {
     const obj = {} as Record<TestKey, ScoreValue>;
     for (const t of TESTS) obj[t.key] = "";
@@ -684,7 +685,7 @@ export default function FunctionalFitheidstestPage() {
                 <TestCard
                   key={t.key}
                   def={t}
-                onRank={() => { setRankTest(t); setRankAllTime(false); setRankGrade(Number(profiel?.graad) || Math.ceil(Number(profiel?.leerjaar || 1) / 2)); setRankGender("M"); }}
+                onRank={() => { setRankTest(t); setRankAllTime(false); setRankModified(false); setRankGrade(Number(profiel?.graad) || Math.ceil(Number(profiel?.leerjaar || 1) / 2)); setRankGender("M"); }}
                   value={scores[t.key]}
                   onChange={(raw) => setOne(t.key, raw)}
                 readOnly={t.key === "vma_kmu"}
@@ -777,7 +778,8 @@ export default function FunctionalFitheidstestPage() {
     {rankTest && <div role="presentation" onMouseDown={(e) => { if(e.target===e.currentTarget)setRankTest(null); }} style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(0,0,0,.78)",display:"grid",placeItems:"center",padding:12}}>
   <section role="dialog" aria-modal="true" aria-label={`Klassement ${rankTest.title}`} style={{background:"#102638",color:"white",border:"1px solid #4B8E8D",borderRadius:20,padding:20,width:"min(100%,600px)",maxHeight:"85dvh",overflowY:"auto"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:12}}><h2 style={{fontSize:20,fontWeight:900}}>🏆 {rankTest.title}</h2><button type="button" onClick={()=>setRankTest(null)} style={{padding:10,color:"white"}} aria-label="Sluiten">✕</button></div>
-    {teacherMode ? <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:14}}>
+    {["pushups_60s","table_pullup_invertedrow_60s"].includes(rankTest.key) && <label style={{display:"block",marginTop:14}}>Uitvoering <select value={rankModified ? "aangepast" : "standaard"} onChange={e=>setRankModified(e.target.value==="aangepast")} style={{color:"#111",padding:8,borderRadius:8,marginLeft:8}}><option value="standaard">{rankTest.key==="pushups_60s" ? "Gewone push-ups" : "Gestrekte benen"}</option><option value="aangepast">{rankTest.key==="pushups_60s" ? "Op de knieën" : "Geplooide benen"}</option></select></label>}
+  {teacherMode ? <div style={{display:"flex",flexWrap:"wrap",gap:10,marginTop:14}}>
       <label>Geslacht <select value={rankGender} onChange={e=>setRankGender(e.target.value)} style={{color:"#111",padding:8,borderRadius:8}}><option value="M">Jongens</option><option value="V">Meisjes</option></select></label>
       <label>Graad <select value={rankGrade} onChange={e=>setRankGrade(Number(e.target.value))} style={{color:"#111",padding:8,borderRadius:8}}>{[1,2,3].map(g=><option key={g} value={g}>{g}e graad</option>)}</select></label>
       <label>Periode <select value={rankAllTime?"all":"current"} onChange={e=>setRankAllTime(e.target.value==="all")} style={{color:"#111",padding:8,borderRadius:8}}><option value="current">Dit schooljaar</option><option value="all">Aller tijden</option></select></label>
