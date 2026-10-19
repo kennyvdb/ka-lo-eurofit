@@ -101,10 +101,14 @@ function HomeworkDetail({
   leerling,
   submission,
   onClose,
+  onRetry,
+  retrying,
 }: {
   leerling: Leerling;
   submission: HomeworkSubmission;
   onClose: () => void;
+  onRetry: () => void;
+  retrying: boolean;
 }) {
   const form = submission.payload?.form ?? {};
   const ai = aiAssessment(submission);
@@ -238,7 +242,10 @@ function HomeworkDetail({
                 </div>
               </div>
             ) : null}
-            <div className="mt-3 text-xs leading-5 text-white/40">
+                      {ai?.status !== "completed" && submission.payload?.status === "definitief" ? (
+            <button type="button" onClick={onRetry} disabled={retrying} className="mt-3 rounded-xl border border-violet-400/30 bg-violet-400/15 px-4 py-2 text-sm font-black text-violet-100 disabled:opacity-50">{retrying ? "AI-beoordeling uitvoeren…" : "🔄 AI-beoordeling opnieuw uitvoeren"}</button>
+          ) : null}
+<div className="mt-3 text-xs leading-5 text-white/40">
               De AI-beoordeling is alleen zichtbaar voor LO-leerkrachten totdat ze gepubliceerd wordt.
             </div>
           </div>
@@ -265,6 +272,7 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
   const [loadingOverview, setLoadingOverview] = useState(false);
   const [detail, setDetail] = useState<{ leerling: Leerling; submission: HomeworkSubmission } | null>(null);
   const [reopeningId, setReopeningId] = useState<string | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishInfo, setPublishInfo] = useState<string | null>(null);
   const klassen = useMemo(() => {
@@ -371,6 +379,26 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
       result = result.sort((a, b) => a.naam.localeCompare(b.naam, "nl"));
     }
     return result;
+  }
+  async function retryAi(submission: HomeworkSubmission, leerling: Leerling) {
+    if (retryingId || !window.confirm(`AI-beoordeling voor ${leerling.naam} opnieuw uitvoeren? De antwoorden blijven ongewijzigd.`)) return;
+    setRetryingId(submission.id);
+    setError(null);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+      if (!token) throw new Error("Je bent niet aangemeld.");
+      const response = await fetch("/api/huiswerk/ai-herkansing", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` }, body: JSON.stringify({ submissionId: submission.id }) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result?.error || "De AI-herkansing is mislukt.");
+      const updated = { ...submission, payload: { ...submission.payload, aiAssessment: result.aiAssessment } };
+      setSubmissions((prev) => prev.map((row) => row.id === submission.id ? updated : row));
+      setDetail((prev) => prev?.submission.id === submission.id ? { ...prev, submission: updated } : prev);
+    } catch (e: any) {
+      setError(e?.message ?? "De AI-herkansing is mislukt.");
+    } finally {
+      setRetryingId(null);
+    }
   }
   async function reopenHomework(submission: HomeworkSubmission, leerling: Leerling) {
     if (!window.confirm(`Huistaak van ${leerling.naam} éénmalig opnieuw openstellen? De leerling kan de bestaande antwoorden aanpassen en één keer opnieuw indienen.`)) return;
@@ -787,8 +815,11 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
                         </>
                       ) : null}
                     </div>
-                    <div className="p-3">
-                      <div className="grid grid-cols-1 gap-2">
+                                      <div className="p-3">
+                    {submission && ai?.status !== "completed" && submission.payload?.status === "definitief" ? (
+                      <button type="button" onClick={() => void retryAi(submission, leerling)} disabled={Boolean(retryingId)} className="mb-3 w-full rounded-xl border border-violet-400/30 bg-violet-400/15 px-2 py-2 text-[10px] font-black text-violet-100 disabled:opacity-50">{retryingId === submission.id ? "AI beoordelen…" : "🔄 AI opnieuw beoordelen"}</button>
+                    ) : null}
+                    <div className="grid grid-cols-1 gap-2">
 <div>
                           <div className="text-[9px] font-black uppercase tracking-wider text-violet-200/60">AI</div>
                           {ai?.status === "completed" && ai.level ? (
@@ -818,6 +849,8 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
         leerling={detail.leerling}
         submission={detail.submission}
         onClose={() => setDetail(null)}
+      onRetry={() => void retryAi(detail.submission, detail.leerling)}
+      retrying={retryingId === detail.submission.id}
       />
     ) : null}
 </AppShell>
