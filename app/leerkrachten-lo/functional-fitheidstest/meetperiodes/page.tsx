@@ -1,0 +1,33 @@
+"use client";
+import React,{useCallback,useEffect,useState} from "react";
+import Link from "next/link";
+import AppShell from "@/components/AppShell";
+import {createClient} from "@/lib/supabase/client";
+const supabase=createClient();
+type Period={id:string;naam:string;schooljaar:string;geopend_op:string;gesloten_op:string|null};
+const schoolyear=()=>{const d=new Date(),y=d.getFullYear();return d.getMonth()>=8?`${y}-${y+1}`:`${y-1}-${y}`};
+export default function MeetperiodesPage(){
+ const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[allowed,setAllowed]=useState(false);
+ const [error,setError]=useState(""),[message,setMessage]=useState(""),[year,setYear]=useState(schoolyear()),[name,setName]=useState("");
+ const [periods,setPeriods]=useState<Period[]>([]);
+ const load=useCallback(async(y:string)=>{const {data,error}=await supabase.from("functional_fitheidstest_meetperiodes").select("id,naam,schooljaar,geopend_op,gesloten_op").eq("schooljaar",y).order("geopend_op",{ascending:false});if(error)throw error;setPeriods((data??[]) as Period[])},[]);
+ useEffect(()=>{void(async()=>{try{const {data:{user}}=await supabase.auth.getUser();if(!user)throw new Error("Meld je eerst aan.");const {data,error}=await supabase.from("profielen").select("rol,schooljaar").eq("id",user.id).single();if(error)throw error;if(!["lo_leerkracht","leerkracht_lo","admin","administratief_personeel"].includes(String(data?.rol??"").toLowerCase()))throw new Error("Geen toegang voor dit profiel.");setAllowed(true);const y=data?.schooljaar&&data.schooljaar!=="2025-2026"?data.schooljaar:schoolyear();setYear(y);await load(y)}catch(e:any){setError(e?.message??"Laden mislukt.")}finally{setLoading(false)}})()},[load]);
+ const active=periods.find(p=>p.gesloten_op===null);
+ async function action(kind:"open"|"close"|"reopen",period?:Period){setBusy(true);setError("");setMessage("");try{
+  if(kind==="open"){if(active)throw new Error("Sluit eerst de huidige meetperiode af.");if(!name.trim())throw new Error("Vul een naam in.");if(!window.confirm(`Meetperiode '${name.trim()}' openen voor alle klasgroepen van ${year}?`))return;const {error}=await supabase.from("functional_fitheidstest_meetperiodes").insert({naam:name.trim(),schooljaar:year});if(error)throw error;setName("");setMessage("Nieuwe meetperiode geopend voor alle klasgroepen.")}
+  if(kind==="close"&&period){if(!window.confirm(`'${period.naam}' afsluiten voor ALLE leerlingen? Leerlingen kunnen daarna geen scores meer wijzigen.`))return;const {error}=await supabase.from("functional_fitheidstest_meetperiodes").update({gesloten_op:new Date().toISOString()}).eq("id",period.id).is("gesloten_op",null);if(error)throw error;setMessage("Meetperiode afgesloten.")}
+  if(kind==="reopen"&&period){if(active)throw new Error("Sluit eerst de andere open meetperiode af.");if(!window.confirm(`'${period.naam}' opnieuw openen voor alle klasgroepen?`))return;const {error}=await supabase.from("functional_fitheidstest_meetperiodes").update({gesloten_op:null}).eq("id",period.id);if(error)throw error;setMessage("Meetperiode opnieuw geopend.")}
+  await load(year);
+ }catch(e:any){setError(e?.message??"Actie mislukt.")}finally{setBusy(false)}}
+ return <AppShell title="LO App" subtitle="Meetperiodes beheren">
+ <div className="mx-auto max-w-4xl space-y-5 text-white">
+ <Link href="/leerkrachten-lo/functional-fitheidstest" className="inline-flex rounded-xl border border-white/15 px-4 py-2 text-sm font-bold text-white/80">← Huiswerk en leerkrachtenbeheer</Link>
+ <section className="rounded-3xl border border-white/10 bg-white/5 p-5 sm:p-7"><h1 className="text-2xl font-black">💪 Meetperiodes beheren</h1><p className="mt-2 text-sm leading-6 text-white/65">Een nulmeting of hertest geldt voor alle klasgroepen van het gekozen schooljaar. Scores worden automatisch opgeslagen binnen de actieve periode.</p></section>
+ {loading?<p>Laden…</p>:!allowed?<p className="rounded-xl bg-red-500/10 p-4 text-red-200">{error||"Geen toegang."}</p>:<>
+ <section className="rounded-3xl border border-white/10 bg-white/5 p-5"><label className="text-sm font-bold">Schooljaar</label><div className="mt-2 flex flex-wrap gap-2"><input value={year} onChange={e=>setYear(e.target.value)} className="h-11 rounded-xl border border-white/15 bg-black/30 px-4 text-white"/><button disabled={busy} onClick={()=>void load(year).catch(e=>setError(e.message))} className="rounded-xl border border-white/15 px-4 text-sm font-bold">Laden</button></div></section>
+ {error?<div className="rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-red-100">{error}</div>:null}{message?<div className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-emerald-100">{message}</div>:null}
+ <section className="rounded-3xl border border-white/10 bg-white/5 p-5"><h2 className="font-black">Huidige meetperiode</h2>{active?<div className="mt-4 space-y-3"><p className="text-lg font-bold">🟢 {active.naam}</p><p className="text-sm text-white/60">Open voor alle klasgroepen van {year}</p><button disabled={busy} onClick={()=>void action("close",active)} className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3 text-sm font-black text-amber-100 disabled:opacity-50">Meetperiode afsluiten</button></div>:<div className="mt-4 space-y-3"><p className="text-sm text-white/65">Er is momenteel geen open meetperiode.</p><input placeholder="Bijv. Hertest februari 2027" value={name} onChange={e=>setName(e.target.value)} className="h-12 w-full rounded-xl border border-white/15 bg-black/30 px-4 text-white"/><button disabled={busy||!name.trim()} onClick={()=>void action("open")} className="rounded-xl border border-teal-400/30 bg-teal-400/15 px-4 py-3 text-sm font-black text-teal-100 disabled:opacity-50">Nieuwe meetperiode openen voor alle klasgroepen</button></div>}</section>
+ <section className="rounded-3xl border border-white/10 bg-white/5 p-5"><h2 className="font-black">Eerdere meetperiodes</h2><div className="mt-4 space-y-3">{periods.length===0?<p className="text-sm text-white/60">Geen meetperiodes gevonden.</p>:periods.map(p=><div key={p.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-4"><div><div className="font-bold">{p.naam}</div><div className="mt-1 text-xs text-white/60">{p.gesloten_op?"Afgesloten":"Open"}</div></div>{p.gesloten_op&&!active?<button disabled={busy} onClick={()=>void action("reopen",p)} className="rounded-xl border border-white/15 px-3 py-2 text-xs font-bold disabled:opacity-50">Opnieuw openen</button>:null}</div>)}</div></section>
+ </>}
+ </div></AppShell>
+}

@@ -78,6 +78,10 @@ type FunctionalSubmission = {
 
   created_at: string;
 
+  meetperiode_id?: string | null;
+
+  periode_naam?: string;
+
 };
 
 type TestMeta = {
@@ -310,7 +314,7 @@ export default function FunctionalFitheidstestResultatenPage() {
 
         .from("functional_fitheidstest_submissions")
 
-        .select("id, user_id, schooljaar, date, scores, modifications, note, created_at")
+        .select("id, user_id, schooljaar, date, scores, modifications, note, created_at, meetperiode_id")
 
         .eq("user_id", userId)
 
@@ -328,7 +332,19 @@ export default function FunctionalFitheidstestResultatenPage() {
 
       }
 
-      setResults((rows ?? []) as FunctionalSubmission[]);
+      const raw=(rows??[]) as FunctionalSubmission[];
+      const periodIds=[...new Set(raw.map(r=>r.meetperiode_id).filter((id):id is string=>Boolean(id)))];
+      const {data:periods,error:periodError}=periodIds.length?await supabase.from("functional_fitheidstest_meetperiodes").select("id,naam,geopend_op").in("id",periodIds):{data:[],error:null};
+      if(periodError){setError(periodError.message);setLoading(false);return;}
+      const names=new Map((periods??[]).map(p=>[p.id,p.naam]));
+      const grouped=new Map<string,FunctionalSubmission>();
+      for(const row of [...raw].reverse()){
+        const key=row.meetperiode_id??`legacy:${row.id}`;
+        const old=grouped.get(key);
+        if(!old)grouped.set(key,{...row,periode_naam:row.meetperiode_id?names.get(row.meetperiode_id):undefined});
+        else grouped.set(key,{...old,scores:{...old.scores,...row.scores},modifications:{...old.modifications,...row.modifications},note:row.note??old.note,created_at:row.created_at,date:row.date});
+      }
+      setResults([...grouped.values()].sort((a,b)=>b.date.localeCompare(a.date)));
 
       setLoading(false);
 
@@ -748,7 +764,7 @@ export default function FunctionalFitheidstestResultatenPage() {
 
               <div style={{ marginTop: 8, color: ui.muted, fontSize: 13.5 }}>
 
-                Overzicht van al je opgeslagen metingen, meest recente eerst.
+                Overzicht per meetperiode. Meerdere opslagacties binnen dezelfde periode worden samengevoegd.
 
               </div>
 
@@ -796,7 +812,7 @@ export default function FunctionalFitheidstestResultatenPage() {
 
                         <div style={{ fontWeight: 950, color: ui.text }}>
 
-                          {row.date}
+                          {row.periode_naam??row.date}
 
                         </div>
 

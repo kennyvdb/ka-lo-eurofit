@@ -246,14 +246,11 @@ export default function FunctionalFitheidstestPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"invullen" | "info" | "huiswerk">("invullen");
-  const [date, setDate] = useState(toYMD());
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
-  const [loadingLatest, setLoadingLatest] = useState(false);
-  const [activeMeasurement, setActiveMeasurement] = useState<SavedRow | null>(null);
+  const [activePeriod, setActivePeriod] = useState<{id:string;naam:string;schooljaar:string;gesloten_op:string|null}|null>(null);
   const [measurementReady, setMeasurementReady] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
-  const [draftEnabled, setDraftEnabled] = useState(true);
   const [masInfo, setMasInfo] = useState<string | null>(null);
   const [masLoading, setMasLoading] = useState(false);
   const [confirmedMas, setConfirmedMas] = useState<number | null>(null);
@@ -342,7 +339,6 @@ export default function FunctionalFitheidstestPage() {
       const saved = localStorage.getItem(key);
       if (saved) {
         const draft = JSON.parse(saved) as { date?: string; note?: string; scores?: Partial<Record<TestKey, ScoreValue>>; modifications?: { pushups_on_knees?: boolean; table_pullup_bent_legs?: boolean } };
-        if (draft.date) setDate(draft.date);
         if (typeof draft.note === "string") setNote(draft.note);
         if (draft.scores) { const otherScores = { ...draft.scores }; delete otherScores.vma_kmu; setScores((old) => ({ ...old, ...otherScores, vma_kmu: "" })); }
         if (draft.modifications) setModifications({ pushups_on_knees: Boolean(draft.modifications.pushups_on_knees), table_pullup_bent_legs: Boolean(draft.modifications.table_pullup_bent_legs) });
@@ -354,9 +350,9 @@ export default function FunctionalFitheidstestPage() {
     }
   }, [uid]);
   useEffect(() => {
-    if (!uid || !draftReady || !measurementReady || !draftEnabled) return;
-    localStorage.setItem(`functional-fitheidstest-draft:${uid}`, JSON.stringify({ date, note, scores: { ...scores, vma_kmu: "" }, modifications }));
-  }, [uid, draftReady, measurementReady, draftEnabled, date, note, scores, modifications]);
+    if (!uid || !draftReady || !measurementReady) return;
+    localStorage.setItem(`functional-fitheidstest-draft:${uid}`, JSON.stringify({ note, scores: { ...scores, vma_kmu: "" }, modifications }));
+  }, [uid, draftReady, measurementReady, note, scores, modifications]);
   useEffect(() => {
     if (!uid || !draftReady || !profiel?.schooljaar) return;
     let cancelled = false;
@@ -389,34 +385,32 @@ export default function FunctionalFitheidstestPage() {
     void loadMas();
     return () => { cancelled = true; };
   }, [uid, draftReady, profiel?.schooljaar]);
-  useEffect(() => {
-    if (!uid || !draftReady) return;
-    let cancelled = false;
-    const loadOpenMeasurement = async () => {
-      setMeasurementReady(false);
-      const { data, error } = await supabase.from("functional_fitheidstest_submissions").select("id,user_id,schooljaar,date,scores,points,total_points,modifications,note,created_at,status").eq("user_id",uid).eq("status","in_uitvoering").order("created_at",{ascending:false}).limit(1).maybeSingle();
-      if (cancelled) return;
-      if (error) setError(error.message);
-      else if (data) {
-        const row = data as SavedRow;
-        setActiveMeasurement(row);
-        setDate(row.date);
-        setNote(row.note ?? "");
-        setModifications({pushups_on_knees:Boolean(row.modifications?.pushups_on_knees),table_pullup_bent_legs:Boolean(row.modifications?.table_pullup_bent_legs)});
-        setScores(old => {
-          const next = {...old};
-          for (const t of TESTS) if (t.key !== "vma_kmu") {
-            const value = row.scores?.[t.key];
-            next[t.key] = typeof value === "number" && Number.isFinite(value) ? value : "";
-          }
-          return next;
-        });
+  const loadPeriod = async () => {
+    if (!uid || !profiel?.schooljaar) { setMeasurementReady(true); return; }
+    setMeasurementReady(false);
+    const {data:periodRows,error:periodError}=await supabase.from("functional_fitheidstest_meetperiodes")
+      .select("id,naam,schooljaar,gesloten_op").eq("schooljaar",profiel.schooljaar).order("aangemaakt_op",{ascending:false});
+    if(periodError){setError(periodError.message);setMeasurementReady(true);return;}
+    const all=periodRows??[];
+    const period=all.find(p=>p.gesloten_op===null)??null;
+    setActivePeriod(period);
+    if(period){
+      const {data:rows,error:rowError}=await supabase.from("functional_fitheidstest_submissions")
+        .select("id,user_id,schooljaar,date,scores,points,total_points,modifications,note,created_at,status")
+        .eq("user_id",uid).eq("meetperiode_id",period.id).order("created_at",{ascending:true});
+      if(rowError)setError(rowError.message);
+      else if(rows?.length){
+        const merged=rows.reduce((acc,row)=>({...acc,...(row.scores??{})}),{} as Record<string,number>);
+        const last=rows[rows.length-1] as SavedRow;
+        setNote(last.note??"");
+        const mods=rows.reduce((acc,row)=>({...acc,...(row.modifications??{})}),{} as Record<string,boolean>);
+        setModifications({pushups_on_knees:Boolean(mods.pushups_on_knees),table_pullup_bent_legs:Boolean(mods.table_pullup_bent_legs)});
+        setScores(old=>{const next={...old};for(const t of TESTS)if(t.key!=="vma_kmu")next[t.key]=typeof merged[t.key]==="number"?merged[t.key]:"";return next;});
       }
-      setMeasurementReady(true);
-    };
-    void loadOpenMeasurement();
-    return () => { cancelled = true; };
-  },[uid,draftReady]);
+    }
+    setMeasurementReady(true);
+  };
+  useEffect(()=>{if(uid&&draftReady&&profiel?.schooljaar)void loadPeriod();},[uid,draftReady,profiel?.schooljaar]);
   const setOne = (k: TestKey, raw: string) => {
     if (k === "vma_kmu") return;
     setInfo(null);
@@ -451,89 +445,29 @@ export default function FunctionalFitheidstestPage() {
     setMasInfo(null);
     setError(null);
   };
-  const handleSave = async (finish = false) => {
-    if (!uid || !measurementReady || saving) return;
-    setSaving(true);
-    setError(null);
-    setInfo(null);
-    try {
-      const currentScores: Record<string,number> = {...(activeMeasurement?.scores ?? {})};
-      for (const t of TESTS) {
-        if (t.key === "vma_kmu") continue;
-        const raw = scores[t.key];
-        if (String(raw).trim() === "") continue;
-        const value = Number(String(raw).replace(",","."));
-        if (!Number.isFinite(value) || value < (t.min ?? 0) || value > (t.max ?? Infinity)) throw new Error(`Ongeldige score voor ${t.title}.`);
-        currentScores[t.key] = value;
+  const handleSave = async () => {
+    if(!uid||!measurementReady||!activePeriod||saving)return;
+    setSaving(true);setError(null);setInfo(null);
+    try{
+      const currentScores:Record<string,number>={};
+      for(const t of TESTS){
+        if(t.key==="vma_kmu")continue;
+        const raw=scores[t.key];if(String(raw).trim()==="")continue;
+        const value=Number(String(raw).replace(",","."));
+        if(!Number.isFinite(value)||value<(t.min??0)||value>(t.max??Infinity))throw new Error(`Ongeldige score voor ${t.title}.`);
+        currentScores[t.key]=value;
       }
-      if (!Object.keys(currentScores).length) throw new Error("Vul eerst minstens één oefening in.");
-      if (finish && !window.confirm("Wil je deze meting definitief afronden? Nadien kun je de scores niet meer zelf aanpassen.")) return;
-      const now = new Date().toISOString();
-      const basePayload = {schooljaar:activeMeasurement?.schooljaar ?? profiel?.schooljaar ?? null,date:activeMeasurement?.date ?? date,scores:currentScores,points:{},total_points:0,modifications,note:note.trim() || null,bijgewerkt_op:now};
-      let currentId = activeMeasurement?.id ?? null;
-      if (!currentId) {
-        const {data:existing,error:findError} = await supabase.from("functional_fitheidstest_submissions").select("id,user_id,schooljaar,date,scores,points,total_points,modifications,note,created_at,status").eq("user_id",uid).eq("status","in_uitvoering").limit(1).maybeSingle();
-        if (findError) throw findError;
-        if (existing) throw new Error("Er bestaat intussen een openstaande meting. Herlaad de pagina om deze te openen; je scores zijn lokaal bewaard.");
-        const {data,error} = await supabase.from("functional_fitheidstest_submissions").insert({...basePayload,user_id:uid,status:"in_uitvoering"}).select("id,user_id,schooljaar,date,scores,points,total_points,modifications,note,created_at,status").single();
-        if (error) throw error;
-        currentId = data.id;
-        setActiveMeasurement(data as SavedRow);
-      } else {
-        const {data,error} = await supabase.from("functional_fitheidstest_submissions").update(basePayload).eq("id",currentId).eq("user_id",uid).eq("status","in_uitvoering").select("id,user_id,schooljaar,date,scores,points,total_points,modifications,note,created_at,status").maybeSingle();
-        if (error) throw error;
-        if (!data) throw new Error("Deze meting is intussen afgesloten. Herlaad de pagina.");
-        setActiveMeasurement(data as SavedRow);
-      }
-      if (finish) {
-        const {data,error} = await supabase.from("functional_fitheidstest_submissions").update({status:"afgerond",afgerond_op:new Date().toISOString(),bijgewerkt_op:new Date().toISOString()}).eq("id",currentId).eq("user_id",uid).eq("status","in_uitvoering").select("id").maybeSingle();
-        if (error) throw error;
-        if (!data) throw new Error("De meting kon niet definitief worden afgerond. Ze is wel tussentijds opgeslagen; herlaad de pagina.");
-        setDraftEnabled(false);
-        localStorage.removeItem(`functional-fitheidstest-draft:${uid}`);
-        setActiveMeasurement(null);
-        setDate(toYMD());
-        setNote("");
-        setModifications({pushups_on_knees:false,table_pullup_bent_legs:false});
-        setScores(() => {
-          const empty = {} as Record<TestKey,ScoreValue>;
-          for (const t of TESTS) empty[t.key] = t.key === "vma_kmu" && confirmedMas !== null ? String(confirmedMas).replace(".",",") : "";
-          return empty;
-        });
-        window.location.href = "/functional-fitheidstest/resultaten";
-      } else {
-        setInfo("Tussentijds opgeslagen. Je kunt later verderwerken aan dezelfde meting.");
-      }
-    } catch (e: any) { setError(e?.message ?? "Opslaan mislukt."); }
-    finally { setSaving(false); }
-  };
-  const handleLoadLatest = async () => {
-    if (activeMeasurement) { setInfo("Je openstaande meting is al automatisch geladen."); return; }
-    if (!uid) return;
-    setLoadingLatest(true);
-    setError(null);
-    setInfo(null);
-    try {
-      const {data,error} = await supabase.from("functional_fitheidstest_submissions").select("id,user_id,schooljaar,date,scores,points,total_points,modifications,note,created_at,status").eq("user_id",uid).eq("status","in_uitvoering").order("created_at",{ascending:false}).limit(1).maybeSingle();
-      if (error) throw error;
-      if (!data) { setInfo("Geen openstaande meting gevonden. Je kunt een nieuwe meting starten."); return; }
-      const row = data as SavedRow;
-      setActiveMeasurement(row);
-      setDate(row.date);
-      setNote(row.note ?? "");
-      setModifications({pushups_on_knees:Boolean(row.modifications?.pushups_on_knees),table_pullup_bent_legs:Boolean(row.modifications?.table_pullup_bent_legs)});
-      setScores(old => {
-        const next = {...old};
-        for (const t of TESTS) if (t.key !== "vma_kmu") {
-          const v = row.scores?.[t.key];
-          next[t.key] = typeof v === "number" && Number.isFinite(v) ? v : "";
-        }
-        return next;
+      if(confirmedMas!==null)currentScores.vma_kmu=confirmedMas;
+      if(!Object.keys(currentScores).some(key=>key!=="vma_kmu"))throw new Error("Vul eerst minstens één oefening in.");
+      const {error}=await supabase.rpc("functional_scores_opslaan",{
+        p_meetperiode_id:activePeriod.id,p_scores:currentScores,p_modifications:modifications,p_note:note.trim()||null
       });
-      setInfo("Openstaande meting geladen.");
-      setActiveTab("invullen");
-    } catch (e: any) { setError(e?.message ?? "Laden mislukt."); }
-    finally { setLoadingLatest(false); }
+      if(error)throw error;
+      setInfo("Scores succesvol opgeslagen. Je kunt later verderwerken in dezelfde meetperiode.");
+      localStorage.removeItem(`functional-fitheidstest-draft:${uid}`);
+      await loadPeriod();
+    }catch(e:any){setError(e?.message??"Opslaan mislukt.");}
+    finally{setSaving(false);}
   };
   if (loading) {
     return (
@@ -628,20 +562,7 @@ export default function FunctionalFitheidstestPage() {
       </div>
       {activeTab !== "huiswerk" ? (
         <div className="meta-grid-2" style={styles.metaRow}>
-          <div style={styles.metaCard}>
-            <div style={styles.metaLabel}>📅 Datum</div>
-            <input
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              style={styles.input}
-              inputMode="text"
-              placeholder="YYYY-MM-DD"
-            />
-            <div style={{ marginTop: 6, fontSize: 12, color: ui.muted }}>
-              Tip: zet dezelfde datum als op je invulblad.
-            </div>
-          </div>
-          <div style={styles.metaCard}>
+<div style={styles.metaCard}>
             <div style={styles.metaLabel}>📝 Opmerking (optioneel)</div>
             <input
               value={note}
@@ -657,28 +578,16 @@ export default function FunctionalFitheidstestPage() {
       ) : null}
       {activeTab === "invullen" ? (
         <>
-          <div style={styles.actionRow}>
-            <button
-              onClick={handleLoadLatest}
-              disabled={loadingLatest || !measurementReady}
-              style={{ ...styles.blackBtn, opacity: loadingLatest ? 0.7 : 1 }}
-            >
-              {loadingLatest ? "Laden..." : "Openstaande meting laden"}
-            </button>
-            <button onClick={resetAll} style={styles.ghostBtn}>
-              Alles leegmaken
-            </button>
-            <button
-              onClick={() => void handleSave(false)}
-              disabled={saving || !measurementReady}
-              style={{ ...styles.primaryBtn, opacity: saving ? 0.7 : 1 }}
-              title="Bewaar je huidige scores en werk later verder"
-            >
-              {saving ? "Opslaan..." : "Tussentijds opslaan"}
-            </button>
-            <button type="button" onClick={() => void handleSave(true)} disabled={saving || !measurementReady} style={{...styles.primaryBtn,opacity:saving || !measurementReady ? .6 : 1}}>Test definitief afronden</button>
+          <div style={styles.panel}>
+            <div style={{fontWeight:900,color:ui.text}}>Meetperiode: {activePeriod?.naam??"Geen open meetperiode"}</div>
+            <div style={{marginTop:6,color:ui.muted,fontSize:13}}>{activePeriod?"Je scores worden binnen deze periode aangevuld. Je kunt later verderwerken.":"De leerkracht moet eerst een meetperiode openen."}</div>
+            <div style={{marginTop:8,color:ui.muted,fontSize:13}}>{TESTS.filter(t=>t.key!=="vma_kmu"&&String(scores[t.key]).trim()!=="").length} van 11 handmatig in te vullen oefeningen ingevuld</div>
           </div>
-                    <section style={{ marginTop: 14 }}>
+          <div style={{...styles.actionRow,marginTop:14}}>
+            <button type="button" onClick={resetAll} style={styles.ghostBtn}>Invoer leegmaken</button>
+            <button type="button" onClick={()=>void handleSave()} disabled={saving||!measurementReady||!activePeriod} style={{...styles.primaryBtn,opacity:saving||!activePeriod?0.6:1}}>{saving?"Opslaan...":"Scores opslaan"}</button>
+          </div>
+          <section style={{ marginTop: 14 }}>
             <div style={{ marginBottom: 10, fontSize: 13, fontWeight: 950, color: ui.text }}>Onderdelen</div>
             <div className="functional-grid" style={styles.gridWrap}>
               {TESTS.map((t) => (
@@ -715,15 +624,6 @@ export default function FunctionalFitheidstestPage() {
               ))}
             </div>
           </section>
-          <div style={{ marginTop: 20, display: "flex", justifyContent: "center" }}>
-            <button
-              onClick={() => void handleSave(false)}
-              disabled={saving || !measurementReady}
-              style={{ ...styles.primaryBtn, opacity: saving ? 0.7 : 1 }}
-            >
-              {saving ? "Opslaan..." : "Tussentijds opslaan"}
-            </button>
-          </div>
         </>
       ) : activeTab === "info" ? (
         <div style={{ marginTop: 14, display: "grid", gap: 12 }}>

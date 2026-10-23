@@ -274,6 +274,8 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
   const [reopeningId, setReopeningId] = useState<string | null>(null);
   const [retryingId, setRetryingId] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
+  const [reminding, setReminding] = useState(false);
+  const [reminderInfo, setReminderInfo] = useState<string | null>(null);
   const [publishInfo, setPublishInfo] = useState<string | null>(null);
   const klassen = useMemo(() => {
     const wantedYears = grade === "2e" ? [3, 4] : [5, 6];
@@ -294,7 +296,7 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
     return map;
   }, [submissions]);
   const stats = useMemo(() => {
-    const submitted = leerlingen.filter((l) => l.heeftProfiel && latestByUser.has(l.id)).length;
+    const submitted = leerlingen.filter((l) => l.heeftProfiel && latestByUser.get(l.id)?.payload?.status === "definitief").length;
     return { submitted, missing: leerlingen.length - submitted };
   }, [leerlingen, latestByUser]);
   async function loadClassStudents(year: string) {
@@ -414,17 +416,82 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
       setReopeningId(null);
     }
   }
+  async function sendLoMessage(ids: string[], onderwerp: string, inhoud: string) {
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !sessionData.session?.access_token) throw new Error("Je bent niet aangemeld.");
+    let sent = 0;
+    for (let i = 0; i < ids.length; i += 100) {
+      const response = await fetch("/api/lo-berichten/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionData.session.access_token}` },
+        body: JSON.stringify({ aanvraag_id: crypto.randomUUID(), onderwerp, inhoud, doelgroep: "personen", selectie: ids.slice(i, i + 100), link: "/functional-fitheidstest" })
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(`${sent} bericht(en) ingepland; daarna fout: ${result?.error || "Verzenden mislukt"}`);
+      sent += Number(result.ontvangers ?? ids.slice(i, i + 100).length);
+    }
+    return sent;
+  }
+  async function remindHomework() {
+    if (!selectedKlasgroepId || reminding || loadingOverview) return;
+    const groupId = selectedKlasgroepId;
+    const group = klasgroepen.find(g => g.id === groupId);
+    setReminding(true);
+    setReminderInfo(null);
+    setError(null);
+    try {
+      // Herlees de klasgroepleden en indieningen vlak voor verzending.
+      const members = await loadKlasgroepRows(groupId);
+      const resolved = await resolveProfiles(members, true);
+      const ids = resolved.filter(l => l.heeftProfiel).map(l => l.id);
+      const latest = new Map<string, HomeworkSubmission>();
+      for (let i = 0; i < ids.length; i += 100) {
+        const { data, error } = await supabase.from("eurofit_huiswerk_submissions")
+          .select("id,user_id,schooljaar,klas_naam,date,grade,payload,created_at")
+          .eq("schooljaar", schooljaar).eq("grade", grade).in("user_id", ids.slice(i, i + 100))
+          .order("created_at", { ascending: false });
+        if (error) throw new Error(readableError(error, "Kon de indieningen niet controleren."));
+        for (const row of (data ?? []) as HomeworkSubmission[]) if (!latest.has(row.user_id)) latest.set(row.user_id, row);
+      }
+      const missing = resolved.filter(l => l.heeftProfiel && latest.get(l.id)?.payload?.status !== "definitief").map(l => l.id);
+      const noProfile = resolved.filter(l => !l.heeftProfiel).length;
+      if (!missing.length) {
+        setReminderInfo(noProfile ? `Geen leerlingen met profiel te herinneren. ${noProfile} leerling(en) hebben geen profiel.` : "Iedereen heeft definitief ingediend.");
+        await loadOverview();
+        return;
+      }
+      if (!window.confirm(`Herinnering sturen naar ${missing.length} leerling(en) van ${group?.naam ?? "de klasgroep"} die nog niet definitief ingediend hebben?${noProfile ? `\n${noProfile} leerling(en) zonder profiel kunnen geen bericht ontvangen.` : ""}`)) return;
+      const sent = await sendLoMessage(missing, "Herinnering: LO-huiswerk", "Je hebt je LO-huiswerk nog niet definitief ingediend. Open de LO App en dien je opdracht in.");
+      setReminderInfo(`Bericht voor ${sent} leerling(en) in de pushwachtrij geplaatst.`);
+      await loadOverview();
+    } catch (e: any) {
+      setError(e?.message ?? "Herinnering versturen is mislukt.");
+    } finally {
+      setReminding(false);
+    }
+  }
   async function publishHomework() {
     if (!selectedKlasgroepId || publishing) return;
-    const group = klasgroepen.find((g) => g.id === selectedKlasgroepId);
-    if (!window.confirm(`Beoordelingen voor ${group?.naam ?? "deze klasgroep"} publiceren? Leerlingen kunnen hun beoordeling daarna bekijken.`)) return;
+    const group = klasgroepen.find(g => g.id === selectedKlasgroepId);
+    if (!window.confirm(`Beoordelingen voor ${group?.naam ?? "deze klasgroep"} publiceren en betrokken leerlingen verwittigen?`)) return;
     setPublishing(true);
     setPublishInfo(null);
     setError(null);
     try {
-      const { data, error } = await supabase.rpc("lo_publiceer_huiswerk", { p_klasgroep_id: selectedKlasgroepId, p_schooljaar: schooljaar, p_grade: grade });
+      const { data, error } = await supabase.rpc("lo_publiceer_huiswerk_met_ontvangers", { p_klasgroep_id: selectedKlasgroepId, p_schooljaar: schooljaar, p_grade: grade });
       if (error) throw new Error(readableError(error, "Publiceren is mislukt."));
-      setPublishInfo(`${Number(data ?? 0)} nieuwe beoordeling(en) gepubliceerd.`);
+      const ids = [...new Set<string>(Array.isArray(data) ? data.map(String) : [])];
+      if (!ids.length) {
+        setPublishInfo("Geen nieuwe beoordelingen gepubliceerd; er zijn geen nieuwe meldingen verstuurd.");
+      } else {
+        // De publicatie is al definitief opgeslagen, ook wanneer het berichtenverkeer faalt.
+        try {
+          const sent = await sendLoMessage(ids, "Je LO-beoordeling staat klaar", "Je LO-huiswerk is beoordeeld. Bekijk je rubrics en feedback in de LO App.");
+          setPublishInfo(`${ids.length} nieuwe beoordeling(en) gepubliceerd. Bericht voor ${sent} leerling(en) ingepland.`);
+        } catch (notifyError: any) {
+          setPublishInfo(`${ids.length} beoordeling(en) zijn gepubliceerd, maar de melding is niet volledig verzonden: ${notifyError?.message ?? "Onbekende fout"}. Niet opnieuw publiceren om dit te herstellen.`);
+        }
+      }
       await loadOverview();
     } catch (e: any) {
       setError(e?.message ?? "Publiceren is mislukt.");
@@ -603,6 +670,11 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
           </p>
         </div>
       </section>
+      <section className="mt-5 rounded-[24px] border border-teal-400/20 bg-teal-400/5 p-4 sm:p-5">
+        <div className="text-base font-black text-white">💪 Fitheidstesten — meetperiodes</div>
+        <p className="mt-2 text-sm leading-6 text-white/65">Open of sluit een nulmeting of hertest voor alle klasgroepen tegelijk. Het huiswerk en de AI-beoordelingen hieronder blijven ongewijzigd.</p>
+        <Link href="/leerkrachten-lo/functional-fitheidstest/meetperiodes" className="mt-4 inline-flex min-h-11 items-center rounded-2xl border border-teal-300/30 bg-teal-400/15 px-4 text-sm font-black text-teal-100 hover:bg-teal-400/25">Meetperiodes beheren →</Link>
+      </section>
       {error ? (
         <div className="mt-4 rounded-[20px] border border-red-400/20 bg-red-400/10 p-4 text-sm text-red-100">
           <b>Oeps:</b> {error}
@@ -737,8 +809,13 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
         </div>
         {doelType === "klasgroep" && selectedKlasgroepId ? (
         <div className="border-b border-white/10 p-4">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <button type="button" onClick={() => void remindHomework()} disabled={reminding || publishing || loadingOverview || leerlingen.length === 0} className="rounded-xl border border-amber-400/30 bg-amber-400/15 px-4 py-3 text-sm font-black text-amber-100 disabled:opacity-50">{reminding ? "Herinneringen controleren…" : `🔔 Herinnering sturen (${stats.missing} niet ingediend)`}</button>
+            <span className="text-xs text-white/55">Alleen leerlingen die nog niet definitief hebben ingediend en een profiel hebben.</span>
+          </div>
+          {reminderInfo ? <p className="mb-3 text-sm text-emerald-200">{reminderInfo}</p> : null}
           <button type="button" onClick={() => void publishHomework()} disabled={publishing || loadingOverview} className="rounded-xl border border-sky-400/30 bg-sky-400/15 px-4 py-3 text-sm font-black text-sky-100 disabled:opacity-50">{publishing ? "Publiceren…" : "Publiceer beoordelingen voor deze klasgroep"}</button>
-          <p className="mt-2 text-xs text-white/60">Alleen definitief ingediende huistaken met een geslaagde AI-beoordeling. Eerder gepubliceerde beoordelingen worden niet opnieuw gepubliceerd.</p>
+          <p className="mt-2 text-xs text-white/60">Alleen definitief ingediende huistaken met een geslaagde AI-beoordeling. Eerder gepubliceerde beoordelingen worden niet opnieuw gepubliceerd. Bij nieuwe publicaties krijgen de betrokken leerlingen automatisch een bericht.</p>
           {publishInfo ? <p className="mt-2 text-sm text-emerald-200">{publishInfo}</p> : null}
         </div>
       ) : null}
@@ -755,7 +832,7 @@ export default function FunctionalFitheidstestLeerkrachtPage() {
               {leerlingen.map((leerling) => {
                 const submission = leerling.heeftProfiel ? latestByUser.get(leerling.id) ?? null : null;
                 const ai = aiAssessment(submission);
-                const ingediend = Boolean(submission);
+                const ingediend = submission?.payload?.status === "definitief";
                 const isReopened = submission?.payload?.reopen_allowed === true;
                 return (
                   <div
