@@ -156,6 +156,7 @@ export default function DashboardPage() {
     useState(false);
   const [realRole, setRealRole] =
     useState<RealRole | null>(null);
+  const [ongelezenBerichten, setOngelezenBerichten] = useState(0);
   /* ===============================
      SCHOOLJAAR
   ================================ */
@@ -229,6 +230,30 @@ export default function DashboardPage() {
     };
     run();
   }, []);
+  useEffect(() => {
+    if (!uid) return;
+    let actief = true;
+    const laadOngelezen = async () => {
+      const { count, error } = await supabase.from("lo_bericht_ontvangers")
+        .select("bericht_id", { count: "exact", head: true })
+        .eq("gebruiker_id", uid).is("gelezen_op", null);
+      if (!error && actief) setOngelezenBerichten(count ?? 0);
+    };
+    void laadOngelezen();
+    const interval = window.setInterval(() => void laadOngelezen(), 30000);
+    const bijFocus = () => void laadOngelezen();
+    const bijZichtbaarheid = () => {
+      if (document.visibilityState === "visible") void laadOngelezen();
+    };
+    window.addEventListener("focus", bijFocus);
+    document.addEventListener("visibilitychange", bijZichtbaarheid);
+    return () => {
+      actief = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", bijFocus);
+      document.removeEventListener("visibilitychange", bijZichtbaarheid);
+    };
+  }, [uid]);
   /* ===============================
      LOGOUT
   ================================ */
@@ -339,12 +364,16 @@ export default function DashboardPage() {
         quote={q.q}
         quoteAuthor={q.a}
         actions={
-          <Link
-            href="/ideeenbus"
-            className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/55 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/65 hover:shadow-[0_12px_24px_rgba(0,0,0,0.22)]"
-          >
-            💡 Ideeënbus
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link href="/ideeenbus" className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/55 px-4 font-black text-[rgba(234,240,255,0.92)] transition hover:bg-black/65">
+              💡 Ideeënbus
+            </Link>
+            <Link href="/berichten" className="inline-flex h-11 items-center gap-2 rounded-2xl border border-slate-400/20 bg-black/55 px-4 font-black text-[rgba(234,240,255,0.92)] transition hover:bg-black/65">
+              <span aria-hidden="true">🔔</span>
+              <span>Mijn berichten</span>
+              {ongelezenBerichten > 0 && <span className="flex min-w-5 items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-xs font-black text-white">{ongelezenBerichten > 99 ? "99+" : ongelezenBerichten}</span>}
+            </Link>
+          </div>
         }
       />
       {/* ===========================
@@ -503,14 +532,6 @@ export default function DashboardPage() {
               desc="Dashboard voor LO-leerkrachten"
             />
           )}
-          {(realRole === "lo_leerkracht" || realRole === "admin") && (
-            <BaseTile
-              href="/leerkrachten-lo/berichtencentrum"
-              icon="📨"
-              title="Berichtencentrum"
-              desc="Berichten versturen"
-            />
-          )}
           <BaseTile
             href="/reservaties"
             icon="📅"
@@ -528,12 +549,6 @@ export default function DashboardPage() {
             icon="🔗"
             title="Links"
             desc="Handige bronnen"
-          />
-          <BaseTile
-            href="/berichten"
-            icon="✉️"
-            title="Mijn berichten"
-            desc="Berichten & meldingen"
           />
           <BaseTile
             href="/dashboard/profiel"
