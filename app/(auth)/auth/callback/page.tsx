@@ -232,24 +232,22 @@ export default function AuthCallbackPage() {
         /* =========================================
            4. ECHTE KLAS SELECTEREN
         \========================================= */
-        const selectedClass: ClassStudent | null =
-          classRows.find(
-            (row) =>
-              row.primary_class === true &&
-              startsWithNumber(row.class_name) &&
-              !!getKlasMeta(cleanClassName(row.class_name))
-          ) ??
-          classRows.find(
-            (row) =>
-              startsWithNumber(row.class_name) &&
-              !!getKlasMeta(cleanClassName(row.class_name))
-          ) ??
-          classRows.find((row) =>
-            startsWithNumber(row.class_name)
-          ) ??
-          null;
-        const klasNaam = selectedClass?.class_name
-          ? cleanClassName(selectedClass.class_name)
+        // Gebruik dezelfde veilige klaskeuze als de dagelijkse synchronisatie.
+        // In het tweede jaar zijn 2 AA t.e.m. 2 AE de algemene klassen.
+        const kandidaatKlassen = classRows.filter((row) => {
+          const naam = cleanClassName(row.class_name);
+          return startsWithNumber(naam) &&
+            (!/^2\s/.test(naam) || /^2 A[A-E]$/.test(naam));
+        });
+        const uniekeKlasnamen = [...new Set(
+          kandidaatKlassen.map((row) => cleanClassName(row.class_name))
+        )];
+        // Bij twee verschillende officiële klassen niets overschrijven.
+        const klasNaam = uniekeKlasnamen.length === 1
+          ? uniekeKlasnamen[0]
+          : null;
+        const selectedClass: ClassStudent | null = klasNaam
+          ? kandidaatKlassen.find((row) => cleanClassName(row.class_name) === klasNaam) ?? null
           : null;
         const loGroep = getLoGroep(classRows);
         const klasMeta = klasNaam
@@ -502,17 +500,17 @@ export default function AuthCallbackPage() {
            * bijgewerkt worden.
            */
           klas_naam: isStudent
-            ? klasNaam
+            ? klasNaam ?? existingProfile?.klas_naam ?? null
             : existingProfile?.klas_naam ?? null,
           lo_groep: isStudent
-            ? loGroep
+            ? loGroep ?? existingProfile?.lo_groep ?? null
             : existingProfile?.lo_groep ?? null,
           class_info:
             smartschoolUser?.raw?.metadata?.[
               "smsc.classInfo"
             ] ??
             (isStudent
-              ? klasNaam
+              ? klasNaam ?? existingProfile?.class_info ?? null
               : existingProfile?.class_info ??
                 null),
           class_year:
@@ -534,15 +532,14 @@ export default function AuthCallbackPage() {
             existingProfile?.internal_number ??
             null,
           graad: isStudent
-            ? klasMeta?.graad ?? null
+            ? klasMeta?.graad ?? existingProfile?.graad ?? null
             : existingProfile?.graad ?? null,
           leerjaar: isStudent
-            ? klasMeta?.leerjaar ?? null
+            ? klasMeta?.leerjaar ?? existingProfile?.leerjaar ?? null
             : existingProfile?.leerjaar ?? null,
           finaliteit: isStudent
-            ? klasMeta?.finaliteit ?? null
-            : existingProfile?.finaliteit ??
-              null,
+            ? klasMeta?.finaliteit ?? existingProfile?.finaliteit ?? null
+            : existingProfile?.finaliteit ?? null,
           schooljaar: actueelSchooljaar,
           schooljaar_bevestigd_op:
             existingProfile?.schooljaar ===
