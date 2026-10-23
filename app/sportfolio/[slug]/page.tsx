@@ -196,12 +196,21 @@ function formatDateTime(value?: string | null) {
     minute: "2-digit",
   }).format(date);
 }
+function isDistanceTime(slug?: string | null, naam?: string | null) {
+  return ["1500m", "3000m"].some(d => (slug ?? "").toLowerCase().replace(/[^a-z0-9]/g, "") === d || (naam ?? "").toLowerCase().replace(/[^a-z0-9]/g, "") === d);
+}
+function formatMinutes(value: number) {
+  const seconds = Math.round(value * 60);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
 function formatScoreValue(args: {
+  timeDiscipline?: boolean;
   score_nummer: number | null;
   score_tekst: string | null;
   eenheid?: string | null;
 }) {
   if (args.score_nummer !== null && args.score_nummer !== undefined) {
+    if (args.timeDiscipline) return formatMinutes(args.score_nummer);
     return `${args.score_nummer} ${args.eenheid ?? ""}`.trim();
   }
   if (args.score_tekst) return args.score_tekst;
@@ -222,6 +231,9 @@ export default function DisciplineDetailPage() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>([]);
   const [leaderboardGrade, setLeaderboardGrade] = useState<number | null>(null);
   const [scoreInput, setScoreInput] = useState("");
+  const [minutesInput, setMinutesInput] = useState("");
+  const [secondsInput, setSecondsInput] = useState("");
+  const timeDiscipline = isDistanceTime(discipline?.slug, discipline?.naam);
   const [tekstInput, setTekstInput] = useState("");
   const [deelnameStatus, setDeelnameStatus] = useState<"score" | "afwezig" | "geblesseerd">("score");
   const roleLabel = useMemo(
@@ -345,6 +357,8 @@ export default function DisciplineDetailPage() {
             ? String(first.score_nummer)
             : ""
         );
+        setMinutesInput(first.score_nummer == null ? "" : String(Math.floor(Math.round(first.score_nummer * 60) / 60)));
+        setSecondsInput(first.score_nummer == null ? "" : String(Math.round(first.score_nummer * 60) % 60));
         setTekstInput(first.score_tekst ?? "");
         const tekst = (first.score_tekst ?? "").trim().toLowerCase();
         setDeelnameStatus(
@@ -352,6 +366,8 @@ export default function DisciplineDetailPage() {
         );
       } else {
         setScoreInput("");
+        setMinutesInput("");
+        setSecondsInput("");
         setTekstInput("");
         setDeelnameStatus("score");
       }
@@ -400,12 +416,16 @@ export default function DisciplineDetailPage() {
     try {
       setSubmitting(true);
       setError(null);
-      const numericValue =
-        deelnameStatus === "score" &&
+      if (deelnameStatus === "score" && timeDiscipline && (!/^\d+$/.test(minutesInput) || !/^\d{1,2}$/.test(secondsInput) || Number(secondsInput) > 59)) {
+        throw new Error("Vul minuten en seconden in (seconden van 0 tot 59).");
+      }
+      const numericValue = timeDiscipline && deelnameStatus === "score"
+        ? Number(((Number(minutesInput) * 60 + Number(secondsInput)) / 60).toFixed(6))
+        : (deelnameStatus === "score" &&
         scoreInput.trim().length > 0 &&
         !Number.isNaN(Number(scoreInput))
           ? Number(scoreInput)
-          : null;
+          : null);
       const textValue =
         deelnameStatus === "afwezig"
           ? "Afwezig"
@@ -569,6 +589,7 @@ export default function DisciplineDetailPage() {
                       score_nummer: bestCurrentYearScore.score_nummer,
                       score_tekst: bestCurrentYearScore.score_tekst,
                       eenheid: discipline.eenheid,
+                      timeDiscipline,
                     })
                   : "Nog geen score"}
               </div>
@@ -640,20 +661,18 @@ export default function DisciplineDetailPage() {
                   </div>
                 </div>
               ) : null}
-              <div>
-                <label className="mb-2 block text-xs font-black uppercase tracking-[0.08em] text-white/60">
-                  Numerieke score
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={scoreInput}
-                  onChange={(e) => setScoreInput(e.target.value)}
-                  placeholder={`Bijv. 12 ${discipline.eenheid ?? ""}`}
-                  disabled={!leerlingMagIngeven || deelnameStatus !== "score"}
-                  className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50"
-                />
-              </div>
+              {timeDiscipline ? (
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.08em] text-white/60">Minuten</label>
+                    <input type="number" min="0" step="1" value={minutesInput} onChange={(e)=>setMinutesInput(e.target.value)} placeholder="12" disabled={!leerlingMagIngeven || deelnameStatus !== "score"} className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none disabled:opacity-50" /></div>
+                  <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.08em] text-white/60">Seconden (0–59)</label>
+                    <input type="number" min="0" max="59" step="1" value={secondsInput} onChange={(e)=>setSecondsInput(e.target.value)} placeholder="30" disabled={!leerlingMagIngeven || deelnameStatus !== "score"} className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none disabled:opacity-50" /></div>
+                </div>
+              ) : (
+                <div><label className="mb-2 block text-xs font-black uppercase tracking-[0.08em] text-white/60">Numerieke score</label>
+                  <input type="number" step="0.01" value={scoreInput} onChange={(e)=>setScoreInput(e.target.value)} placeholder={`Bijv. 12 ${discipline.eenheid ?? ""}`} disabled={!leerlingMagIngeven || deelnameStatus !== "score"} className="h-12 w-full rounded-2xl border border-white/10 bg-white/5 px-4 text-sm font-semibold text-white outline-none placeholder:text-white/30 disabled:cursor-not-allowed disabled:opacity-50" />
+                </div>
+              )}
               <div>
                 <label className="mb-2 block text-xs font-black uppercase tracking-[0.08em] text-white/60">
                   Tekstscore / opmerking
@@ -719,6 +738,7 @@ export default function DisciplineDetailPage() {
                               score_nummer: score.score_nummer,
                               score_tekst: score.score_tekst,
                               eenheid: discipline.eenheid,
+                       timeDiscipline,
                             })}
                           </div>
                           <div className="mt-1 text-xs text-white/55">
@@ -825,6 +845,7 @@ export default function DisciplineDetailPage() {
                                 score_nummer: row.score_nummer,
                                 score_tekst: row.score_tekst,
                                 eenheid: discipline.eenheid,
+                               timeDiscipline,
                               })}
                             </div>
                           </div>

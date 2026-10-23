@@ -154,6 +154,25 @@ function normalizeGender(value: unknown) {
   return v || null;
 }
 
+function isAfstandTijd(discipline?: Discipline | null) {
+  const key = `${discipline?.slug ?? ""} ${discipline?.naam ?? ""}`.toLowerCase().replace(/[_-]+/g, " ");
+  return /(^|\D)(1500|3000)\s*m?(?=\D|$)/.test(key);
+}
+function parseSportfolioScore(value: string, discipline?: Discipline | null): number | null {
+  const v = value.trim();
+  if (!v) return null;
+  if (!isAfstandTijd(discipline)) return toNullableNumber(v);
+  const match = /^(\d+):([0-5]\d)$/.exec(v);
+  if (!match) return null;
+  return Math.round((Number(match[1]) + Number(match[2]) / 60) * 1000000) / 1000000;
+}
+function formatSportfolioScore(value: number | null, discipline?: Discipline | null) {
+  if (value == null) return "";
+  if (!isAfstandTijd(discipline)) return String(value);
+  const total = Math.round(value * 60);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, "0")}`;
+}
+
 function toNullableNumber(value: string) {
   const trimmed = value.trim().replace(",", ".");
   if (!trimmed) return null;
@@ -182,7 +201,7 @@ function heeftDriePogingen(discipline?: Discipline | null) {
 
 function bestePoging(draft: ScoreDraft, discipline?: Discipline | null) {
   const values = [draft.nummer, draft.poging2, draft.poging3]
-    .map(toNullableNumber)
+    .map(v => parseSportfolioScore(v, discipline))
     .filter((v): v is number => v !== null);
 
   if (values.length === 0) return null;
@@ -241,6 +260,7 @@ function ExistingScoreRow({
   leerling,
   rubric,
   savingId,
+  discipline,
   onSave,
   onDelete,
 }: {
@@ -248,18 +268,19 @@ function ExistingScoreRow({
   leerling?: Leerling;
   rubric: RubricRow | null;
   savingId: string | null;
+  discipline?: Discipline | null;
   onSave: (score: ExistingScore, nummer: string, tekst: string) => Promise<void>;
   onDelete: (score: ExistingScore) => Promise<void>;
 }) {
   const [nummer, setNummer] = useState(
-    score.score_nummer == null ? "" : String(score.score_nummer)
+    formatSportfolioScore(score.score_nummer, discipline)
   );
   const [tekst, setTekst] = useState(score.score_tekst ?? "");
 
   useEffect(() => {
-    setNummer(score.score_nummer == null ? "" : String(score.score_nummer));
+    setNummer(formatSportfolioScore(score.score_nummer, discipline));
     setTekst(score.score_tekst ?? "");
-  }, [score.id, score.score_nummer, score.score_tekst]);
+  }, [score.id, score.score_nummer, score.score_tekst, discipline]);
 
   const busy =
     savingId === `score-${score.id}` ||
@@ -283,12 +304,13 @@ function ExistingScoreRow({
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
           <input
-            inputMode="decimal"
+            inputMode={isAfstandTijd(discipline) ? "text" : "decimal"}
+            placeholder={isAfstandTijd(discipline) ? "12:30" : "—"}
             value={nummer}
             onChange={(e) => setNummer(e.target.value)}
             className="h-10 w-28 rounded-xl border border-white/10 bg-white/5 px-3 font-bold text-white outline-none focus:border-white/25"
           />
-          <span className="text-xs text-white/45">{score.eenheid ?? ""}</span>
+          <span className="text-xs text-white/45">{isAfstandTijd(discipline) ? "min:sec" : score.eenheid ?? ""}</span>
         </div>
       </td>
       <td className="px-4 py-3">
@@ -891,11 +913,11 @@ export default function SportfolioBeheerPage() {
   ) {
     if (!profiel) return;
 
-    const scoreNummer = toNullableNumber(nummer);
+    const scoreNummer = parseSportfolioScore(nummer, selectedDiscipline);
     const scoreTekst = tekstWaarde.trim() || null;
 
     if (nummer.trim() && scoreNummer == null) {
-      setError("De score is geen geldig getal.");
+      setError(isAfstandTijd(selectedDiscipline) ? "Gebruik minuten:seconden, bv. 12:30 (seconden 00–59)." : "De score is geen geldig getal.");
       return;
     }
     if (scoreNummer == null && !scoreTekst) {
@@ -1391,10 +1413,10 @@ export default function SportfolioBeheerPage() {
     if (targetLeerlingen.some((l) => {
       const d = scoreDrafts[l.id] ?? EMPTY_DRAFT;
       return [d.nummer, d.poging2, d.poging3].some(
-        (value) => value.trim() && toNullableNumber(value) == null
+        (value) => value.trim() && parseSportfolioScore(value, selectedDiscipline) == null
       );
     })) {
-      setError("Een ingevulde numerieke score is ongeldig.");
+      setError(isAfstandTijd(selectedDiscipline) ? "Gebruik bij 1500 m en 3000 m minuten:seconden, bv. 12:30." : "Een ingevulde numerieke score is ongeldig.");
       return;
     }
 
@@ -2035,7 +2057,7 @@ export default function SportfolioBeheerPage() {
                               <input
                                 data-score-input={`mobile-${leerling.id}-${field}`}
                                 aria-label={`${leerling.naam} ${fields.length === 1 ? "score" : `poging ${fieldIndex + 1}`}`}
-                                inputMode="decimal"
+                                inputMode={isAfstandTijd(selectedDiscipline) ? "text" : "decimal"}
                                 enterKeyHint="next"
                                 // iPhone/Safari gebruikt de focusvolgorde voor de ↑/↓-knoppen
                                 // boven het numerieke toetsenbord. Orden daarom per pogingkolom:
@@ -2046,7 +2068,7 @@ export default function SportfolioBeheerPage() {
                                 onChange={(e) => updateDraft(leerling.id, field, e.target.value)}
                                 onKeyDown={(e) => handleScoreKeyDown(e, leerlingIndex, field, "mobile")}
                                 onFocus={(e) => e.currentTarget.select()}
-                                placeholder="—"
+                                placeholder={isAfstandTijd(selectedDiscipline) ? "12:30" : "—"}
                                 className="h-12 w-full min-w-0 rounded-xl border border-white/10 bg-white/5 px-2 text-center text-base font-black text-white outline-none focus:border-sky-400/60 focus:bg-sky-400/10 disabled:cursor-not-allowed disabled:opacity-25"
                               />
                             </label>
@@ -2115,13 +2137,13 @@ export default function SportfolioBeheerPage() {
                           <input
                             data-score-input={`desktop-${leerling.id}-${field}`}
                             aria-label={`${leerling.naam} ${field}`}
-                            inputMode="decimal"
+                            inputMode={isAfstandTijd(selectedDiscipline) ? "text" : "decimal"}
                             value={draft[field]}
                             disabled={disabled}
                             onChange={(e) => updateDraft(leerling.id, field, e.target.value)}
                             onKeyDown={(e) => handleScoreKeyDown(e, leerlingIndex, field, "desktop")}
                             onFocus={(e) => e.currentTarget.select()}
-                            placeholder="—"
+                            placeholder={isAfstandTijd(selectedDiscipline) ? "12:30" : "—"}
                             className="h-11 w-20 rounded-xl border border-white/10 bg-white/5 px-2 text-center font-bold text-white outline-none focus:border-sky-400/60 disabled:cursor-not-allowed disabled:opacity-25"
                           />
                         );
@@ -2256,6 +2278,7 @@ export default function SportfolioBeheerPage() {
                           leerling={leerling}
                           rubric={rubric}
                           savingId={savingId}
+                          discipline={selectedDiscipline}
                           onSave={updateExistingScore}
                           onDelete={deleteExistingScore}
                         />
@@ -2350,7 +2373,7 @@ export default function SportfolioBeheerPage() {
                           <div className="mt-1 text-lg font-black text-white">
                             {best
                               ? best.score_nummer != null
-                                ? `${best.score_nummer} ${best.eenheid ?? selectedDiscipline?.eenheid ?? ""}`.trim()
+                                ? `${formatSportfolioScore(best.score_nummer, selectedDiscipline)} ${isAfstandTijd(selectedDiscipline) ? "" : best.eenheid ?? selectedDiscipline?.eenheid ?? ""}`.trim()
                                 : best.score_tekst ?? "—"
                               : "—"}
                           </div>
