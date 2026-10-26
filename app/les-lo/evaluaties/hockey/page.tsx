@@ -10,7 +10,7 @@ const supabase = createClient();
 type Row = Record<string, any>;
 type Lesson = { id: string; naam: string; schooljaar: string; lesdatum: string; leerjaar: number; finaliteiten: string[]; aantal_circuits: number; eindtijd: string | null; status: string; aangemaakt_door: string; zelfevaluatie_seconden: number };
 type Participant = { id: string; les_id: string; leerling_email: string; leerling_username: string | null; profiel_id: string | null; volledige_naam: string; klas_naam: string | null; geslacht: string | null; aanwezigheid: string; geblesseerd: boolean; toestel_beschikbaar: boolean; groep_code: string | null };
-type Assignment = { id: string; les_id: string; ronde: number; type: "techniek" | "wedstrijd"; observator_id: string; beoordeelde_id: string; status: string };
+type Assignment = { id: string; les_id: string; ronde: number; type: "techniek" | "wedstrijd"; observator_id: string; beoordeelde_id: string; status: string; invoermethode?: "digitaal" | "papier" };
 type Evaluation = { id: string; les_id: string; observatie_id: string | null; beoordeelde_id: string; type: string; rubrics: Record<string, number>; status: string };
 type Timer = { les_id: string; klokbeheerder_id: string | null; huidige_ronde: number; fase: string; loopt: boolean; resterende_seconden: number | null; eindigt_op: string | null; versie: number };
 type SmartStudent = { email: string; volledige_naam: string; username: string | null; klas_naam: string; profiel_id: string | null; geslacht: string | null; schooljaar: string };
@@ -74,6 +74,7 @@ export default function HockeyPage() {
  const [now,setNow]=useState(Date.now()); const [tab,setTab]=useState<"voorbereiding"|"groepen"|"les"|"resultaten">("voorbereiding");
  const [activeAssignment,setActiveAssignment]=useState<string|null>(null); const [draft,setDraft]=useState<Record<string,number>>({}); const [saveState,setSaveState]=useState("");
  const [selfDraft,setSelfDraft]=useState<Record<string,number>>({}); const [selectedResult,setSelectedResult]=useState<string|null>(null);
+ const [paperOpen,setPaperOpen]=useState(false); const [paperAssignmentId,setPaperAssignmentId]=useState(""); const [paperDraft,setPaperDraft]=useState<Record<string,number>>({});
  const [classFilter,setClassFilter]=useState(""); const [studentSearch,setStudentSearch]=useState(""); const [showAll,setShowAll]=useState(false);
  const [showTeacherSelect,setShowTeacherSelect]=useState(false);
  const [assignmentNames,setAssignmentNames]=useState<Record<string,string>>({});
@@ -86,6 +87,9 @@ export default function HockeyPage() {
   const studentsForYear=useMemo(()=>smart.filter(s=>s.schooljaar===schoolYear() && s.klas_naam.startsWith(String(year)) && finalities.some(f=>s.klas_naam.toUpperCase().includes(f)) && (!classFilter||s.klas_naam===classFilter) && (s.volledige_naam+" "+s.klas_naam).toLowerCase().includes(studentSearch.toLowerCase())).sort((a,b)=>a.klas_naam.localeCompare(b.klas_naam,"nl-BE")||a.volledige_naam.localeCompare(b.volledige_naam,"nl-BE")),[smart,year,finalities,classFilter,studentSearch]);
  const groupCodes=useMemo(()=>Array.from({length:(lesson?.aantal_circuits??circuits)*5},(_,i)=>`${i<5?"A":"B"}${i%5+1}`),[lesson,circuits]);
  const myAssignments=useMemo(()=>assignments.filter(a=>a.observator_id===myParticipant?.id && a.ronde===currentRound),[assignments,myParticipant,currentRound]);
+ const paperAssignments=useMemo(()=>assignments.filter(a=>a.status!=="ingediend" && !evaluations.some(e=>e.observatie_id===a.id && e.status==="ingediend")).sort((a,b)=>a.ronde-b.ronde || pupilNameForSort(a.observator_id).localeCompare(pupilNameForSort(b.observator_id),"nl-BE")),[assignments,evaluations,participants]);
+ function pupilNameForSort(id:string){return participants.find(p=>p.id===id)?.volledige_naam??"";}
+ const paperAssignment=assignments.find(a=>a.id===paperAssignmentId);
  useEffect(()=>{
   if(!lessonId || teacher || !uid){setAssignmentNames({});return;}
   let cancelled=false;
@@ -177,6 +181,17 @@ export default function HockeyPage() {
  async function clockOwner(id:string){await run(async()=>{const {error:e}=await supabase.rpc("hockey_stel_klokbeheerder_in",{p_les_id:lessonId,p_leerkracht_id:id});if(e)throw e;},"Klokbeheerder ingesteld.");}
  async function clock(action:string){await run(async()=>{const {error:e}=await supabase.rpc("hockey_bedien_timer",{p_les_id:lessonId,p_actie:action});if(e)throw e;},"Timer bijgewerkt.");}
  async function closeExpiredLesson(){if(!lessonId||!lesson||!window.confirm("Deze verlopen Hockeyles definitief afsluiten? Ingediende evaluaties blijven bewaard. Niet-ingediende beoordelingen kunnen daarna niet meer worden ingediend."))return;await run(async()=>{const {error:e}=await supabase.rpc("hockey_sluit_les_af",{p_les_id:lessonId});if(e)throw e;setLessons(prev=>prev.map(l=>l.id===lessonId?{...l,status:"afgerond"}:l));},"De Hockeyles is afgesloten. Alle ingediende beoordelingen blijven bewaard.");}
+ async function savePaper(){
+  if(!paperAssignment)return;
+  const required=RUBRICS[paperAssignment.type];
+  if(required.some(r=>!Number.isInteger(paperDraft[r.key]) || paperDraft[r.key]<1 || paperDraft[r.key]>4)){setError("Vul eerst alle beoordelingscriteria in.");return;}
+  if(!window.confirm(`Papieren ${paperAssignment.type}evaluatie definitief invoeren voor ${pupilName(paperAssignment.beoordeelde_id)}?`))return;
+  await run(async()=>{
+   const {error:e}=await supabase.rpc("hockey_bewaar_papierevaluatie",{p_observatie_id:paperAssignment.id,p_rubrics:paperDraft});
+   if(e)throw e;
+   setPaperAssignmentId("");setPaperDraft({});setPaperOpen(false);
+  },"Papieren evaluatie definitief opgeslagen en verwerkt in de resultaten.");
+ }
  async function savePeer(values:Record<string,number>,submit=false){if(!activeAssignment)return;setSaveState("Opslaan...");try{
   const {error:e}=await supabase.rpc("hockey_bewaar_peerevaluatie",{p_observatie_id:activeAssignment,p_rubrics:values,p_indienen:submit});if(e)throw e;
   setSaveState(submit?"Definitief ingediend":"Concept opgeslagen");await refresh();
@@ -209,8 +224,24 @@ export default function HockeyPage() {
     <section className={panel}>
      <div className="flex flex-wrap items-center justify-between gap-3">
       <h2 className="text-xl font-black">Resultatenmatrix</h2>
-      <button className={btn} onClick={downloadReport}>⬇ CSV-lesrapport</button>
+      <div className="flex flex-wrap gap-2"><button className={primary} type="button" onClick={()=>setPaperOpen(v=>!v)}>➕ Papieren evaluatie invoeren</button><button className={btn} onClick={downloadReport}>⬇ CSV-lesrapport</button></div>
      </div>
+     {paperOpen&&<div className="mt-5 rounded-2xl border border-[#89C2AA]/40 bg-black/25 p-4 sm:p-5">
+      <h3 className="text-lg font-black">Papieren beoordeling overnemen</h3>
+      <p className="mt-1 text-sm text-white/65">Kies de oorspronkelijke observatieopdracht. Alleen nog niet definitief ingediende opdrachten zijn beschikbaar, ook bij een afgelopen les.</p>
+      <label className="mt-4 block text-sm font-bold">Observator → beoordeelde leerling · ronde · type
+       <select className={`${input} mt-2`} value={paperAssignmentId} onChange={e=>{setPaperAssignmentId(e.target.value);const old=evaluations.find(x=>x.observatie_id===e.target.value);setPaperDraft(old?.status==="concept"?old.rubrics??{}:{});}}>
+        <option value="">Selecteer een bestaande opdracht...</option>
+        {paperAssignments.map(a=><option key={a.id} value={a.id}>{pupilName(a.observator_id)} → {pupilName(a.beoordeelde_id)} · ronde {a.ronde} · {a.type}</option>)}
+       </select>
+      </label>
+      {paperAssignments.length===0&&<p className="mt-3 text-sm text-emerald-100">Alle observatieopdrachten zijn al definitief ingediend, of er zijn nog geen opdrachten aangemaakt.</p>}
+      {paperAssignment&&<div className="mt-5">
+       <div className="mb-3 rounded-xl bg-white/5 p-3 text-sm"><strong>Observator:</strong> {pupilName(paperAssignment.observator_id)}<br/><strong>Beoordeelde:</strong> {pupilName(paperAssignment.beoordeelde_id)}<br/><strong>Ronde:</strong> {paperAssignment.ronde} · {paperAssignment.type}</div>
+       <div className="space-y-3">{RUBRICS[paperAssignment.type].map(item=><div key={item.key} className="rounded-xl border border-white/10 bg-black/20 p-3"><div className="mb-2 text-sm font-semibold">{item.label}</div><div className="grid grid-cols-4 gap-2">{LEVELS.map((level,i)=><button type="button" key={i} onClick={()=>setPaperDraft(prev=>({...prev,[item.key]:i+1}))} className={`${paperDraft[item.key]===i+1?"border-[#89C2AA] bg-[#4B8E8D]/70":"border-white/15 bg-white/5"} rounded-xl border py-2 font-black`}>{level}</button>)}</div></div>)}</div>
+       <div className="mt-4 flex flex-wrap gap-2"><button type="button" className={primary} disabled={busy||RUBRICS[paperAssignment.type].some(r=>!paperDraft[r.key])} onClick={()=>void savePaper()}>✓ Definitief opslaan</button><button type="button" className={btn} onClick={()=>{setPaperAssignmentId("");setPaperDraft({});setPaperOpen(false);}}>Annuleren</button></div>
+      </div>}
+     </div>}
      <p className="mt-2 text-sm text-white/60">Gemiddelden op schaal 1–4. Klik op een leerling om de oorspronkelijke beoordelingen te bekijken. Resultaten zijn ook tijdens een actieve les zichtbaar. Geen klassement.</p>
      <div className="mt-4 overflow-x-auto">
       <table className="w-full min-w-[650px] text-sm">
@@ -272,7 +303,7 @@ export default function HockeyPage() {
                     return (
                      <div key={ev.id} className="mt-3 border-t border-white/10 pt-3">
                       <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-white/65">
-                       <span>{kind === "samenwerken" ? "Zelfevaluatie" : `Observator: ${observer ?? "Niet bekend"}`}{observation ? ` · ronde ${observation.ronde}` : ""}</span>
+                       <span>{kind === "samenwerken" ? "Zelfevaluatie" : `Observator: ${observer ?? "Niet bekend"}`}{observation ? ` · ronde ${observation.ronde}` : ""}{observation?.invoermethode==="papier"?" · 📝 Papieren evaluatie (ingevoerd door leerkracht)":""}</span>
                        <span className={`rounded-lg px-2 py-1 font-bold ${ev.status === "ingediend" ? "bg-emerald-500/20 text-emerald-100" : "bg-amber-500/20 text-amber-100"}`}>{ev.status === "ingediend" ? "Definitief ingediend" : "Concept"}</span>
                       </div>
                       <div className="space-y-2">
