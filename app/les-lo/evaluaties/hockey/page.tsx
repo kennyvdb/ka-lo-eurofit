@@ -186,7 +186,108 @@ export default function HockeyPage() {
    {teacher&&lesson&&tab==="voorbereiding"&&<section className={panel}><h2 className="text-xl font-black">{lessonLabel(lesson)}</h2><p className="mt-2 text-white/65">Status: {lesson.status} · {participants.length} leerlingen · {lesson.aantal_circuits} circuit(s)</p><div className="mt-4 flex flex-wrap gap-2"><button className={btn} onClick={()=>setTab("groepen")}>Groepsindeling →</button><button className={btn} onClick={()=>{setCreating(true);setLesson(null);setLessonId("");}}>Nieuwe les maken</button></div><h3 className="mt-6 mb-3 font-black">Aanwezigheid en hulpmiddelen</h3><div className="max-h-[500px] overflow-auto"><table className="w-full min-w-[700px] text-left text-sm"><thead><tr className="text-white/65"><th className="p-2">Leerling</th><th>Groep</th><th>Aanwezig</th><th>Geblesseerd</th><th>Gsm beschikbaar</th></tr></thead><tbody>{participants.map(p=><tr key={p.id} className="border-t border-white/10"><td className="p-2">{p.volledige_naam}<span className="block text-xs text-white/50">{p.klas_naam}</span></td><td>{p.groep_code??"—"}</td><td><input type="checkbox" disabled={busy||lesson.status!=="voorbereiding"} checked={p.aanwezigheid==="aanwezig"} onChange={e=>void changeParticipant(p.id,{aanwezigheid:e.target.checked?"aanwezig":"afwezig"})}/></td><td><input type="checkbox" disabled={busy||lesson.status!=="voorbereiding"} checked={p.geblesseerd} onChange={e=>void changeParticipant(p.id,{geblesseerd:e.target.checked})}/></td><td><input type="checkbox" disabled={busy||lesson.status!=="voorbereiding"} checked={p.toestel_beschikbaar} onChange={e=>void changeParticipant(p.id,{toestel_beschikbaar:e.target.checked})}/></td></tr>)}</tbody></table></div><p className="mt-3 text-xs text-white/60">Wijzig je aanwezigheid na het genereren van de groepen? Genereer de indeling opnieuw.</p></section>}
    {teacher&&lesson&&tab==="groepen"&&<section className={panel}><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">Groepen en rotaties</h2><div className="flex flex-wrap gap-2"><button className={primary} disabled={busy||lesson.status!=="voorbereiding"} onClick={()=>void makeGroups()}>Automatisch verdelen</button><button className={btn} disabled={busy||lesson.status!=="voorbereiding"} onClick={()=>void rebuild()}>Opdrachten herberekenen</button></div></div><p className="mt-2 text-sm text-white/65">Groep A1 start op station 1, A2 op station 2, enz. Elke ronde schuift één station door. Handmatig wisselen kan vóór de les; bereken daarna de opdrachten opnieuw.</p><div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{groupCodes.map(code=><div key={code} className="rounded-2xl border border-white/15 bg-black/20 p-3"><h3 className="mb-2 font-black text-[#89C2AA]">Groep {code} · station {station(code,currentRound)}</h3>{participants.filter(p=>p.groep_code===code).map(p=><div key={p.id} className="mb-2 text-sm"><span>{p.volledige_naam}{p.geblesseerd?" 🩹":""}</span><select aria-label={`Groep van ${p.volledige_naam}`} className={`${input} mt-1 py-1 text-xs`} value={p.groep_code??""} disabled={busy||lesson.status!=="voorbereiding"} onChange={e=>void changeGroup(p,e.target.value)}>{groupCodes.map(c=><option key={c} value={c}>{c}</option>)}</select></div>)}</div>)}</div><div className="mt-4 rounded-xl border border-white/10 p-3 text-sm text-white/75">Station 1 → observeert techniek op station 2 · Station 3 → observeert wedstrijd op stations 4 en 5 · Geblesseerden worden niet als beoordeelde speler ingepland.</div><p className="mt-2 text-sm">{assignments.length} observatieopdrachten gegenereerd.</p></section>}
    {teacher&&lesson&&tab==="les"&&<><section className={panel}><h2 className="text-xl font-black">Live lesbediening</h2><div className="mt-4 grid gap-4 sm:grid-cols-3"><div className="rounded-xl bg-black/20 p-4"><div className="text-white/60">Fase</div><div className="text-2xl font-black">{timer?.fase??"voorbereiding"}</div><div>Ronde {currentRound} / 5</div></div><div className="rounded-xl bg-black/20 p-4"><div className="text-white/60">Resterende tijd</div><div className="text-5xl font-black tabular-nums">{clockDisplay(currentSeconds)}</div></div><div className="rounded-xl bg-black/20 p-4"><div className="text-white/60">Klokbeheerder</div><div className="font-black">{teacherOptions.find(t=>t.id===timer?.klokbeheerder_id)?.volledige_naam??"Niet ingesteld"}</div><div className="mt-2 text-sm">{canClock?"Jij bedient de klok":"Alleen de klokbeheerder bedient de klok"}</div></div></div><div className="mt-4 flex flex-wrap gap-2"><button className={primary} disabled={busy||!canClock||timer?.fase!=="voorbereiding"||!assignments.length} onClick={()=>void clock("start")}>▶ Start les</button><button className={btn} disabled={busy||!canClock||!timer?.loopt} onClick={()=>void clock("pauzeer")}>⏸ Pauzeer</button><button className={btn} disabled={busy||!canClock||timer?.loopt||!["rotatie","zelfevaluatie"].includes(timer?.fase??"")} onClick={()=>void clock("hervat")}>▶ Hervat</button><button className={primary} disabled={busy||!canClock||!["rotatie","zelfevaluatie"].includes(timer?.fase??"")} onClick={()=>{if(window.confirm("Naar de volgende ronde of fase gaan?"))void clock("volgende");}}>Volgende →</button></div></section><section className={panel}><h3 className="text-lg font-black">Begeleidende leerkrachten ({teachers.length}/3)</h3><div className="mt-3 flex flex-wrap gap-2">{teachers.map(t=><div key={t.leerkracht_id} className="rounded-xl border border-white/15 p-3 text-sm">{teacherOptions.find(x=>x.id===t.leerkracht_id)?.volledige_naam??"Leerkracht"}{timer?.klokbeheerder_id===t.leerkracht_id?" · klokbeheerder":""}{timer?.klokbeheerder_id!==t.leerkracht_id&&<button className="ml-2 text-[#89C2AA]" disabled={busy} onClick={()=>void clockOwner(t.leerkracht_id)}>Maak klokbeheerder</button>}</div>)}</div>{teachers.length<3&&<div className="mt-3 flex gap-2"><select className={input} value={showTeacherSelect?"select":""} onChange={e=>{if(e.target.value)void addTeacher(e.target.value);setShowTeacherSelect(false);}}><option value="">Voeg leerkracht toe...</option>{teacherOptions.filter(t=>!teachers.some(x=>x.leerkracht_id===t.id)).map(t=><option key={t.id} value={t.id}>{t.volledige_naam}</option>)}</select></div>}</section><section className={panel}><h3 className="mb-3 text-lg font-black">Live evaluatievoortgang</h3><p className="text-sm text-white/65">{assignments.filter(a=>a.status==="ingediend").length}/{assignments.length} peerevaluaties ingediend</p><div className="mt-2 h-3 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-[#89C2AA]" style={{width:`${assignments.length?100*assignments.filter(a=>a.status==="ingediend").length/assignments.length:0}%`}}/></div><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{assignments.filter(a=>a.ronde===currentRound).map(a=><div key={a.id} className={`rounded-xl border p-2 text-sm ${a.status==="ingediend"?"border-emerald-500/30 bg-emerald-500/10":"border-amber-500/20 bg-white/5"}`}>{pupilName(a.observator_id)} → {pupilName(a.beoordeelde_id)}<div className="text-xs text-white/55">{a.type} · {a.status}</div></div>)}</div></section></>}
-   {teacher&&lesson&&tab==="resultaten"&&<section className={panel}><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">Resultatenmatrix</h2><button className={btn} onClick={downloadReport}>⬇ CSV-lesrapport</button></div><p className="mt-2 text-sm text-white/60">Gemiddelden op schaal 1–4. Klik op een leerling voor details. Geen klassement.</p><div className="mt-4 overflow-x-auto"><table className="min-w-[650px] w-full text-sm"><thead><tr className="border-b border-white/20 text-left"><th className="p-3">Leerling</th><th>Techniek</th><th>Wedstrijd</th><th>Samenwerken</th><th>Ingediend</th></tr></thead><tbody>{results.map(r=><tr key={r.p.id} className="border-b border-white/10"><td className="p-2"><button className="text-left font-bold text-[#b4e8d1] underline" onClick={()=>setSelectedResult(selectedResult===r.p.id?null:r.p.id)}>{r.p.volledige_naam}</button><span className="block text-xs text-white/50">{r.p.klas_naam}</span></td>{([r.techniek,r.wedstrijd,r.samenwerken] as (number|null)[]).map((v,i)=><td key={i}><span className={`inline-block min-w-14 rounded-lg p-2 text-center font-black ${scoreColor(v)}`}>{v?.toFixed(2)??"—"}</span></td>)}<td>{r.count}</td></tr>)}</tbody></table></div>{selectedResult&&<div className="mt-5 rounded-xl border border-white/15 bg-black/20 p-4"><h3 className="font-black">{pupilName(selectedResult)} · evaluatiedetails</h3>{evaluations.filter(e=>e.beoordeelde_id===selectedResult).map(e=><div key={e.id} className="mt-3 border-t border-white/10 pt-2 text-sm"><b>{e.type}</b> · {e.status}<div className="mt-1 flex flex-wrap gap-2">{Object.entries(e.rubrics??{}).map(([k,v])=><span key={k} className="rounded bg-white/10 px-2 py-1">{RUBRICS[e.type]?.find(x=>x.key===k)?.label??k}: {LEVELS[Number(v)-1]??v}</span>)}</div></div>)}</div>}</section>}
+   {teacher && lesson && tab === "resultaten" && (
+    <section className={panel}>
+     <div className="flex flex-wrap items-center justify-between gap-3">
+      <h2 className="text-xl font-black">Resultatenmatrix</h2>
+      <button className={btn} onClick={downloadReport}>⬇ CSV-lesrapport</button>
+     </div>
+     <p className="mt-2 text-sm text-white/60">Gemiddelden op schaal 1–4. Klik op een leerling om de oorspronkelijke beoordelingen te bekijken. Resultaten zijn ook tijdens een actieve les zichtbaar. Geen klassement.</p>
+     <div className="mt-4 overflow-x-auto">
+      <table className="w-full min-w-[650px] text-sm">
+       <thead>
+        <tr className="border-b border-white/20 text-left">
+         <th className="p-3">Leerling</th><th>Techniek</th><th>Wedstrijd</th><th>Samenwerken</th><th>Ingediend</th>
+        </tr>
+       </thead>
+       <tbody>
+        {results.map(r => {
+         const opened = selectedResult === r.p.id;
+         const studentEvaluations = evaluations.filter(e => e.beoordeelde_id === r.p.id);
+         return (
+          <React.Fragment key={r.p.id}>
+           <tr className={`border-b border-white/10 ${opened ? "bg-[#4B8E8D]/15" : ""}`}>
+            <td className="p-2">
+             <button
+              type="button"
+              aria-expanded={opened}
+              aria-controls={`hockey-detail-${r.p.id}`}
+              className="flex items-center gap-2 text-left font-bold text-[#b4e8d1] underline underline-offset-4 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#89C2AA]"
+              onClick={() => setSelectedResult(opened ? null : r.p.id)}
+             >
+              <span aria-hidden="true">{opened ? "▾" : "▸"}</span>
+              {r.p.volledige_naam}
+             </button>
+             <span className="block text-xs text-white/50">{r.p.klas_naam}</span>
+            </td>
+            {([r.techniek, r.wedstrijd, r.samenwerken] as (number | null)[]).map((v, i) => (
+             <td key={i}><span className={`inline-block min-w-14 rounded-lg p-2 text-center font-black ${scoreColor(v)}`}>{v?.toFixed(2) ?? "—"}</span></td>
+            ))}
+            <td>{r.count}</td>
+           </tr>
+           {opened && (
+            <tr id={`hockey-detail-${r.p.id}`} className="border-b border-[#89C2AA]/30 bg-black/25">
+             <td colSpan={5} className="p-3 sm:p-5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+               <h3 className="text-lg font-black text-white">{r.p.volledige_naam} · beoordelingsdetails</h3>
+               <button type="button" className={btn} onClick={() => setSelectedResult(null)}>Sluiten ✕</button>
+              </div>
+              {studentEvaluations.length === 0 ? (
+               <p className="mt-3 text-sm text-white/65">Voor deze leerling zijn nog geen beoordelingen opgeslagen.</p>
+              ) : (
+               <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                {(["techniek", "wedstrijd", "samenwerken"] as const).map(kind => {
+                 const kindEvaluations = studentEvaluations.filter(e => e.type === kind);
+                 const label = kind === "techniek" ? "Techniek" : kind === "wedstrijd" ? "Wedstrijd" : "Samenwerken (zelfevaluatie)";
+                 return (
+                  <div key={kind} className="rounded-2xl border border-white/15 bg-white/5 p-4">
+                   <h4 className="text-base font-black text-[#b4e8d1]">{label}</h4>
+                   {kindEvaluations.length === 0 ? (
+                    <p className="mt-2 text-sm text-white/55">Nog geen beoordeling beschikbaar.</p>
+                   ) : kindEvaluations.map(ev => {
+                    const observation = assignments.find(a => a.id === ev.observatie_id);
+                    const observer = observation ? participants.find(p => p.id === observation.observator_id)?.volledige_naam : null;
+                    const criteria = RUBRICS[kind] ?? [];
+                    const numbers = criteria.map(c => Number(ev.rubrics?.[c.key])).filter(v => v >= 1 && v <= 4);
+                    const average = mean(numbers);
+                    return (
+                     <div key={ev.id} className="mt-3 border-t border-white/10 pt-3">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 text-xs text-white/65">
+                       <span>{kind === "samenwerken" ? "Zelfevaluatie" : `Observator: ${observer ?? "Niet bekend"}`}{observation ? ` · ronde ${observation.ronde}` : ""}</span>
+                       <span className={`rounded-lg px-2 py-1 font-bold ${ev.status === "ingediend" ? "bg-emerald-500/20 text-emerald-100" : "bg-amber-500/20 text-amber-100"}`}>{ev.status === "ingediend" ? "Definitief ingediend" : "Concept"}</span>
+                      </div>
+                      <div className="space-y-2">
+                       {criteria.map(c => {
+                        const value = Number(ev.rubrics?.[c.key]);
+                        const symbol = value >= 1 && value <= 4 ? LEVELS[value - 1] : "—";
+                        return (
+                         <div key={c.key} className="flex items-center justify-between gap-3 rounded-xl bg-black/20 px-3 py-2">
+                          <span className="text-sm text-white/85">{c.label}</span>
+                          <span className={`min-w-12 rounded-lg px-2 py-1 text-center text-base font-black ${value >= 1 && value <= 4 ? scoreColor(value) : "bg-white/10 text-white/55"}`}>{symbol}</span>
+                         </div>
+                        );
+                       })}
+                      </div>
+                      <p className="mt-3 text-right text-sm font-bold text-white/80">Gemiddelde: {average === null ? "—" : `${average.toFixed(2)}/4`}</p>
+                     </div>
+                    );
+                   })}
+                  </div>
+                 );
+                })}
+               </div>
+              )}
+             </td>
+            </tr>
+           )}
+          </React.Fragment>
+         );
+        })}
+       </tbody>
+      </table>
+     </div>
+    </section>
+   )}
    {!teacher&&lesson&&myParticipant&&<><section className={panel}><h2 className="text-xl font-black">Welkom, {myParticipant.volledige_naam}</h2><p className="mt-2 text-white/70">{lessonLabel(lesson)}</p><div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="rounded-xl bg-black/20 p-4">Mijn groep<div className="text-3xl font-black">{myParticipant.groep_code??"—"}</div></div><div className="rounded-xl bg-black/20 p-4">Mijn station<div className="text-3xl font-black">{station(myParticipant.groep_code,currentRound)??"—"}</div></div><div className="rounded-xl bg-black/20 p-4">Ronde {currentRound} · {timer?.fase??"voorbereiding"}<div className="text-3xl font-black tabular-nums">{clockDisplay(currentSeconds)}</div></div></div>{myParticipant.geblesseerd&&<p className="mt-3 rounded-xl border border-amber-400/30 p-3 text-amber-100">Je bent als geblesseerd aangeduid. Vraag de leerkracht naar je scheidsrechter- of observatietaak.</p>}</section>{timer?.fase==="rotatie"&&<section className={panel}><h2 className="mb-3 text-xl font-black">Mijn observatieopdrachten</h2>{myAssignments.length===0?<p className="text-white/65">In deze ronde heb je geen digitale observatieopdracht.</p>:<div className="flex flex-wrap gap-2">{myAssignments.map(a=><button key={a.id} className={activeAssignment===a.id?primary:btn} onClick={()=>{setActiveAssignment(a.id);setSaveState("");}}>{a.type}: {assignmentNames[a.id]??pupilName(a.beoordeelde_id)} {a.status==="ingediend"?"✓":""}</button>)}</div>}{selectedAssignment&&selectedAssignment.ronde===currentRound&&<div className="mt-5"><h3 className="mb-3 text-lg font-black">{selectedAssignment.type} · {assignmentNames[selectedAssignment.id]??pupilName(selectedAssignment.beoordeelde_id)}</h3><RubricForm kind={selectedAssignment.type} values={draft} onChange={changePeer} locked={assignmentEvaluation?.status==="ingediend"}/><div className="mt-4 flex items-center gap-3"><button className={primary} disabled={assignmentEvaluation?.status==="ingediend"||RUBRICS[selectedAssignment.type].some(x=>!draft[x.key])} onClick={()=>{if(saveTimer.current)clearTimeout(saveTimer.current);void savePeer(draft,true);}}>Definitief indienen</button><span className="text-sm text-white/65">{saveState}</span></div></div>}</section>}{timer?.fase==="zelfevaluatie"&&<section className={panel}><h2 className="mb-3 text-xl font-black">Zelfevaluatie samenwerken</h2><RubricForm kind="samenwerken" values={selfDraft} onChange={changeSelf} locked={mySelf?.status==="ingediend"}/><div className="mt-4 flex items-center gap-3"><button className={primary} disabled={mySelf?.status==="ingediend"||!selfDraft.samenwerken} onClick={()=>{if(saveTimer.current)clearTimeout(saveTimer.current);void saveSelf(selfDraft,true);}}>Zelfevaluatie indienen</button><span className="text-sm text-white/65">{saveState}</span></div></section>}{timer?.fase==="afgerond"&&<section className={panel}>De Hockey-les is afgerond. Bedankt voor je inzet!</section>}</>}
    {!teacher&&uid&&!lesson&&<section className={panel}>Er is nog geen Hockey-les voor jouw account beschikbaar. Vraag je LO-leerkracht om je aan de les toe te voegen.</section>}
   </main>
