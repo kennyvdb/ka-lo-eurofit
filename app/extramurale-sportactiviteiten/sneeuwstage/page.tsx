@@ -635,7 +635,7 @@ export default function SneeuwstagePage() {
         <div className="mb-2 text-[12px] font-black uppercase tracking-[0.12em] text-white/45">
           Sneeuwstage
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
           {tabs.map((tab) => {
             const active = activeTab === tab.id;
             return (
