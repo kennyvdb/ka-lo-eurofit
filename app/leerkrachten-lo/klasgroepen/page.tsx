@@ -1,5 +1,6 @@
 "use client";
 import AppShell from "@/components/AppShell";
+import HockeyKlasgroepResultaten from "@/components/hockey/HockeyKlasgroepResultaten";
 import BaseHero from "@/components/heroes/BaseHero";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -895,6 +896,7 @@ export default function LeerkrachtenLOKlasgroepenPage() {
                   </div>
                 </div>
               </div>
+              <HockeyKlasgroepResultaten schooljaar={schooljaar} leden={klasgroepLeerlingen} />
             </>
           ) : (
             <>
