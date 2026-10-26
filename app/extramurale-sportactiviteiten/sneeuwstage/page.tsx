@@ -14,6 +14,7 @@ type Tab =
   | "annulering"
   | "kamers"
   | "groepen"
+  | "brochure"
   | "faq";
 type ChecklistItem = {
   id: string;
@@ -51,6 +52,7 @@ const tabs: {
   { id: "annulering", icon: "🛡️", label: "Annulering" },
   { id: "kamers", icon: "🛏️", label: "Kamers" },
   { id: "groepen", icon: "⛷️", label: "Groepen" },
+  { id: "brochure", icon: "📖", label: "Reisbrochure" },
   { id: "faq", icon: "❓", label: "FAQ" },
 ];
 /* =========================================================
@@ -326,6 +328,194 @@ const checklistGroups: ChecklistGroup[] = [
   },
 ];
 /* =========================================================
+   SKI- EN SNOWBOARDGROEPEN 2026
+========================================================= */
+const sneeuwstageGroepen = [
+  { nummer: 1, titel: "Ski • beginners", icoon: "🎿", leden: [
+    "Lenthel Vercruysse", "Lilou Delcour", "Kobi Maes", "Jolien Stockman",
+    "Lena Vandenbussche", "Nova De Jonghe", "Arnaud Coreelman",
+    "Mateo Schoonjans", "Niels De Brauwere", "Gaspard Vanneste",
+    "Wout Vandenbulcke", "Joppe Steurbaut"
+  ] },
+  { nummer: 2, titel: "Ski • beginners", icoon: "🎿", leden: [
+    "Louise Vandecasteele", "Alessio Monnart", "Iljo Vandenbogaerde",
+    "Louna Fevereiro", "Jason Vandeghinste", "Lotte Vandenabeele",
+    "Elise Vandeginste", "Laura-Mae Gezels", "Floor De Smeyter",
+    "Louisa-Maria De Geeter", "Nom Dawyndt"
+  ] },
+  { nummer: 3, titel: "Ski • ervaring", icoon: "⛷️", leden: [
+    "Arne Naessens", "Naomi Vandenborre", "Ela Gervalla",
+    "Felke Van den Berghe", "Remi Fourneau", "Rémi-Maxence Dumont",
+    "Mathis D'haene", "Aeron Wastijn", "Bibiana Vanhonacker",
+    "Kato Schatteman", "Felice Gryspeert", "Laura-Marie Bouts"
+  ] },
+  { nummer: 4, titel: "Ski • gevorderden", icoon: "🏔️", leden: [
+    "Aerjen De Pauw", "Cas Messiaen", "Enna Vanpevenaeyge",
+    "Ashley Marbach", "Ode Vanavermaete", "Janne Demets",
+    "Sam De Leeuw", "Anouk Gryspeert"
+  ] },
+  { nummer: 5, titel: "Snowboard • gevorderden", icoon: "🏂", leden: [
+    "Célestine Wieme", "Indiraj Deprez", "Mathis Choquet",
+    "Mathias Coudyzer", "Seppe Libiez", "Ciel Coussement",
+    "Lou De Jaegher", "Lana Turpin"
+  ] }
+] as const;
+
+function normaliseerNaam(naam: string) {
+  return naam.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("nl-BE").trim();
+}
+
+function SneeuwstageGroepen() {
+  const [zoekterm, setZoekterm] = useState("");
+  const [onthuld, setOnthuld] = useState(false);
+  const zoek = normaliseerNaam(zoekterm);
+  const gevonden = zoek.length >= 2
+    ? sneeuwstageGroepen.flatMap(g => g.leden
+        .filter(naam => normaliseerNaam(naam).includes(zoek))
+        .map(naam => ({ naam, groep: g.nummer })))
+    : [];
+
+  return (
+    <section className="mt-4 space-y-4">
+      <div className="relative overflow-hidden rounded-3xl border border-[#89C2AA]/30 bg-gradient-to-br from-[#16374C] via-[#173C4B] to-[#28594F] p-5 shadow-xl sm:p-7">
+        <div className="pointer-events-none absolute -right-8 -top-10 text-[110px] opacity-10">❄️</div>
+        <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-[#C8F1E0]">
+          Sneeuwstage 2026 • Ahrntal
+        </span>
+        <h2 className="mt-4 text-2xl font-black text-white sm:text-3xl">🎉 De groepen zijn bekend!</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
+          Ontdek met wie je straks de pistes van Speikboden en Klausberg verovert.
+          Zoek je naam of bekijk alle groepen hieronder. Wij hebben er alvast zin in! ⛷️❄️
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-white/85">
+          <span className="rounded-full bg-white/10 px-3 py-2">👥 51 deelnemers</span>
+          <span className="rounded-full bg-white/10 px-3 py-2">🎿 4 skigroepen</span>
+          <span className="rounded-full bg-white/10 px-3 py-2">🏂 1 snowboardgroep</span>
+        </div>
+      </div>
+      <div style={styles.panel}>
+        <label htmlFor="groep-zoeken" className="block text-base font-black text-white">
+          🔎 Zoek jouw groep
+        </label>
+        <p className="mt-1 text-xs leading-5 text-white/60">Typ minstens twee letters van je voor- of achternaam.</p>
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <input
+            id="groep-zoeken"
+            type="search"
+            autoComplete="off"
+            value={zoekterm}
+            onChange={e => { setZoekterm(e.target.value); setOnthuld(false); }}
+            onKeyDown={e => { if (e.key === "Enter" && gevonden.length) setOnthuld(true); }}
+            placeholder="Bijvoorbeeld: Mathis Choquet"
+            className="min-w-0 flex-1 rounded-2xl border border-white/20 bg-black/25 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-[#89C2AA]"
+          />
+          <button type="button" onClick={() => setOnthuld(true)}
+            disabled={!gevonden.length}
+            className="rounded-2xl bg-[#89C2AA] px-5 py-3 text-sm font-black text-[#10313A] transition hover:bg-[#A8DDC8] disabled:cursor-not-allowed disabled:opacity-40">
+            ✨ Onthul mijn groep
+          </button>
+        </div>
+        {zoek.length >= 2 && gevonden.length === 0 && (
+          <p role="status" className="mt-3 text-sm text-amber-200">
+            Geen naam gevonden. Controleer de schrijfwijze of probeer je achternaam.
+          </p>
+        )}
+        {onthuld && gevonden.length > 0 && (
+          <div role="status" aria-live="polite"
+            className="mt-4 animate-[fadeIn_450ms_ease-out] rounded-2xl border border-[#89C2AA]/40 bg-[#89C2AA]/15 p-4">
+            <div className="text-xs font-black uppercase tracking-widest text-[#B9EBD4]">🎉 Gevonden!</div>
+            {gevonden.map(({ naam, groep }) => (
+              <div key={naam} className="mt-2 text-base font-bold text-white">
+                {naam} <span className="text-[#B9EBD4]">→ Groep {groep}</span>
+              </div>
+            ))}
+            <p className="mb-0 mt-2 text-xs text-white/65">Je groep vind je ook in het overzicht hieronder.</p>
+          </div>
+        )}
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        {sneeuwstageGroepen.map(groep => (
+          <article key={groep.nummer} className="overflow-hidden rounded-3xl border border-white/15 bg-white/[0.055] shadow-lg">
+            <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.045] p-4">
+              <div className="flex items-center gap-3">
+                <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#89C2AA]/15 text-2xl">{groep.icoon}</span>
+                <div>
+                  <h3 className="m-0 text-lg font-black text-white">Groep {groep.nummer}</h3>
+                  <p className="m-0 text-xs text-white/60">{groep.titel}</p>
+                </div>
+              </div>
+              <span className="shrink-0 rounded-full border border-white/15 px-3 py-1 text-xs font-bold text-white/75">
+                {groep.leden.length} leerlingen
+              </span>
+            </div>
+            <ul className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
+              {groep.leden.map(naam => {
+                const match = zoek.length >= 2 && normaliseerNaam(naam).includes(zoek);
+                return (
+                  <li key={naam} className={[
+                    "rounded-xl border px-3 py-2.5 text-sm font-semibold transition",
+                    match ? "border-[#89C2AA]/60 bg-[#89C2AA]/20 text-white" :
+                      "border-white/10 bg-black/15 text-white/80"
+                  ].join(" ")}>
+                    {match ? "⭐ " : "❄️ "}{naam}
+                  </li>
+                );
+              })}
+            </ul>
+          </article>
+        ))}
+      </div>
+      <div className="rounded-3xl border border-amber-200/25 bg-amber-200/[0.08] p-4">
+        <h3 className="m-0 text-sm font-black text-amber-100">ℹ️ De groepsindeling kan nog wijzigen</h3>
+        <p className="mb-0 mt-2 text-sm leading-6 text-white/75">
+          Tijdens de eerste twee dagen bekijken de monitoren of iedereen op het juiste niveau zit.
+          Indien nodig kan je nog naar een andere groep worden verplaatst, zodat iedereen veilig
+          kan bijleren en plezier maken.
+        </p>
+      </div>
+      <div className="rounded-3xl border border-[#89C2AA]/25 bg-[#89C2AA]/10 p-5 text-center">
+        <p className="m-0 text-base font-black text-white">🎿 Materiaal klaar? Wij tellen af!</p>
+        <p className="mb-0 mt-2 text-sm text-white/70">Tot snel op de piste! ⛷️❄️</p>
+      </div>
+    </section>
+  );
+}
+
+function Reisbrochure() {
+  const pdf = "/sneeuwstage/reisbrochure-2026.pdf";
+  return (
+    <section className="mt-4 space-y-4">
+      <div className="rounded-3xl border border-[#89C2AA]/30 bg-gradient-to-br from-[#18394A] to-[#245A52] p-5 sm:p-7">
+        <div className="text-4xl">📖</div>
+        <h2 className="mt-3 text-2xl font-black text-white">Jouw reisgids 2026</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75">
+          Alles over de busreis, het verblijf, de skilessen, je bagage, de afspraken
+          en het programma. Lees de brochure zeker voor vertrek.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <a href={pdf} target="_blank" rel="noopener noreferrer"
+            className="rounded-2xl bg-[#89C2AA] px-4 py-3 text-sm font-black text-[#10313A] hover:bg-[#A8DDC8]">
+            📖 Open brochure
+          </a>
+          <a href={pdf} download="Reisbrochure-sneeuwstage-2026.pdf"
+            className="rounded-2xl border border-white/25 bg-white/10 px-4 py-3 text-sm font-black text-white hover:bg-white/15">
+            ⬇️ Download PDF
+          </a>
+        </div>
+      </div>
+      <div className="overflow-hidden rounded-3xl border border-white/15 bg-white/[0.04]">
+        <div className="border-b border-white/10 p-4 text-sm font-bold text-white">📄 Reisbrochure • 9 pagina’s</div>
+        <iframe src={`${pdf}#toolbar=1`} title="Reisbrochure sneeuwstage 2026"
+          className="h-[65vh] min-h-[440px] w-full bg-white sm:h-[780px]" />
+      </div>
+      <p className="text-xs leading-5 text-white/55">
+        Verschijnt de PDF niet op jouw toestel? Gebruik dan de knop ‘Open brochure’.
+      </p>
+    </section>
+  );
+}
+
+/* =========================================================
    PAGE
 \========================================================= */
 export default function SneeuwstagePage() {
@@ -445,7 +635,7 @@ export default function SneeuwstagePage() {
         <div className="mb-2 text-[12px] font-black uppercase tracking-[0.12em] text-white/45">
           Sneeuwstage
         </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8">
           {tabs.map((tab) => {
             const active = activeTab === tab.id;
             return (
@@ -538,6 +728,12 @@ export default function SneeuwstagePage() {
               value="Autocar"
             />
           </div>
+          <button type="button" onClick={() => setActiveTab("brochure")}
+            className="mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-[#89C2AA]/30 bg-[#89C2AA]/10 p-4 text-left transition hover:bg-[#89C2AA]/20">
+            <span><span className="block font-black text-white">📖 Reisbrochure 2026</span>
+              <span className="mt-1 block text-xs text-white/65">Alle reisinfo, afspraken en het programma op één plek.</span></span>
+            <span className="shrink-0 text-sm font-black text-[#B9EBD4]">Bekijk →</span>
+          </button>
           <div style={styles.panel} className="mt-4">
             <div className="text-lg font-black text-white">
               🏔️ Sneeuwstage
@@ -557,8 +753,8 @@ export default function SneeuwstagePage() {
               ℹ️ Meer praktische informatie volgt
             </div>
             <div className="mt-1 text-sm leading-6 text-white/70">
-              Exact vertrekuur, vertrekplaats en eventuele
-              laatste afspraken worden later meegedeeld.
+              Het vertrek is op 18 december om 17.00 uur. We verzamelen om 16.30 uur
+              op de parking naast de school. Bekijk ook de reisbrochure voor alle afspraken.
             </div>
           </div>
         </section>
@@ -788,13 +984,8 @@ export default function SneeuwstagePage() {
       {/* ===================================================
           GROEPEN
       \=================================================== */}
-      {activeTab === "groepen" && (
-        <ComingSoon
-          icon="⛷️"
-          title="Ski- & snowboardgroepen"
-          description="De groepsverdeling wordt later door het LO-team gepubliceerd."
-        />
-      )}
+      {activeTab === "groepen" && <SneeuwstageGroepen />}
+      {activeTab === "brochure" && <Reisbrochure />}
       {/* ===================================================
           FAQ
       \=================================================== */}
@@ -835,7 +1026,7 @@ export default function SneeuwstagePage() {
             />
             <Faq
               question="Wanneer wordt mijn ski- of snowboardgroep bekendgemaakt?"
-              answer="De groepsverdeling wordt later door het LO-team op deze pagina gepubliceerd."
+              answer="De groepen zijn bekend! Bekijk het tabblad Groepen en zoek je naam om jouw groep te ontdekken."
             />
           </div>
         </section>
