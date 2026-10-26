@@ -67,7 +67,10 @@ export default function HockeyKlasgroepResultaten({ schooljaar, leden }: Props) 
 
   const matrix = useMemo(() => {
     const byEmail = new Map(participants.map(p => [String(p.leerling_email ?? "").toLowerCase(), p.id]));
-    return [...leden].sort((a, b) => a.positie - b.positie).map(lid => {
+    return [...leden].sort((a, b) => {
+      const classOrder = String(a.klas_naam ?? "").localeCompare(String(b.klas_naam ?? ""), "nl-BE", { numeric: true });
+      return classOrder || Number(a.positie ?? 0) - Number(b.positie ?? 0);
+    }).map(lid => {
       const participantId = byEmail.get(lid.leerling_email.toLowerCase());
       const scores = TYPES.map(type => {
         const values = evaluations
