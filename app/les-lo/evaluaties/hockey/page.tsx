@@ -44,6 +44,7 @@ const localDate = () => { const d = new Date(); return `${d.getFullYear()}-${Str
 const isTeacher = (role: unknown) => ["lo_leerkracht", "leerkracht_lo", "admin"].includes(text(role).toLowerCase());
 const station = (code: string | null, round: number) => code ? ((Number(code.slice(1)) + round - 2) % 5) + 1 : null;
 const getError = (e: unknown) => e instanceof Error ? e.message : text((e as Row)?.message) || "Onbekende fout";
+function rubricSymbol(v: number | null): string { return v === null ? "—" : LEVELS[Math.max(0, Math.min(3, Math.round(v) - 1))]; }
 function scoreColor(v: number | null) { return v === null ? "bg-white/10 text-white/50" : v < 1.75 ? "bg-red-500/30 text-red-100" : v < 2.5 ? "bg-amber-500/30 text-amber-100" : v < 3.25 ? "bg-teal-500/30 text-teal-100" : "bg-emerald-500/30 text-emerald-100"; }
 function mean(values: number[]): number | null { return values.length ? values.reduce((a,b)=>a+b,0)/values.length : null; }
 function score(evals: Evaluation[], type: string) { return mean(evals.filter(e=>e.type===type && e.status==="ingediend").flatMap(e=>Object.values(e.rubrics ?? {}).map(Number).filter(v=>v>=1&&v<=4))); }
@@ -221,7 +222,7 @@ export default function HockeyPage() {
              <span className="block text-xs text-white/50">{r.p.klas_naam}</span>
             </td>
             {([r.techniek, r.wedstrijd, r.samenwerken] as (number | null)[]).map((v, i) => (
-             <td key={i}><span className={`inline-block min-w-14 rounded-lg p-2 text-center font-black ${scoreColor(v)}`}>{v?.toFixed(2) ?? "—"}</span></td>
+             <td key={i}><span className={`inline-block min-w-14 rounded-lg p-2 text-center font-black ${scoreColor(v)}`}>{rubricSymbol(v)}</span></td>
             ))}
             <td>{r.count}</td>
            </tr>
