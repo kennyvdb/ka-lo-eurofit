@@ -25,6 +25,12 @@ const ui = {
 
 const modules = [
   {
+    href: "/leerkrachten-lo/les-lo",
+    icon: "🏫",
+    title: "Les LO",
+    desc: "Lessen voorbereiden en begeleiden, groepen beheren en de leerlingenweergave bekijken. Inclusief Hockey.",
+  },
+  {
     href: "/eurofittest",
     icon: "🏃",
     title: "Eurofittest",

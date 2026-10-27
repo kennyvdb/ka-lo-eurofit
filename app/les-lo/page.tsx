@@ -62,7 +62,9 @@ export default function LesLOHubPage() {
         }
         description={
           <>
-            Alles voor de les: <strong className="text-white">kijkwijzers</strong>,{" "}
+            Alles voor de les:{" "}
+            <strong className="text-white">lessen</strong>,{" "}
+            <strong className="text-white">kijkwijzers</strong>,{" "}
             <strong className="text-white">rollen</strong>,{" "}
             <strong className="text-white">jaarplanning</strong>,{" "}
             <strong className="text-white">evaluaties</strong> en{" "}
@@ -85,9 +87,19 @@ export default function LesLOHubPage() {
       />
 
       <section className="mt-4">
-        <div className="mb-3 text-[13px] font-black text-white/85">Les LO</div>
+        <div className="mb-3 text-[13px] font-black text-white/85">
+          Les LO
+        </div>
 
         <div className="grid grid-cols-2 gap-3.5 md:grid-cols-4">
+          {/* NIEUW: LESSEN */}
+          <BaseTile
+            href="/les-lo/les"
+            icon="🏫"
+            title="Lessen"
+            desc="Volg de lessen en opdrachten"
+          />
+
           <BaseTile
             href="/les-lo/kijkwijzers"
             icon="👀"
@@ -113,7 +125,7 @@ export default function LesLOHubPage() {
             href="/les-lo/evaluaties"
             icon="✅"
             title="Evaluaties"
-            desc="Rubrics (SAM) & feedback"
+            desc="Rubrics en persoonlijke feedback"
           />
 
           <BaseTile
