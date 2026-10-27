@@ -1,6 +1,5 @@
 "use client";
 import AppShell from "@/components/AppShell";
-import HockeyKlasgroepResultaten from "@/components/hockey/HockeyKlasgroepResultaten";
 import BaseHero from "@/components/heroes/BaseHero";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -34,22 +33,6 @@ type Klasgroep = {
   filters: Record<string, any> | null;
   aangemaakt_op?: string | null;
   bijgewerkt_op?: string | null;
-};
-type KlasgroepLeerling = {
-  koppeling_id: string;
-  klasgroep_id: string;
-  klasgroep_naam: string;
-  schooljaar: string;
-  leerkracht_id: string;
-  positie: number;
-  leerling_email: string;
-  profiel_id: string | null;
-  volledige_naam: string;
-  given_name: string;
-  family_name: string;
-  username: string;
-  klas_naam: string;
-  lo_groepen: string;
 };
 const ui = {
   text: "rgba(234,240,255,0.92)",
@@ -184,9 +167,7 @@ export default function LeerkrachtenLOKlasgroepenPage() {
   const [leerlingenRows, setLeerlingenRows] = useState<RawRow[]>([]);
   const [bewaardeGroepLeerlingen, setBewaardeGroepLeerlingen] = useState<RawRow[]>([]);
   const [profielEmails, setProfielEmails] = useState<Set<string>>(new Set());
-  const [enkelZonderProfiel, setEnkelZonderProfiel] = useState(false);
   const [klasgroepen, setKlasgroepen] = useState<Klasgroep[]>([]);
-  const [klasgroepLeerlingen, setKlasgroepLeerlingen] = useState<KlasgroepLeerling[]>([]);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
   const [groepNaam, setGroepNaam] = useState("");
   const [omschrijving, setOmschrijving] = useState("");
@@ -198,7 +179,6 @@ export default function LeerkrachtenLOKlasgroepenPage() {
   const [zoekterm, setZoekterm] = useState("");
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [klasbeeldOpen, setKlasbeeldOpen] = useState(false);
-  const [activeKlasbeeldKlas, setActiveKlasbeeldKlas] = useState<string>("");
   const [leerlingOrder, setLeerlingOrder] = useState<string[]>([]);
   useEffect(() => {
     injectResponsiveCSS();
@@ -212,16 +192,6 @@ export default function LeerkrachtenLOKlasgroepenPage() {
       .order("naam", { ascending: true });
     if (error) throw new Error(readableSupabaseError(error, "Kon klasgroepen niet laden."));
     setKlasgroepen((data ?? []) as Klasgroep[]);
-  }
-  async function loadGroepLeerlingen(klasgroepId: string) {
-    const { data, error } = await supabase
-      .from("lo_klasgroep_leden_view")
-      .select("*")
-      .eq("klasgroep_id", klasgroepId)
-      .order("klas_naam", { ascending: true })
-      .order("positie", { ascending: true });
-    if (error) throw new Error(readableSupabaseError(error, "Kon leerlingen van klasgroep niet laden."));
-    setKlasgroepLeerlingen((data ?? []) as KlasgroepLeerling[]);
   }
   useEffect(() => {
     const run = async () => {
@@ -378,9 +348,9 @@ export default function LeerkrachtenLOKlasgroepenPage() {
   }, [leerlingen]);
   const gefilterdeLeerlingen = useMemo(() => {
     return leerlingen.filter((leerling) =>
-      (!enkelZonderProfiel || !leerling.heeftProfiel) && leerlingPastBinnenFilters({ leerling, leerjaarFilter, klasFilter, loGroepFilter, geslachtFilter, zoekterm })
+      leerlingPastBinnenFilters({ leerling, leerjaarFilter, klasFilter, loGroepFilter, geslachtFilter, zoekterm })
     );
-  }, [leerlingen, leerjaarFilter, klasFilter, loGroepFilter, geslachtFilter, zoekterm, enkelZonderProfiel]);
+  }, [leerlingen, leerjaarFilter, klasFilter, loGroepFilter, geslachtFilter, zoekterm]);
   const geselecteerdeLeerlingen = useMemo(() => {
     return leerlingen.filter((l) => selectedKeys.has(leerlingKey(l)));
   }, [leerlingen, selectedKeys]);
@@ -408,11 +378,6 @@ export default function LeerkrachtenLOKlasgroepenPage() {
       return sortName(a).localeCompare(sortName(b), "nl-BE") || a.naam.localeCompare(b.naam, "nl-BE");
     });
   }, [geselecteerdeLeerlingen, leerlingOrder]);
-  const klasbeeldKlassen = useMemo(() => {
-    return Array.from(new Set<string>(geordendeGeselecteerdeLeerlingen.map((l) => l.klas))).sort((a, b) =>
-      a.localeCompare(b, "nl-BE", { numeric: true })
-    );
-  }, [geordendeGeselecteerdeLeerlingen]);
   const actieveKlasbeeldLeerlingen = useMemo(() => {
     return geordendeGeselecteerdeLeerlingen;
   }, [geordendeGeselecteerdeLeerlingen]);
@@ -477,20 +442,16 @@ export default function LeerkrachtenLOKlasgroepenPage() {
     setGeslachtFilter("Alle");
     setZoekterm("");
     setSelectedKeys(new Set());
-    setKlasgroepLeerlingen([]);
     setBewaardeGroepLeerlingen([]);
     setKlasbeeldOpen(false);
-    setActiveKlasbeeldKlas("");
     setLeerlingOrder([]);
   }
   async function handleSchooljaarChange(nextSchooljaar: string) {
     setSchooljaar(nextSchooljaar);
     setActiveGroupId(null);
-    setKlasgroepLeerlingen([]);
     setBewaardeGroepLeerlingen([]);
     setSelectedKeys(new Set());
     setKlasbeeldOpen(false);
-    setActiveKlasbeeldKlas("");
     setLeerlingOrder([]);
     if (!profiel) return;
     try {
@@ -514,9 +475,7 @@ export default function LeerkrachtenLOKlasgroepenPage() {
     setZoekterm("");
     setKlasbeeldOpen(true);
     setLeerlingOrder([]);
-    setActiveKlasbeeldKlas(filters.activeKlasbeeldKlas ?? "");
     try {
-      await loadGroepLeerlingen(group.id);
       const { data, error } = await supabase.from("lo_klasgroep_leden_view")
         .select("profiel_id, leerling_email, volledige_naam, klas_naam, positie, username, given_name, family_name")
         .eq("klasgroep_id", group.id).order("positie", { ascending: true });
@@ -561,8 +520,6 @@ export default function LeerkrachtenLOKlasgroepenPage() {
       }
       setSelectedKeys(keys);
       setLeerlingOrder(volgorde);
-      const klassen = Array.from(new Set(alleLeerlingen.filter((l) => keys.has(leerlingKey(l))).map((l) => l.klas))).sort((a, b) => a.localeCompare(b, "nl-BE", { numeric: true }));
-      if (!filters.activeKlasbeeldKlas && klassen[0]) setActiveKlasbeeldKlas(klassen[0]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kon klasgroep openen.");
     } finally {
@@ -641,7 +598,6 @@ export default function LeerkrachtenLOKlasgroepenPage() {
         .upsert(payload, { onConflict: "klasgroep_id,leerling_email" });
       if (membersError) throw new Error(readableSupabaseError(membersError, "Kon leerlingen niet koppelen."));
       await loadKlasgroepen(profiel.id, schooljaar);
-      await loadGroepLeerlingen(klasgroepId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Kon klasgroep niet opslaan.");
     } finally {
@@ -896,7 +852,6 @@ export default function LeerkrachtenLOKlasgroepenPage() {
                   </div>
                 </div>
               </div>
-              <HockeyKlasgroepResultaten schooljaar={schooljaar} leden={klasgroepLeerlingen} />
             </>
           ) : (
             <>
@@ -1177,38 +1132,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 900,
     cursor: "pointer",
   },
-  classSwitchRow: {
-    marginTop: 16,
-    display: "flex",
-    gap: 10,
-    flexWrap: "wrap",
-  },
-  classSwitchButton: {
-    border: `1px solid ${ui.border}`,
-    color: ui.text,
-    borderRadius: 14,
-    padding: "9px 14px",
-    fontWeight: 950,
-    cursor: "pointer",
-  },
-  sidebarClassBox: {
-    marginTop: 16,
-    paddingTop: 14,
-    borderTop: `1px solid ${ui.border}`,
-  },
-  sidebarClassTitle: {
-    color: ui.muted,
-    fontSize: 12,
-    fontWeight: 950,
-    marginBottom: 10,
-    textTransform: "uppercase",
-    letterSpacing: 0.4,
-  },
-  sidebarClassGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-    gap: 8,
-  },
   klasbeeldScroll: {
     marginTop: 16,
     overflowX: "auto",
@@ -1218,19 +1141,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   klasbeeldTable: {
     minWidth: "max-content",
-  },
-  klasbeeldHeader: {
-    height: 56,
-    minWidth: "100%",
-    padding: "0 22px",
-    display: "flex",
-    alignItems: "center",
-    borderBottom: "10px solid rgba(255,255,255,0.10)",
-    color: ui.text,
-    fontSize: 24,
-    fontWeight: 950,
-    letterSpacing: 0.2,
-    background: "rgba(0,0,0,0.38)",
   },
   klasbeeldClassRow: {
     display: "flex",
