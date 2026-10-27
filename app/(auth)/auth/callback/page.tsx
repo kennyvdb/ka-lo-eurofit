@@ -162,6 +162,15 @@ export default function AuthCallbackPage() {
         if (!email) {
           throw new Error("Geen e-mailadres gevonden.");
         }
+        // Optionele centrale toegangscontrole; pas activeren na audit.
+        if (process.env.NEXT_PUBLIC_ENFORCE_SCHOOL_ACCESS === "true") {
+          const { data: allowed, error: accessError } = await supabase.rpc("school_access_allowed");
+          if (accessError || allowed !== true) {
+            await supabase.auth.signOut({ scope: "local" });
+            throw new Error("Dit account heeft geen toegang. Meld je aan met je goedgekeurde schoolaccount.");
+          }
+        }
+
         /* =========================================
            2. BESTAAND PROFIEL OPHALEN
         \========================================= */
@@ -557,12 +566,28 @@ export default function AuthCallbackPage() {
         /* =========================================
            10. PROFIEL OPSLAAN
         \========================================= */
-        const { error: profielError } =
-          await supabase
-            .from("profielen")
-            .upsert(profielPayload, {
-              onConflict: "id",
-            });
+        // Geen UPSERT: INSERT is bewust verboden voor gewone gebruikers.
+        // De auth.users-trigger maakt het profiel aan. Werk uitsluitend
+        // de niet-geblokkeerde profielgegevens bij.
+        const {
+          id: _profileId,
+          email: _profileEmail,
+          rol: _profileRol,
+          role: _profileRole,
+          smartschool_sourced_id: _smartschoolId,
+          rol_bevestigd: _rolBevestigd,
+          ...bewerkbareVelden
+        } = profielPayload;
+        void [_profileId, _profileEmail, _profileRol, _profileRole, _smartschoolId, _rolBevestigd];
+        const { data: bijgewerkt, error: profielError } = await supabase
+          .from("profielen")
+          .update(bewerkbareVelden)
+          .eq("id", authUser.id)
+          .select("id")
+          .maybeSingle();
+        if (!profielError && !bijgewerkt) {
+          throw new Error("Geen profiel gevonden. Controleer de auth.users-profieltrigger.");
+        }
         if (profielError) {
           throw new Error(profielError.message);
         }

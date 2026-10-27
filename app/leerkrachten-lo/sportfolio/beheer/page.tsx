@@ -2868,7 +2868,7 @@ export default function SportfolioBeheerPage() {
                 </div>
               )}
             </div>
-          </section>
+          </section>w
         </>
       ) : null}
     </AppShell>
