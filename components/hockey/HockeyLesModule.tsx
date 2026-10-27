@@ -45,7 +45,13 @@ const isTeacher = (role: unknown) => ["lo_leerkracht", "leerkracht_lo", "admin"]
 const station = (code: string | null, round: number) => code ? ((Number(code.slice(1)) + round - 2) % 5) + 1 : null;
 const getError = (e: unknown) => e instanceof Error ? e.message : text((e as Row)?.message) || "Onbekende fout";
 function rubricSymbol(v: number | null): string { return v === null ? "—" : LEVELS[Math.max(0, Math.min(3, Math.round(v) - 1))]; }
-function scoreColor(v: number | null) { return v === null ? "bg-white/10 text-white/50" : v < 1.75 ? "bg-red-500/30 text-red-100" : v < 2.5 ? "bg-amber-500/30 text-amber-100" : v < 3.25 ? "bg-teal-500/30 text-teal-100" : "bg-emerald-500/30 text-emerald-100"; }
+function scoreColor(v: number | null) {
+  if (v === null) return "border border-white/10 bg-white/5 text-white/60";
+  if (v < 1.75) return "border border-red-400/25 bg-red-400/10 text-red-100";
+  if (v < 2.5) return "border border-amber-400/25 bg-amber-400/10 text-amber-100";
+  if (v < 3.25) return "border border-sky-400/25 bg-sky-400/10 text-sky-100";
+  return "border border-emerald-400/25 bg-emerald-400/10 text-emerald-100";
+}
 function mean(values: number[]): number | null { return values.length ? values.reduce((a,b)=>a+b,0)/values.length : null; }
 function score(evals: Evaluation[], type: string) { return mean(evals.filter(e=>e.type===type && e.status==="ingediend").flatMap(e=>Object.values(e.rubrics ?? {}).map(Number).filter(v=>v>=1&&v<=4))); }
 function clockDisplay(s: number) { return `${Math.floor(s/60).toString().padStart(2,"0")}:${Math.floor(s%60).toString().padStart(2,"0")}`; }
@@ -251,22 +257,25 @@ export default function HockeyLesModule({ omgeving }: { omgeving: "leerling" | "
       <p className="mt-4 rounded-xl bg-white/5 p-4 text-sm text-white/65">Geen aanwezige leerlingen voor deze les.</p>
      ) : (
       <>
-       <p className="mt-3 text-xs text-white/60">Schuif horizontaal om alle leerlingen te bekijken. Klik op een naam voor de volledige beoordeling.</p>
+       <p className="mt-3 text-xs text-white/60">Leerlingen staan onder elkaar. Klik op een naam voor de volledige beoordeling.</p>
        <div className="mt-3 overflow-x-auto rounded-2xl border border-white/15">
-        <table className="w-max min-w-full border-collapse text-sm">
+        <table className="w-full min-w-[640px] border-collapse text-sm">
          <thead><tr className="border-b border-white/15 bg-black/25">
-          <th scope="col" className="sticky left-0 z-10 min-w-[140px] border-r border-white/15 bg-[#182b37] p-3 text-left">Onderdeel</th>
-          {results.map(r=><th scope="col" key={r.p.id} className="min-w-[155px] max-w-[190px] border-r border-white/10 p-3 text-center align-top">
-           <button type="button" aria-expanded={selectedResult===r.p.id} onClick={()=>setSelectedResult(selectedResult===r.p.id?null:r.p.id)} className="font-black text-[#b4e8d1] underline underline-offset-4 hover:text-white">{r.p.volledige_naam} {selectedResult===r.p.id?"▾":"▸"}</button>
-           <span className="mt-1 block text-xs font-normal text-white/55">{r.p.klas_naam??""}</span>
-          </th>)}
+          <th scope="col" className="min-w-[180px] p-3 text-left">Leerling</th>
+          <th scope="col" className="p-3 text-center">Techniek</th>
+          <th scope="col" className="p-3 text-center">Wedstrijd</th>
+          <th scope="col" className="p-3 text-center">Samenwerken</th>
+          <th scope="col" className="p-3 text-center">Ingediend</th>
          </tr></thead>
          <tbody>
-          {(["techniek","wedstrijd","samenwerken"] as const).map(kind=><tr key={kind} className="border-b border-white/10">
-           <th scope="row" className="sticky left-0 z-10 border-r border-white/15 bg-[#182b37] p-3 text-left font-black">{kind==="techniek"?"Techniek":kind==="wedstrijd"?"Wedstrijd":"Samenwerken"}</th>
-           {results.map(r=>{const value=r[kind];return <td key={r.p.id} className="border-r border-white/10 p-3 text-center"><span title={value===null?"Nog geen score":`${value.toFixed(2)}/4`} className={`inline-block min-w-14 rounded-lg p-2 text-center font-black ${scoreColor(value)}`}>{rubricSymbol(value)}</span></td>;})}
+          {[...results].sort((a,b)=>(a.p.klas_naam??"").localeCompare(b.p.klas_naam??"","nl-BE",{numeric:true})||a.p.volledige_naam.localeCompare(b.p.volledige_naam,"nl-BE")).map(r=><tr key={r.p.id} className="border-b border-white/10 hover:bg-white/5">
+           <th scope="row" className="p-3 text-left">
+            <button type="button" aria-expanded={selectedResult===r.p.id} onClick={()=>setSelectedResult(selectedResult===r.p.id?null:r.p.id)} className="font-black text-[#b4e8d1] underline underline-offset-4 hover:text-white">{r.p.volledige_naam} {selectedResult===r.p.id?"▾":"▸"}</button>
+            <span className="block text-xs font-normal text-white/55">{r.p.klas_naam??""}</span>
+           </th>
+           {(["techniek","wedstrijd","samenwerken"] as const).map(kind=>{const value=r[kind];return <td key={kind} className="p-3 text-center"><span title={value===null?"Nog geen score":`${value.toFixed(2)}/4`} className={`inline-block min-w-14 rounded-lg p-2 text-center font-black ${scoreColor(value)}`}>{rubricSymbol(value)}</span></td>;})}
+           <td className="p-3 text-center text-white/75">{r.count}</td>
           </tr>)}
-          <tr><th scope="row" className="sticky left-0 z-10 border-r border-white/15 bg-[#182b37] p-3 text-left font-bold">Ingediend</th>{results.map(r=><td key={r.p.id} className="border-r border-white/10 p-3 text-center text-white/75">{r.count}</td>)}</tr>
          </tbody>
         </table>
        </div>
