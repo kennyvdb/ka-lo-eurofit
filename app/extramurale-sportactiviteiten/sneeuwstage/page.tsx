@@ -1,1301 +1,2605 @@
 "use client";
+
 import AppShell from "@/components/AppShell";
+
 import BaseHero from "@/components/heroes/BaseHero";
+
 import Link from "next/link";
+
 import { createClient } from "@/lib/supabase/client";
+
 import React, { useEffect, useMemo, useState } from "react";
+
 /* =========================================================
+
    TYPES
+
 \========================================================= */
+
 type Tab =
+
   | "materiaal"
+
   | "info"
+
   | "checklist"
+
   | "annulering"
+
   | "kamers"
+
   | "groepen"
+
   | "brochure"
+
   | "faq";
+
 type ChecklistItem = {
+
   id: string;
+
   label: string;
+
   note?: string;
+
   important?: boolean;
+
 };
+
 type ChecklistGroup = {
+
   title: string;
+
   icon: string;
+
   items: ChecklistItem[];
+
 };
+
 /* =========================================================
+
    UI
+
 \========================================================= */
+
 const ui = {
+
   text: "rgba(234,240,255,0.94)",
+
   muted: "rgba(234,240,255,0.70)",
+
   border: "rgba(255,255,255,0.12)",
+
   borderStrong: "rgba(255,255,255,0.18)",
+
   panel:
+
     "linear-gradient(180deg, rgba(255,255,255,0.07), rgba(255,255,255,0.045))",
+
 };
+
 /* =========================================================
+
    TABS
+
 \========================================================= */
+
 const tabs: {
+
   id: Tab;
+
   icon: string;
+
   label: string;
+
 }[] = [
+
   { id: "info", icon: "🏔️", label: "Info" },
+
   { id: "materiaal", icon: "🎿", label: "Eigen materiaal" },
+
   { id: "checklist", icon: "🎒", label: "Checklist" },
+
   { id: "annulering", icon: "🛡️", label: "Annulering" },
+
   { id: "kamers", icon: "🛏️", label: "Kamers" },
+
   { id: "groepen", icon: "⛷️", label: "Groepen" },
+
   { id: "brochure", icon: "📖", label: "Reisbrochure" },
+
   { id: "faq", icon: "❓", label: "FAQ" },
+
 ];
+
 /* =========================================================
+
    CHECKLIST
+
 \========================================================= */
+
 const checklistGroups: ChecklistGroup[] = [
+
   {
+
     title: "Documenten & geld",
+
     icon: "🪪",
+
     items: [
+
       {
+
         id: "identiteitskaart",
+
         label: "Identiteitskaart",
+
         important: true,
+
       },
+
       {
+
         id: "eurocross",
+
         label: "Eurocross-kaart",
+
         note: "Je ontvangt deze op de bus bij vertrek.",
+
       },
+
       {
+
         id: "portefeuille",
+
         label: "Portefeuille",
+
       },
+
       {
+
         id: "zakgeld",
+
         label: "Zakgeld",
+
       },
+
       {
+
         id: "bankkaart",
+
         label: "Bankkaart",
+
         note: "Indien je er één gebruikt.",
+
       },
+
     ],
+
   },
+
   {
+
     title: "Handbagage voor de bus",
+
     icon: "🎒",
+
     items: [
+
       {
+
         id: "skisokken-handbagage",
+
         label: "1 paar skisokken",
+
         note: "Zeker in je handbagage steken bij vertrek.",
+
         important: true,
+
       },
+
       {
+
         id: "wagenziekte",
+
         label: "Middel tegen wagenziekte",
+
         note: "Enkel indien je hier last van hebt.",
+
       },
+
       {
+
         id: "drinkfles",
+
         label: "Drinkfles",
+
       },
+
       {
+
         id: "snack-bus",
+
         label: "Kleine snack voor onderweg",
+
       },
+
       {
+
         id: "gsm-handbagage",
+
         label: "Gsm",
+
       },
+
       {
+
         id: "oordopjes",
+
         label: "Oortjes / hoofdtelefoon",
+
       },
+
       {
+
         id: "powerbank",
+
         label: "Powerbank",
+
         note: "Optioneel.",
+
       },
+
     ],
+
   },
+
   {
+
     title: "Ski- of snowboardkledij",
+
     icon: "⛷️",
+
     items: [
+
       {
+
         id: "skivest",
+
         label: "Skivest",
+
         note: "Gebruik deze ook als gewone jas. Dat bespaart plaats in je valies.",
+
         important: true,
+
       },
+
       {
+
         id: "skibroek",
+
         label: "Skibroek(en)",
+
       },
+
       {
+
         id: "skihandschoenen",
+
         label: "Skihandschoenen",
+
         important: true,
+
       },
+
       {
+
         id: "skisokken",
+
         label: "Voldoende skisokken",
+
       },
+
       {
+
         id: "skibril",
+
         label: "Skibril",
+
       },
+
       {
+
         id: "thermisch-boven",
+
         label: "Thermisch onderhemd / thermische baselayer",
+
       },
+
       {
+
         id: "thermisch-onder",
+
         label: "Thermische broek",
+
       },
+
       {
+
         id: "fleece",
+
         label: "Fleece of warme tussenlaag",
+
       },
+
       {
+
         id: "buff",
+
         label: "Buff / nekwarmer",
+
         note: "Of een sjaal.",
+
       },
+
       {
+
         id: "muts",
+
         label: "Muts",
+
       },
+
       {
+
         id: "zonnebril",
+
         label: "Zonnebril",
+
       },
+
     ],
+
   },
+
   {
+
     title: "Bescherming tegen zon & koude",
+
     icon: "☀️",
+
     items: [
+
       {
+
         id: "zonnecreme",
+
         label: "Zonnecrème",
+
         important: true,
+
       },
+
       {
+
         id: "lippenbalsem",
+
         label: "Lippenbalsem",
+
       },
+
       {
+
         id: "aftersun",
+
         label: "Aftersun of verzorgende crème",
+
       },
+
     ],
+
   },
+
   {
+
     title: "Gewone kledij",
+
     icon: "👕",
+
     items: [
+
       {
+
         id: "tshirts",
+
         label: "T-shirts",
+
       },
+
       {
+
         id: "truien",
+
         label: "Truien",
+
       },
+
       {
+
         id: "broeken",
+
         label: "Broeken",
+
       },
+
       {
+
         id: "ondergoed",
+
         label: "Voldoende ondergoed",
+
       },
+
       {
+
         id: "sokken",
+
         label: "Gewone sokken",
+
       },
+
       {
+
         id: "pyjama",
+
         label: "Pyjama",
+
       },
+
       {
+
         id: "schoenen",
+
         label: "Comfortabele schoenen",
+
       },
+
       {
+
         id: "pantoffels",
+
         label: "Pantoffels / slippers",
+
         note: "Optioneel voor in het verblijf.",
+
       },
+
     ],
+
   },
+
   {
+
     title: "Toilet & verzorging",
+
     icon: "🧴",
+
     items: [
+
       {
+
         id: "handdoeken",
+
         label: "Handdoeken",
+
         note: "Beddengoed is voorzien door het pension.",
+
         important: true,
+
       },
+
       {
+
         id: "toiletgerief",
+
         label: "Toiletgerief",
+
       },
+
       {
+
         id: "tandenborstel",
+
         label: "Tandenborstel & tandpasta",
+
       },
+
       {
+
         id: "deo",
+
         label: "Deodorant",
+
       },
+
       {
+
         id: "douchegel",
+
         label: "Douchegel / shampoo",
+
       },
+
       {
+
         id: "haarborstel",
+
         label: "Kam / haarborstel",
+
       },
+
       {
+
         id: "maandverband",
+
         label: "Eventuele maandverbanden / tampons",
+
       },
+
       {
+
         id: "zakdoeken",
+
         label: "Zakdoeken",
+
       },
+
     ],
+
   },
+
   {
+
     title: "Medicatie",
+
     icon: "💊",
+
     items: [
+
       {
+
         id: "persoonlijke-medicatie",
+
         label: "Persoonlijke medicatie",
+
         note: "Neem enkel medicatie mee die je zelf nodig hebt.",
+
       },
+
     ],
+
   },
+
   {
+
     title: "Elektronica",
+
     icon: "🔌",
+
     items: [
+
       {
+
         id: "gsm-lader",
+
         label: "Gsm-lader",
+
         important: true,
+
       },
+
       {
+
         id: "smartwatch-lader",
+
         label: "Lader smartwatch",
+
         note: "Indien nodig.",
+
       },
+
       {
+
         id: "powerbank-extra",
+
         label: "Powerbank + laadkabel",
+
         note: "Optioneel.",
+
       },
+
     ],
+
   },
+
   {
+
     title: "Vrije tijd",
+
     icon: "🎲",
+
     items: [
+
       {
+
         id: "gezelschapsspel",
+
         label: "1 gezelschapsspel per 4 vrienden",
+
         note: "Spreek onderling af wie een spel meeneemt.",
+
       },
+
       {
+
         id: "boek",
+
         label: "Boek / tijdschrift",
+
         note: "Optioneel.",
+
       },
+
     ],
+
   },
+
 ];
+
 /* =========================================================
+
    SKI- EN SNOWBOARDGROEPEN 2026
+
 ========================================================= */
+
 const sneeuwstageGroepen = [
-  { nummer: 1, titel: "Ski • beginners", icoon: "🎿", leden: [
+
+  { nummer: 1, titel: "Ski • beginners", icoon: "🎿", begeleiders: ["Vermoere"], leden: [
+
     "Lenthel Vercruysse", "Lilou Delcour", "Kobi Maes", "Jolien Stockman",
+
     "Lena Vandenbussche", "Nova De Jonghe", "Arnaud Coreelman",
+
     "Mateo Schoonjans", "Niels De Brauwere", "Gaspard Vanneste",
+
     "Wout Vandenbulcke", "Joppe Steurbaut"
+
   ] },
-  { nummer: 2, titel: "Ski • beginners", icoon: "🎿", leden: [
+
+  { nummer: 2, titel: "Ski • beginners", icoon: "🎿", begeleiders: ["Kobe"], leden: [
+
     "Louise Vandecasteele", "Alessio Monnart", "Iljo Vandenbogaerde",
+
     "Louna Fevereiro", "Jason Vandeghinste", "Lotte Vandenabeele",
+
     "Elise Vandeginste", "Laura-Mae Gezels", "Floor De Smeyter",
-    "Louisa-Maria De Geeter", "Nom Dawyndt"
+
+    "Louisa-Maria De Geeter", "Nom Dawyndt", "Ela Gervalla"
+
   ] },
-  { nummer: 3, titel: "Ski • ervaring", icoon: "⛷️", leden: [
-    "Arne Naessens", "Naomi Vandenborre", "Ela Gervalla",
+
+  { nummer: 3, titel: "Ski • ervaring", icoon: "⛷️", begeleiders: ["Seppe"], leden: [
+
+    "Arne Naessens", "Naomi Vandenborre",
+
     "Felke Van den Berghe", "Remi Fourneau", "Rémi-Maxence Dumont",
+
     "Mathis D'haene", "Aeron Wastijn", "Bibiana Vanhonacker",
+
     "Kato Schatteman", "Felice Gryspeert", "Laura-Marie Bouts"
+
   ] },
-  { nummer: 4, titel: "Ski • gevorderden", icoon: "🏔️", leden: [
+
+  { nummer: 4, titel: "Ski • gevorderden", icoon: "🏔️", begeleiders: ["Chris"], leden: [
+
     "Aerjen De Pauw", "Cas Messiaen", "Enna Vanpevenaeyge",
+
     "Ashley Marbach", "Ode Vanavermaete", "Janne Demets",
+
     "Sam De Leeuw", "Anouk Gryspeert"
+
   ] },
-  { nummer: 5, titel: "Snowboard • gevorderden", icoon: "🏂", leden: [
+
+  { nummer: 5, titel: "Snowboard • gevorderden", icoon: "🏂", begeleiders: ["Vandeborre", "Labie"], leden: [
+
     "Célestine Wieme", "Indiraj Deprez", "Mathis Choquet",
+
     "Mathias Coudyzer", "Seppe Libiez", "Ciel Coussement",
+
     "Lou De Jaegher", "Lana Turpin"
+
   ] }
+
 ] as const;
+
+
 
 function normaliseerNaam(naam: string) {
-  return naam.normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").toLocaleLowerCase("nl-BE").trim();
+
+  return naam.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase("nl-BE").trim();
+
 }
+
+
 
 function SneeuwstageGroepen() {
+
   const [zoekterm, setZoekterm] = useState("");
+
   const [onthuld, setOnthuld] = useState(false);
+
   const zoek = normaliseerNaam(zoekterm);
+
   const gevonden = zoek.length >= 2
+
     ? sneeuwstageGroepen.flatMap(g => g.leden
+
         .filter(naam => normaliseerNaam(naam).includes(zoek))
+
         .map(naam => ({ naam, groep: g.nummer })))
+
     : [];
 
+
+
   return (
+
     <section className="mt-4 space-y-4">
+
       <div className="relative overflow-hidden rounded-3xl border border-[#89C2AA]/30 bg-gradient-to-br from-[#16374C] via-[#173C4B] to-[#28594F] p-5 shadow-xl sm:p-7">
+
         <div className="pointer-events-none absolute -right-8 -top-10 text-[110px] opacity-10">❄️</div>
+
         <span className="inline-flex rounded-full border border-white/20 bg-white/10 px-3 py-1 text-[11px] font-black uppercase tracking-widest text-[#C8F1E0]">
+
           Sneeuwstage 2026 • Ahrntal
+
         </span>
+
         <h2 className="mt-4 text-2xl font-black text-white sm:text-3xl">🎉 De groepen zijn bekend!</h2>
+
         <p className="mt-2 max-w-2xl text-sm leading-6 text-white/80">
+
           Ontdek met wie je straks de pistes van Speikboden en Klausberg verovert.
+
           Zoek je naam of bekijk alle groepen hieronder. Wij hebben er alvast zin in! ⛷️❄️
+
         </p>
+
         <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-white/85">
+
           <span className="rounded-full bg-white/10 px-3 py-2">👥 51 deelnemers</span>
+
           <span className="rounded-full bg-white/10 px-3 py-2">🎿 4 skigroepen</span>
+
           <span className="rounded-full bg-white/10 px-3 py-2">🏂 1 snowboardgroep</span>
+
         </div>
+
       </div>
+
       <div style={styles.panel}>
+
         <label htmlFor="groep-zoeken" className="block text-base font-black text-white">
+
           🔎 Zoek jouw groep
+
         </label>
+
         <p className="mt-1 text-xs leading-5 text-white/60">Typ minstens twee letters van je voor- of achternaam.</p>
+
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+
           <input
+
             id="groep-zoeken"
+
             type="search"
+
             autoComplete="off"
+
             value={zoekterm}
+
             onChange={e => { setZoekterm(e.target.value); setOnthuld(false); }}
+
             onKeyDown={e => { if (e.key === "Enter" && gevonden.length) setOnthuld(true); }}
+
             placeholder="Bijvoorbeeld: Mathis Choquet"
+
             className="min-w-0 flex-1 rounded-2xl border border-white/20 bg-black/25 px-4 py-3 text-sm text-white outline-none placeholder:text-white/35 focus:border-[#89C2AA]"
+
           />
+
           <button type="button" onClick={() => setOnthuld(true)}
+
             disabled={!gevonden.length}
+
             className="rounded-2xl bg-[#89C2AA] px-5 py-3 text-sm font-black text-[#10313A] transition hover:bg-[#A8DDC8] disabled:cursor-not-allowed disabled:opacity-40">
+
             ✨ Onthul mijn groep
+
           </button>
+
         </div>
+
         {zoek.length >= 2 && gevonden.length === 0 && (
+
           <p role="status" className="mt-3 text-sm text-amber-200">
+
             Geen naam gevonden. Controleer de schrijfwijze of probeer je achternaam.
+
           </p>
+
         )}
+
         {onthuld && gevonden.length > 0 && (
+
           <div role="status" aria-live="polite"
+
             className="mt-4 animate-[fadeIn_450ms_ease-out] rounded-2xl border border-[#89C2AA]/40 bg-[#89C2AA]/15 p-4">
+
             <div className="text-xs font-black uppercase tracking-widest text-[#B9EBD4]">🎉 Gevonden!</div>
+
             {gevonden.map(({ naam, groep }) => (
+
               <div key={naam} className="mt-2 text-base font-bold text-white">
+
                 {naam} <span className="text-[#B9EBD4]">→ Groep {groep}</span>
+
               </div>
+
             ))}
+
             <p className="mb-0 mt-2 text-xs text-white/65">Je groep vind je ook in het overzicht hieronder.</p>
+
           </div>
+
         )}
+
       </div>
+
       <div className="grid gap-3 lg:grid-cols-2">
+
         {sneeuwstageGroepen.map(groep => (
+
           <article key={groep.nummer} className="overflow-hidden rounded-3xl border border-white/15 bg-white/[0.055] shadow-lg">
+
             <div className="flex items-center justify-between gap-3 border-b border-white/10 bg-white/[0.045] p-4">
+
               <div className="flex items-center gap-3">
+
                 <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[#89C2AA]/15 text-2xl">{groep.icoon}</span>
+
                 <div>
+
                   <h3 className="m-0 text-lg font-black text-white">Groep {groep.nummer}</h3>
+
                   <p className="m-0 text-xs text-white/60">{groep.titel}</p>
+
+                  <p className="mt-1 text-xs font-bold text-[#B9EBD4]">
+                    👨‍🏫 {groep.begeleiders.length > 1 ? "Begeleiders" : "Begeleider"}: {groep.begeleiders.join(" & ")}
+                  </p>
+
                 </div>
+
               </div>
+
               <span className="shrink-0 rounded-full border border-white/15 px-3 py-1 text-xs font-bold text-white/75">
+
                 {groep.leden.length} leerlingen
+
               </span>
+
             </div>
+
             <ul className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
+
               {groep.leden.map(naam => {
+
                 const match = zoek.length >= 2 && normaliseerNaam(naam).includes(zoek);
+
                 return (
+
                   <li key={naam} className={[
+
                     "rounded-xl border px-3 py-2.5 text-sm font-semibold transition",
+
                     match ? "border-[#89C2AA]/60 bg-[#89C2AA]/20 text-white" :
+
                       "border-white/10 bg-black/15 text-white/80"
+
                   ].join(" ")}>
+
                     {match ? "⭐ " : "❄️ "}{naam}
+
                   </li>
+
                 );
+
               })}
+
             </ul>
+
           </article>
+
         ))}
+
       </div>
+
       <div className="rounded-3xl border border-amber-200/25 bg-amber-200/[0.08] p-4">
+
         <h3 className="m-0 text-sm font-black text-amber-100">ℹ️ De groepsindeling kan nog wijzigen</h3>
+
         <p className="mb-0 mt-2 text-sm leading-6 text-white/75">
+
           Tijdens de eerste twee dagen bekijken de monitoren of iedereen op het juiste niveau zit.
+
           Indien nodig kan je nog naar een andere groep worden verplaatst, zodat iedereen veilig
+
           kan bijleren en plezier maken.
+
         </p>
+
       </div>
+
       <div className="rounded-3xl border border-[#89C2AA]/25 bg-[#89C2AA]/10 p-5 text-center">
+
         <p className="m-0 text-base font-black text-white">🎿 Materiaal klaar? Wij tellen af!</p>
+
         <p className="mb-0 mt-2 text-sm text-white/70">Tot snel op de piste! ⛷️❄️</p>
+
       </div>
+
     </section>
+
   );
+
 }
+
+
 
 function Reisbrochure() {
+
   const pdf = "/sneeuwstage/reisbrochure-2026.pdf";
+
   return (
+
     <section className="mt-4 space-y-4">
+
       <div className="rounded-3xl border border-[#89C2AA]/30 bg-gradient-to-br from-[#18394A] to-[#245A52] p-5 sm:p-7">
+
         <div className="text-4xl">📖</div>
+
         <h2 className="mt-3 text-2xl font-black text-white">Jouw reisgids 2026</h2>
+
         <p className="mt-2 max-w-2xl text-sm leading-6 text-white/75">
+
           Alles over de busreis, het verblijf, de skilessen, je bagage, de afspraken
+
           en het programma. Lees de brochure zeker voor vertrek.
+
         </p>
+
         <div className="mt-4 flex flex-wrap gap-2">
+
           <a href={pdf} target="_blank" rel="noopener noreferrer"
+
             className="rounded-2xl bg-[#89C2AA] px-4 py-3 text-sm font-black text-[#10313A] hover:bg-[#A8DDC8]">
+
             📖 Open brochure
+
           </a>
+
           <a href={pdf} download="Reisbrochure-sneeuwstage-2026.pdf"
+
             className="rounded-2xl border border-white/25 bg-white/10 px-4 py-3 text-sm font-black text-white hover:bg-white/15">
+
             ⬇️ Download PDF
+
           </a>
+
         </div>
+
       </div>
+
       <div className="overflow-hidden rounded-3xl border border-white/15 bg-white/[0.04]">
+
         <div className="border-b border-white/10 p-4 text-sm font-bold text-white">📄 Reisbrochure • 9 pagina’s</div>
+
         <iframe src={`${pdf}#toolbar=1`} title="Reisbrochure sneeuwstage 2026"
+
           className="h-[65vh] min-h-[440px] w-full bg-white sm:h-[780px]" />
+
       </div>
+
       <p className="text-xs leading-5 text-white/55">
+
         Verschijnt de PDF niet op jouw toestel? Gebruik dan de knop ‘Open brochure’.
+
       </p>
+
     </section>
+
   );
+
+}
+
+
+
+/* =========================================================
+
+   PAGE
+
+\========================================================= */
+
+export default function SneeuwstagePage() {
+
+  const [activeTab, setActiveTab] = useState<Tab>("info");
+
+  const [checked, setChecked] = useState<Record<string, boolean>>(
+
+    {}
+
+  );
+
+  const [checklistLoaded, setChecklistLoaded] = useState(false);
+
+  /* =======================================================
+
+     CHECKLIST LADEN
+
+  \======================================================= */
+
+  useEffect(() => {
+
+    try {
+
+      const saved = window.localStorage.getItem(
+
+        "sneeuwstage-2026-checklist"
+
+      );
+
+      if (saved) {
+
+        setChecked(JSON.parse(saved));
+
+      }
+
+    } catch (error) {
+
+      console.error(
+
+        "Checklist kon niet geladen worden:",
+
+        error
+
+      );
+
+    } finally {
+
+      setChecklistLoaded(true);
+
+    }
+
+  }, []);
+
+  /* =======================================================
+
+     CHECKLIST OPSLAAN
+
+  \======================================================= */
+
+  useEffect(() => {
+
+    if (!checklistLoaded) return;
+
+    try {
+
+      window.localStorage.setItem(
+
+        "sneeuwstage-2026-checklist",
+
+        JSON.stringify(checked)
+
+      );
+
+    } catch (error) {
+
+      console.error(
+
+        "Checklist kon niet opgeslagen worden:",
+
+        error
+
+      );
+
+    }
+
+  }, [checked, checklistLoaded]);
+
+  /* =======================================================
+
+     CHECKLIST STATISTIEKEN
+
+  \======================================================= */
+
+  const allItems = useMemo(
+
+    () => checklistGroups.flatMap((group) => group.items),
+
+    []
+
+  );
+
+  const checkedCount = allItems.filter(
+
+    (item) => checked[item.id]
+
+  ).length;
+
+  const totalCount = allItems.length;
+
+  const percentage =
+
+    totalCount > 0
+
+      ? Math.round((checkedCount / totalCount) * 100)
+
+      : 0;
+
+  function toggleItem(id: string) {
+
+    setChecked((prev) => ({
+
+      ...prev,
+
+      [id]: !prev[id],
+
+    }));
+
+  }
+
+  function resetChecklist() {
+
+    const ok = window.confirm(
+
+      "Wil je alle vinkjes van de checklist verwijderen?"
+
+    );
+
+    if (!ok) return;
+
+    setChecked({});
+
+  }
+
+  /* =======================================================
+
+     RENDER
+
+  \======================================================= */
+
+  return (
+
+    <AppShell
+
+      title="LO App"
+
+      subtitle="Sneeuwstage"
+
+    >
+
+      {/* ===================================================
+
+          HERO
+
+      \=================================================== */}
+
+      <BaseHero
+
+        label="EXTRAMURALE ACTIVITEIT"
+
+        title={
+
+          <>
+
+            Sneeuwstage{" "}
+
+            <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
+
+              2026
+
+            </span>
+
+          </>
+
+        }
+
+        description="Alle praktische informatie voor onze sneeuwstage naar Ahrntal in Italië."
+
+        imageSrc="/lo/LO.png"
+
+        imageAlt="Sneeuwstage"
+
+        quoteTitle="Ahrntal • Italië"
+
+        quote="Samen sporten, leren en genieten van de bergen."
+
+        quoteAuthor="LO team"
+
+        actions={
+
+          <Link
+
+            href="/extramurale-sportactiviteiten"
+
+            className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45"
+
+          >
+
+            ← Terug
+
+          </Link>
+
+        }
+
+      />
+
+      {/* ===================================================
+
+          NAVIGATIE
+
+          GSM: 2 kolommen
+
+          TABLET: 3 kolommen
+
+          DESKTOP: 6 kolommen
+
+      \=================================================== */}
+
+      <div className="mt-5">
+
+        <div className="mb-2 text-[12px] font-black uppercase tracking-[0.12em] text-white/45">
+
+          Sneeuwstage
+
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
+
+          {tabs.map((tab) => {
+
+            const active = activeTab === tab.id;
+
+            return (
+
+              <button
+
+                key={tab.id}
+
+                type="button"
+
+                onClick={() => setActiveTab(tab.id)}
+
+                aria-pressed={active}
+
+                className={[
+
+                  "relative flex min-h-[76px] w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-all duration-200",
+
+                  active
+
+                    ? "border-[#89C2AA]/60 bg-[#4B8E8D]/20 shadow-[0_8px_24px_rgba(0,0,0,0.20)]"
+
+                    : "border-white/10 bg-white/[0.05] hover:border-white/20 hover:bg-white/[0.08]",
+
+                ].join(" ")}
+
+              >
+
+                <span
+
+                  className={[
+
+                    "grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl transition",
+
+                    active
+
+                      ? "bg-[#89C2AA]/20"
+
+                      : "bg-black/20",
+
+                  ].join(" ")}
+
+                >
+
+                  {tab.icon}
+
+                </span>
+
+                <span className="min-w-0">
+
+                  <span
+
+                    className={[
+
+                      "block text-[13px] font-black leading-tight",
+
+                      active
+
+                        ? "text-white"
+
+                        : "text-white/75",
+
+                    ].join(" ")}
+
+                  >
+
+                    {tab.label}
+
+                  </span>
+
+                  {active && (
+
+                    <span className="mt-1 block text-[10px] font-bold uppercase tracking-wide text-[#89C2AA]">
+
+                      Geopend
+
+                    </span>
+
+                  )}
+
+                </span>
+
+                {active && (
+
+                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#89C2AA] shadow-[0_0_10px_rgba(137,194,170,0.75)]" />
+
+                )}
+
+              </button>
+
+            );
+
+          })}
+
+        </div>
+
+      </div>
+
+      {/* ===================================================
+
+          ALGEMENE INFO
+
+      \=================================================== */}
+
+      {activeTab === "materiaal" && <EigenMateriaal />}
+
+      {activeTab === "info" && (
+
+        <section className="mt-4">
+
+          <SectionTitle
+
+            title="Algemene informatie"
+
+            description="De belangrijkste informatie over de sneeuwstage."
+
+          />
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+
+            <InfoCard
+
+              icon="📅"
+
+              label="Vertrek"
+
+              value="18 december 2026"
+
+            />
+
+            <InfoCard
+
+              icon="🏠"
+
+              label="Terug"
+
+              value="24 december 2026"
+
+            />
+
+            <InfoCard
+
+              icon="📍"
+
+              label="Bestemming"
+
+              value="Ahrntal, Italië"
+
+            />
+
+            <InfoCard
+
+              icon="💶"
+
+              label="Prijs"
+
+              value="€ 775"
+
+            />
+
+            <InfoCard
+
+              icon="⛷️"
+
+              label="Activiteit"
+
+              value="Ski of snowboard"
+
+            />
+
+            <InfoCard
+
+              icon="🚌"
+
+              label="Vervoer"
+
+              value="Autocar"
+
+            />
+
+          </div>
+
+          <button type="button" onClick={() => setActiveTab("brochure")}
+
+            className="mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-[#89C2AA]/30 bg-[#89C2AA]/10 p-4 text-left transition hover:bg-[#89C2AA]/20">
+
+            <span><span className="block font-black text-white">📖 Reisbrochure 2026</span>
+
+              <span className="mt-1 block text-xs text-white/65">Alle reisinfo, afspraken en het programma op één plek.</span></span>
+
+            <span className="shrink-0 text-sm font-black text-[#B9EBD4]">Bekijk →</span>
+
+          </button>
+
+          <div style={styles.panel} className="mt-4">
+
+            <div className="text-lg font-black text-white">
+
+              🏔️ Sneeuwstage
+
+            </div>
+
+            <p className="mt-2 mb-0 text-sm leading-6 text-white/70">
+
+              Op deze pagina vind je alle praktische
+
+              informatie voor de sneeuwstage. Controleer voor
+
+              vertrek zeker de checklist en lees ook de
+
+              informatie over annulering en verzekering.
+
+            </p>
+
+          </div>
+
+          <div
+
+            style={styles.notice}
+
+            className="mt-3"
+
+          >
+
+            <div className="font-black text-white">
+
+              ℹ️ Meer praktische informatie volgt
+
+            </div>
+
+            <div className="mt-1 text-sm leading-6 text-white/70">
+
+              Het vertrek is op 18 december om 17.00 uur. We verzamelen om 16.30 uur
+
+              op de parking naast de school. Bekijk ook de reisbrochure voor alle afspraken.
+
+            </div>
+
+          </div>
+
+        </section>
+
+      )}
+
+      {/* ===================================================
+
+          CHECKLIST
+
+      \=================================================== */}
+
+      {activeTab === "checklist" && (
+
+        <section className="mt-4">
+
+          <SectionTitle
+
+            title="Checklist"
+
+            description="Vink af wat je al hebt klaargelegd. Je voortgang wordt automatisch op dit toestel bewaard."
+
+          />
+
+          <div style={styles.panel}>
+
+            <div className="flex items-center justify-between gap-4">
+
+              <div>
+
+                <div className="text-sm font-black text-white">
+
+                  🎒 Mijn bagage
+
+                </div>
+
+                <div className="mt-1 text-xs text-white/60">
+
+                  {checkedCount} van {totalCount} afgevinkt
+
+                </div>
+
+              </div>
+
+              <div className="text-2xl font-black text-white">
+
+                {percentage}%
+
+              </div>
+
+            </div>
+
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/30">
+
+              <div
+
+                className="h-full rounded-full bg-white/70 transition-all duration-300"
+
+                style={{
+
+                  width: `${percentage}%`,
+
+                }}
+
+              />
+
+            </div>
+
+          </div>
+
+          <div className="mt-3 rounded-3xl border border-amber-300/20 bg-amber-300/[0.08] p-4">
+
+            <div className="font-black text-white">
+
+              ⚠️ Vergeet je handbagage niet
+
+            </div>
+
+            <p className="mt-1 mb-0 text-sm leading-6 text-white/70">
+
+              Steek bij vertrek minstens{" "}
+
+              <strong className="text-white">
+
+                één paar skisokken
+
+              </strong>{" "}
+
+              in je handbagage.
+
+            </p>
+
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-2">
+
+            {checklistGroups.map((group) => (
+
+              <div
+
+                key={group.title}
+
+                style={styles.panel}
+
+              >
+
+                <div className="mb-3 flex items-center gap-2">
+
+                  <span className="text-xl">
+
+                    {group.icon}
+
+                  </span>
+
+                  <h3 className="m-0 text-base font-black text-white">
+
+                    {group.title}
+
+                  </h3>
+
+                </div>
+
+                <div className="space-y-2">
+
+                  {group.items.map((item) => {
+
+                    const done = !!checked[item.id];
+
+                    return (
+
+                      <button
+
+                        key={item.id}
+
+                        type="button"
+
+                        onClick={() =>
+
+                          toggleItem(item.id)
+
+                        }
+
+                        className={[
+
+                          "flex w-full items-start gap-3 rounded-2xl border p-3 text-left transition",
+
+                          done
+
+                            ? "border-emerald-300/20 bg-emerald-300/[0.08]"
+
+                            : "border-white/10 bg-black/10 hover:bg-white/[0.05]",
+
+                        ].join(" ")}
+
+                      >
+
+                        <span
+
+                          className={[
+
+                            "mt-[1px] grid h-6 w-6 shrink-0 place-items-center rounded-lg border text-sm font-black",
+
+                            done
+
+                              ? "border-emerald-300/30 bg-emerald-300/20 text-emerald-100"
+
+                              : "border-white/20 bg-black/20 text-transparent",
+
+                          ].join(" ")}
+
+                        >
+
+                          ✓
+
+                        </span>
+
+                        <span className="min-w-0">
+
+                          <span
+
+                            className={[
+
+                              "block text-sm font-bold",
+
+                              done
+
+                                ? "text-white/55 line-through"
+
+                                : "text-white",
+
+                            ].join(" ")}
+
+                          >
+
+                            {item.label}
+
+                            {item.important && !done && (
+
+                              <span className="ml-2 text-[10px] font-black uppercase tracking-wide text-amber-200">
+
+                                belangrijk
+
+                              </span>
+
+                            )}
+
+                          </span>
+
+                          {item.note && (
+
+                            <span className="mt-1 block text-xs leading-5 text-white/55">
+
+                              {item.note}
+
+                            </span>
+
+                          )}
+
+                        </span>
+
+                      </button>
+
+                    );
+
+                  })}
+
+                </div>
+
+              </div>
+
+            ))}
+
+          </div>
+
+          <div className="mt-4 flex justify-end">
+
+            <button
+
+              type="button"
+
+              onClick={resetChecklist}
+
+              className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-xs font-black text-white/60 transition hover:bg-black/40 hover:text-white"
+
+            >
+
+              Checklist opnieuw instellen
+
+            </button>
+
+          </div>
+
+        </section>
+
+      )}
+
+      {/* ===================================================
+
+          ANNULERING
+
+      \=================================================== */}
+
+      {activeTab === "annulering" && (
+
+        <section className="mt-4">
+
+          <SectionTitle
+
+            title="Annulering & verzekering"
+
+            description="De belangrijkste JOSK-annuleringsvoorwaarden voor de sneeuwstage."
+
+          />
+
+          <div className="grid gap-3 md:grid-cols-3">
+
+            <PenaltyCard
+
+              period="Tot en met 29 dagen voor vertrek"
+
+              cost="€ 250 p.p."
+
+            />
+
+            <PenaltyCard
+
+              period="Van 28 t.e.m. 8 dagen voor vertrek"
+
+              cost="50%"
+
+              sub="van de totale reissom p.p."
+
+            />
+
+            <PenaltyCard
+
+              period="Vanaf 7 dagen voor vertrek"
+
+              cost="100%"
+
+              sub="van de totale reissom p.p."
+
+            />
+
+          </div>
+
+          <div
+
+            style={styles.panel}
+
+            className="mt-4"
+
+          >
+
+            <div className="text-lg font-black text-white">
+
+              🛡️ PROTECTIONS annuleringsverzekering
+
+            </div>
+
+            <p className="mt-2 text-sm leading-6 text-white/70">
+
+              JOSK adviseert om bij boeking een
+
+              annuleringsverzekering PROTECTIONS af te
+
+              sluiten. Deze verzekering voor schoolreizen
+
+              kost <strong className="text-white">€25 p.p.</strong>
+
+            </p>
+
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+
+              <SmallStat
+
+                label="Poliskost"
+
+                value="€25"
+
+              />
+
+              <SmallStat
+
+                label="Eigen risico"
+
+                value="€50"
+
+              />
+
+              <SmallStat
+
+                label="Totale kost*"
+
+                value="€75"
+
+              />
+
+            </div>
+
+            <p className="mt-3 mb-0 text-xs leading-5 text-white/50">
+
+              * Volgens de JOSK-voorwaarden bij een geldige
+
+              reden en na voorlegging van de nodige geldige
+
+              bewijsstukken.
+
+            </p>
+
+          </div>
+
+          <div className="mt-3 rounded-3xl border border-red-300/20 bg-red-300/[0.07] p-4">
+
+            <div className="font-black text-white">
+
+              ⚠️ Annuleren moet schriftelijk
+
+            </div>
+
+            <p className="mt-2 mb-0 text-sm leading-6 text-white/70">
+
+              Volgens de JOSK-voorwaarden moet een annulering
+
+              onmiddellijk en schriftelijk aan JOSK worden
+
+              meegedeeld. Telefonische of mondelinge
+
+              annuleringen worden niet aanvaard.
+
+            </p>
+
+          </div>
+
+          <div className="mt-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
+
+            <div className="font-black text-white">
+
+              🚫 No-show
+
+            </div>
+
+            <p className="mt-2 mb-0 text-sm leading-6 text-white/70">
+
+              Niet komen opdagen zonder schriftelijke
+
+              verwittiging resulteert volgens JOSK
+
+              automatisch in het verlies van 100% van de
+
+              reissom.
+
+            </p>
+
+          </div>
+
+          <div className="mt-4 text-xs leading-5 text-white/45">
+
+            Dit is een vereenvoudigd overzicht. De officiële
+
+            JOSK-reis- en annuleringsvoorwaarden blijven
+
+            bepalend.
+
+          </div>
+
+        </section>
+
+      )}
+
+      {/* ===================================================
+
+          KAMERS
+
+      \=================================================== */}
+
+      {activeTab === "kamers" && (
+
+        <ComingSoon
+
+          icon="🛏️"
+
+          title="Kamerverdeling"
+
+          description="De kamerverdeling wordt later door het LO-team gepubliceerd."
+
+        />
+
+      )}
+
+      {/* ===================================================
+
+          GROEPEN
+
+      \=================================================== */}
+
+      {activeTab === "groepen" && <SneeuwstageGroepen />}
+
+      {activeTab === "brochure" && <Reisbrochure />}
+
+      {/* ===================================================
+
+          FAQ
+
+      \=================================================== */}
+
+      {activeTab === "faq" && (
+
+        <section className="mt-4">
+
+          <SectionTitle
+
+            title="Veelgestelde vragen"
+
+            description="Praktische antwoorden voor de sneeuwstage."
+
+          />
+
+          <div className="space-y-3">
+
+            <Faq
+
+              question="Moet ik zelf handdoeken meenemen?"
+
+              answer="Ja. Neem zelf handdoeken mee. Het beddengoed wordt door het pension voorzien."
+
+            />
+
+            <Faq
+
+              question="Waar krijg ik mijn Eurocross-kaart?"
+
+              answer="Je ontvangt de Eurocross-kaart op de bus bij vertrek."
+
+            />
+
+            <Faq
+
+              question="Wat moet zeker in mijn handbagage?"
+
+              answer="Voorzie bij vertrek minstens één paar skisokken in je handbagage."
+
+            />
+
+            <Faq
+
+              question="Wat als ik last heb van wagenziekte?"
+
+              answer="Wie last heeft van wagenziekte voorziet zelf een geschikt middel tegen wagenziekte."
+
+            />
+
+            <Faq
+
+              question="Moet ik een extra gewone jas meenemen?"
+
+              answer="De school raadt aan om je skivest ook als gewone jas te gebruiken. Zo bespaar je plaats in je valies."
+
+            />
+
+            <Faq
+
+              question="Moet iedereen een gezelschapsspel meenemen?"
+
+              answer="Nee. Voorzie ongeveer één gezelschapsspel per vier vrienden en spreek onderling af wie welk spel meeneemt."
+
+            />
+
+            <Faq
+
+              question="Wanneer wordt de kamerverdeling bekendgemaakt?"
+
+              answer="De kamerverdeling wordt later door het LO-team op deze pagina gepubliceerd."
+
+            />
+
+            <Faq
+
+              question="Wanneer wordt mijn ski- of snowboardgroep bekendgemaakt?"
+
+              answer="De groepen zijn bekend! Bekijk het tabblad Groepen en zoek je naam om jouw groep te ontdekken."
+
+            />
+
+          </div>
+
+        </section>
+
+      )}
+
+    </AppShell>
+
+  );
+
 }
 
 /* =========================================================
-   PAGE
-\========================================================= */
-export default function SneeuwstagePage() {
-  const [activeTab, setActiveTab] = useState<Tab>("info");
-  const [checked, setChecked] = useState<Record<string, boolean>>(
-    {}
-  );
-  const [checklistLoaded, setChecklistLoaded] = useState(false);
-  /* =======================================================
-     CHECKLIST LADEN
-  \======================================================= */
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(
-        "sneeuwstage-2026-checklist"
-      );
-      if (saved) {
-        setChecked(JSON.parse(saved));
-      }
-    } catch (error) {
-      console.error(
-        "Checklist kon niet geladen worden:",
-        error
-      );
-    } finally {
-      setChecklistLoaded(true);
-    }
-  }, []);
-  /* =======================================================
-     CHECKLIST OPSLAAN
-  \======================================================= */
-  useEffect(() => {
-    if (!checklistLoaded) return;
-    try {
-      window.localStorage.setItem(
-        "sneeuwstage-2026-checklist",
-        JSON.stringify(checked)
-      );
-    } catch (error) {
-      console.error(
-        "Checklist kon niet opgeslagen worden:",
-        error
-      );
-    }
-  }, [checked, checklistLoaded]);
-  /* =======================================================
-     CHECKLIST STATISTIEKEN
-  \======================================================= */
-  const allItems = useMemo(
-    () => checklistGroups.flatMap((group) => group.items),
-    []
-  );
-  const checkedCount = allItems.filter(
-    (item) => checked[item.id]
-  ).length;
-  const totalCount = allItems.length;
-  const percentage =
-    totalCount > 0
-      ? Math.round((checkedCount / totalCount) * 100)
-      : 0;
-  function toggleItem(id: string) {
-    setChecked((prev) => ({
-      ...prev,
-      [id]: !prev[id],
-    }));
-  }
-  function resetChecklist() {
-    const ok = window.confirm(
-      "Wil je alle vinkjes van de checklist verwijderen?"
-    );
-    if (!ok) return;
-    setChecked({});
-  }
-  /* =======================================================
-     RENDER
-  \======================================================= */
-  return (
-    <AppShell
-      title="LO App"
-      subtitle="Sneeuwstage"
-    >
-      {/* ===================================================
-          HERO
-      \=================================================== */}
-      <BaseHero
-        label="EXTRAMURALE ACTIVITEIT"
-        title={
-          <>
-            Sneeuwstage{" "}
-            <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">
-              2026
-            </span>
-          </>
-        }
-        description="Alle praktische informatie voor onze sneeuwstage naar Ahrntal in Italië."
-        imageSrc="/lo/LO.png"
-        imageAlt="Sneeuwstage"
-        quoteTitle="Ahrntal • Italië"
-        quote="Samen sporten, leren en genieten van de bergen."
-        quoteAuthor="LO team"
-        actions={
-          <Link
-            href="/extramurale-sportactiviteiten"
-            className="inline-flex h-11 items-center rounded-2xl border border-slate-400/20 bg-black/35 px-4 font-black text-[rgba(234,240,255,0.92)] transition duration-200 hover:-translate-y-0.5 hover:border-slate-300/30 hover:bg-black/45"
-          >
-            ← Terug
-          </Link>
-        }
-      />
-      {/* ===================================================
-          NAVIGATIE
-          GSM: 2 kolommen
-          TABLET: 3 kolommen
-          DESKTOP: 6 kolommen
-      \=================================================== */}
-      <div className="mt-5">
-        <div className="mb-2 text-[12px] font-black uppercase tracking-[0.12em] text-white/45">
-          Sneeuwstage
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 2xl:grid-cols-8">
-          {tabs.map((tab) => {
-            const active = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActiveTab(tab.id)}
-                aria-pressed={active}
-                className={[
-                  "relative flex min-h-[76px] w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-all duration-200",
-                  active
-                    ? "border-[#89C2AA]/60 bg-[#4B8E8D]/20 shadow-[0_8px_24px_rgba(0,0,0,0.20)]"
-                    : "border-white/10 bg-white/[0.05] hover:border-white/20 hover:bg-white/[0.08]",
-                ].join(" ")}
-              >
-                <span
-                  className={[
-                    "grid h-10 w-10 shrink-0 place-items-center rounded-xl text-xl transition",
-                    active
-                      ? "bg-[#89C2AA]/20"
-                      : "bg-black/20",
-                  ].join(" ")}
-                >
-                  {tab.icon}
-                </span>
-                <span className="min-w-0">
-                  <span
-                    className={[
-                      "block text-[13px] font-black leading-tight",
-                      active
-                        ? "text-white"
-                        : "text-white/75",
-                    ].join(" ")}
-                  >
-                    {tab.label}
-                  </span>
-                  {active && (
-                    <span className="mt-1 block text-[10px] font-bold uppercase tracking-wide text-[#89C2AA]">
-                      Geopend
-                    </span>
-                  )}
-                </span>
-                {active && (
-                  <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-[#89C2AA] shadow-[0_0_10px_rgba(137,194,170,0.75)]" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      {/* ===================================================
-          ALGEMENE INFO
-      \=================================================== */}
-      {activeTab === "materiaal" && <EigenMateriaal />}
-      {activeTab === "info" && (
-        <section className="mt-4">
-          <SectionTitle
-            title="Algemene informatie"
-            description="De belangrijkste informatie over de sneeuwstage."
-          />
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <InfoCard
-              icon="📅"
-              label="Vertrek"
-              value="18 december 2026"
-            />
-            <InfoCard
-              icon="🏠"
-              label="Terug"
-              value="24 december 2026"
-            />
-            <InfoCard
-              icon="📍"
-              label="Bestemming"
-              value="Ahrntal, Italië"
-            />
-            <InfoCard
-              icon="💶"
-              label="Prijs"
-              value="€ 775"
-            />
-            <InfoCard
-              icon="⛷️"
-              label="Activiteit"
-              value="Ski of snowboard"
-            />
-            <InfoCard
-              icon="🚌"
-              label="Vervoer"
-              value="Autocar"
-            />
-          </div>
-          <button type="button" onClick={() => setActiveTab("brochure")}
-            className="mt-4 flex w-full items-center justify-between gap-3 rounded-2xl border border-[#89C2AA]/30 bg-[#89C2AA]/10 p-4 text-left transition hover:bg-[#89C2AA]/20">
-            <span><span className="block font-black text-white">📖 Reisbrochure 2026</span>
-              <span className="mt-1 block text-xs text-white/65">Alle reisinfo, afspraken en het programma op één plek.</span></span>
-            <span className="shrink-0 text-sm font-black text-[#B9EBD4]">Bekijk →</span>
-          </button>
-          <div style={styles.panel} className="mt-4">
-            <div className="text-lg font-black text-white">
-              🏔️ Sneeuwstage
-            </div>
-            <p className="mt-2 mb-0 text-sm leading-6 text-white/70">
-              Op deze pagina vind je alle praktische
-              informatie voor de sneeuwstage. Controleer voor
-              vertrek zeker de checklist en lees ook de
-              informatie over annulering en verzekering.
-            </p>
-          </div>
-          <div
-            style={styles.notice}
-            className="mt-3"
-          >
-            <div className="font-black text-white">
-              ℹ️ Meer praktische informatie volgt
-            </div>
-            <div className="mt-1 text-sm leading-6 text-white/70">
-              Het vertrek is op 18 december om 17.00 uur. We verzamelen om 16.30 uur
-              op de parking naast de school. Bekijk ook de reisbrochure voor alle afspraken.
-            </div>
-          </div>
-        </section>
-      )}
-      {/* ===================================================
-          CHECKLIST
-      \=================================================== */}
-      {activeTab === "checklist" && (
-        <section className="mt-4">
-          <SectionTitle
-            title="Checklist"
-            description="Vink af wat je al hebt klaargelegd. Je voortgang wordt automatisch op dit toestel bewaard."
-          />
-          <div style={styles.panel}>
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <div className="text-sm font-black text-white">
-                  🎒 Mijn bagage
-                </div>
-                <div className="mt-1 text-xs text-white/60">
-                  {checkedCount} van {totalCount} afgevinkt
-                </div>
-              </div>
-              <div className="text-2xl font-black text-white">
-                {percentage}%
-              </div>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/30">
-              <div
-                className="h-full rounded-full bg-white/70 transition-all duration-300"
-                style={{
-                  width: `${percentage}%`,
-                }}
-              />
-            </div>
-          </div>
-          <div className="mt-3 rounded-3xl border border-amber-300/20 bg-amber-300/[0.08] p-4">
-            <div className="font-black text-white">
-              ⚠️ Vergeet je handbagage niet
-            </div>
-            <p className="mt-1 mb-0 text-sm leading-6 text-white/70">
-              Steek bij vertrek minstens{" "}
-              <strong className="text-white">
-                één paar skisokken
-              </strong>{" "}
-              in je handbagage.
-            </p>
-          </div>
-          <div className="mt-4 grid gap-3 lg:grid-cols-2">
-            {checklistGroups.map((group) => (
-              <div
-                key={group.title}
-                style={styles.panel}
-              >
-                <div className="mb-3 flex items-center gap-2">
-                  <span className="text-xl">
-                    {group.icon}
-                  </span>
-                  <h3 className="m-0 text-base font-black text-white">
-                    {group.title}
-                  </h3>
-                </div>
-                <div className="space-y-2">
-                  {group.items.map((item) => {
-                    const done = !!checked[item.id];
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() =>
-                          toggleItem(item.id)
-                        }
-                        className={[
-                          "flex w-full items-start gap-3 rounded-2xl border p-3 text-left transition",
-                          done
-                            ? "border-emerald-300/20 bg-emerald-300/[0.08]"
-                            : "border-white/10 bg-black/10 hover:bg-white/[0.05]",
-                        ].join(" ")}
-                      >
-                        <span
-                          className={[
-                            "mt-[1px] grid h-6 w-6 shrink-0 place-items-center rounded-lg border text-sm font-black",
-                            done
-                              ? "border-emerald-300/30 bg-emerald-300/20 text-emerald-100"
-                              : "border-white/20 bg-black/20 text-transparent",
-                          ].join(" ")}
-                        >
-                          ✓
-                        </span>
-                        <span className="min-w-0">
-                          <span
-                            className={[
-                              "block text-sm font-bold",
-                              done
-                                ? "text-white/55 line-through"
-                                : "text-white",
-                            ].join(" ")}
-                          >
-                            {item.label}
-                            {item.important && !done && (
-                              <span className="ml-2 text-[10px] font-black uppercase tracking-wide text-amber-200">
-                                belangrijk
-                              </span>
-                            )}
-                          </span>
-                          {item.note && (
-                            <span className="mt-1 block text-xs leading-5 text-white/55">
-                              {item.note}
-                            </span>
-                          )}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              onClick={resetChecklist}
-              className="rounded-2xl border border-white/10 bg-black/25 px-4 py-3 text-xs font-black text-white/60 transition hover:bg-black/40 hover:text-white"
-            >
-              Checklist opnieuw instellen
-            </button>
-          </div>
-        </section>
-      )}
-      {/* ===================================================
-          ANNULERING
-      \=================================================== */}
-      {activeTab === "annulering" && (
-        <section className="mt-4">
-          <SectionTitle
-            title="Annulering & verzekering"
-            description="De belangrijkste JOSK-annuleringsvoorwaarden voor de sneeuwstage."
-          />
-          <div className="grid gap-3 md:grid-cols-3">
-            <PenaltyCard
-              period="Tot en met 29 dagen voor vertrek"
-              cost="€ 250 p.p."
-            />
-            <PenaltyCard
-              period="Van 28 t.e.m. 8 dagen voor vertrek"
-              cost="50%"
-              sub="van de totale reissom p.p."
-            />
-            <PenaltyCard
-              period="Vanaf 7 dagen voor vertrek"
-              cost="100%"
-              sub="van de totale reissom p.p."
-            />
-          </div>
-          <div
-            style={styles.panel}
-            className="mt-4"
-          >
-            <div className="text-lg font-black text-white">
-              🛡️ PROTECTIONS annuleringsverzekering
-            </div>
-            <p className="mt-2 text-sm leading-6 text-white/70">
-              JOSK adviseert om bij boeking een
-              annuleringsverzekering PROTECTIONS af te
-              sluiten. Deze verzekering voor schoolreizen
-              kost <strong className="text-white">€25 p.p.</strong>
-            </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-3">
-              <SmallStat
-                label="Poliskost"
-                value="€25"
-              />
-              <SmallStat
-                label="Eigen risico"
-                value="€50"
-              />
-              <SmallStat
-                label="Totale kost*"
-                value="€75"
-              />
-            </div>
-            <p className="mt-3 mb-0 text-xs leading-5 text-white/50">
-              * Volgens de JOSK-voorwaarden bij een geldige
-              reden en na voorlegging van de nodige geldige
-              bewijsstukken.
-            </p>
-          </div>
-          <div className="mt-3 rounded-3xl border border-red-300/20 bg-red-300/[0.07] p-4">
-            <div className="font-black text-white">
-              ⚠️ Annuleren moet schriftelijk
-            </div>
-            <p className="mt-2 mb-0 text-sm leading-6 text-white/70">
-              Volgens de JOSK-voorwaarden moet een annulering
-              onmiddellijk en schriftelijk aan JOSK worden
-              meegedeeld. Telefonische of mondelinge
-              annuleringen worden niet aanvaard.
-            </p>
-          </div>
-          <div className="mt-3 rounded-3xl border border-white/10 bg-white/[0.04] p-4">
-            <div className="font-black text-white">
-              🚫 No-show
-            </div>
-            <p className="mt-2 mb-0 text-sm leading-6 text-white/70">
-              Niet komen opdagen zonder schriftelijke
-              verwittiging resulteert volgens JOSK
-              automatisch in het verlies van 100% van de
-              reissom.
-            </p>
-          </div>
-          <div className="mt-4 text-xs leading-5 text-white/45">
-            Dit is een vereenvoudigd overzicht. De officiële
-            JOSK-reis- en annuleringsvoorwaarden blijven
-            bepalend.
-          </div>
-        </section>
-      )}
-      {/* ===================================================
-          KAMERS
-      \=================================================== */}
-      {activeTab === "kamers" && (
-        <ComingSoon
-          icon="🛏️"
-          title="Kamerverdeling"
-          description="De kamerverdeling wordt later door het LO-team gepubliceerd."
-        />
-      )}
-      {/* ===================================================
-          GROEPEN
-      \=================================================== */}
-      {activeTab === "groepen" && <SneeuwstageGroepen />}
-      {activeTab === "brochure" && <Reisbrochure />}
-      {/* ===================================================
-          FAQ
-      \=================================================== */}
-      {activeTab === "faq" && (
-        <section className="mt-4">
-          <SectionTitle
-            title="Veelgestelde vragen"
-            description="Praktische antwoorden voor de sneeuwstage."
-          />
-          <div className="space-y-3">
-            <Faq
-              question="Moet ik zelf handdoeken meenemen?"
-              answer="Ja. Neem zelf handdoeken mee. Het beddengoed wordt door het pension voorzien."
-            />
-            <Faq
-              question="Waar krijg ik mijn Eurocross-kaart?"
-              answer="Je ontvangt de Eurocross-kaart op de bus bij vertrek."
-            />
-            <Faq
-              question="Wat moet zeker in mijn handbagage?"
-              answer="Voorzie bij vertrek minstens één paar skisokken in je handbagage."
-            />
-            <Faq
-              question="Wat als ik last heb van wagenziekte?"
-              answer="Wie last heeft van wagenziekte voorziet zelf een geschikt middel tegen wagenziekte."
-            />
-            <Faq
-              question="Moet ik een extra gewone jas meenemen?"
-              answer="De school raadt aan om je skivest ook als gewone jas te gebruiken. Zo bespaar je plaats in je valies."
-            />
-            <Faq
-              question="Moet iedereen een gezelschapsspel meenemen?"
-              answer="Nee. Voorzie ongeveer één gezelschapsspel per vier vrienden en spreek onderling af wie welk spel meeneemt."
-            />
-            <Faq
-              question="Wanneer wordt de kamerverdeling bekendgemaakt?"
-              answer="De kamerverdeling wordt later door het LO-team op deze pagina gepubliceerd."
-            />
-            <Faq
-              question="Wanneer wordt mijn ski- of snowboardgroep bekendgemaakt?"
-              answer="De groepen zijn bekend! Bekijk het tabblad Groepen en zoek je naam om jouw groep te ontdekken."
-            />
-          </div>
-        </section>
-      )}
-    </AppShell>
-  );
-}
-/* =========================================================
+
    COMPONENTS
+
 \========================================================= */
+
 function SectionTitle({
+
   title,
+
   description,
+
 }: {
+
   title: string;
+
   description?: string;
+
 }) {
+
   return (
+
     <div className="mb-3">
+
       <h2 className="m-0 text-lg font-black text-white">
+
         {title}
+
       </h2>
+
       {description && (
+
         <p className="mt-1 mb-0 text-sm leading-6 text-white/60">
+
           {description}
+
         </p>
+
       )}
+
     </div>
+
   );
+
 }
+
 function InfoCard({
+
   icon,
+
   label,
+
   value,
+
 }: {
+
   icon: string;
+
   label: string;
+
   value: string;
+
 }) {
+
   return (
+
     <div style={styles.panel}>
+
       <div className="flex items-start gap-3">
+
         <div className="text-2xl">{icon}</div>
+
         <div>
+
           <div className="text-xs font-bold uppercase tracking-wide text-white/45">
+
             {label}
+
           </div>
+
           <div className="mt-1 font-black text-white">
+
             {value}
+
           </div>
+
         </div>
+
       </div>
+
     </div>
+
   );
+
 }
+
 function PenaltyCard({
+
   period,
+
   cost,
+
   sub,
+
 }: {
+
   period: string;
+
   cost: string;
+
   sub?: string;
+
 }) {
+
   return (
+
     <div style={styles.panel}>
+
       <div className="text-xs font-bold leading-5 text-white/55">
+
         {period}
+
       </div>
+
       <div className="mt-3 text-3xl font-black text-white">
+
         {cost}
+
       </div>
+
       {sub && (
+
         <div className="mt-1 text-xs text-white/50">
+
           {sub}
+
         </div>
+
       )}
+
     </div>
+
   );
+
 }
+
 function SmallStat({
+
   label,
+
   value,
+
 }: {
+
   label: string;
+
   value: string;
+
 }) {
+
   return (
+
     <div className="rounded-2xl border border-white/10 bg-black/15 p-3">
+
       <div className="text-xs text-white/50">
+
         {label}
+
       </div>
+
       <div className="mt-1 text-lg font-black text-white">
+
         {value}
+
       </div>
+
     </div>
+
   );
+
 }
+
 function ComingSoon({
+
   icon,
+
   title,
+
   description,
+
 }: {
+
   icon: string;
+
   title: string;
+
   description: string;
+
 }) {
+
   return (
+
     <section className="mt-4">
+
       <div
+
         style={styles.panel}
+
         className="py-10 text-center"
+
       >
+
         <div className="text-5xl">
+
           {icon}
+
         </div>
+
         <div className="mt-4 inline-flex rounded-full border border-amber-300/20 bg-amber-300/[0.08] px-3 py-1 text-[11px] font-black uppercase tracking-wider text-amber-100">
+
           🚧 Binnenkort
+
         </div>
+
         <h2 className="mt-4 mb-0 text-xl font-black text-white">
+
           {title}
+
         </h2>
+
         <p className="mx-auto mt-2 mb-0 max-w-lg text-sm leading-6 text-white/60">
+
           {description}
+
         </p>
+
       </div>
+
     </section>
+
   );
+
 }
+
 function Faq({
+
   question,
+
   answer,
+
 }: {
+
   question: string;
+
   answer: string;
+
 }) {
+
   return (
+
     <details
+
       style={styles.panel}
+
       className="group"
+
     >
+
       <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-black text-white">
+
         <span>{question}</span>
+
         <span className="text-lg text-white/45 transition group-open:rotate-45">
+
           +
+
         </span>
+
       </summary>
+
       <p className="mt-3 mb-0 border-t border-white/10 pt-3 text-sm leading-6 text-white/65">
+
         {answer}
+
       </p>
+
     </details>
+
   );
+
 }
+
 /* =========================================================
+
    STYLES
+
 \========================================================= */
+
 const styles: Record<string, React.CSSProperties> = {
+
   panel: {
+
     padding: 16,
+
     borderRadius: 22,
+
     background: ui.panel,
+
     border: `1px solid ${ui.border}`,
+
     boxShadow: "0 12px 28px rgba(0,0,0,0.14)",
+
     backdropFilter: "blur(10px)",
+
   },
+
   notice: {
+
     padding: 16,
+
     borderRadius: 22,
+
     background: "rgba(79,142,141,0.10)",
+
     border: "1px solid rgba(137,194,170,0.20)",
+
   },
+
 };
+
 const materiaalVelden = [
+
   ["ski_schoenen", "Skischoenen"], ["ski_latten", "Skilatten"],
+
   ["ski_helm", "Skihelm"], ["ski_stokken", "Skistokken"],
+
   ["snowboard_schoenen", "Snowboardschoenen"], ["snowboard_board", "Snowboard"],
+
   ["snowboard_helm", "Snowboardhelm"],
+
 ] as const;
+
 type MateriaalKey = typeof materiaalVelden[number][0];
+
 function EigenMateriaal() {
+
   const [client] = useState(() => createClient());
+
   const [stageId, setStageId] = useState("");
+
   const [values, setValues] = useState<Partial<Record<MateriaalKey, boolean>>>({});
+
   const [volledigeSet, setVolledigeSet] = useState<"" | "ja" | "nee">("");
+
   const [opmerking, setOpmerking] = useState("");
+
   const [loading, setLoading] = useState(true);
+
   const [saving, setSaving] = useState(false);
+
   const [allowed, setAllowed] = useState(false);
+
   const [readOnly, setReadOnly] = useState(false);
+
   const [message, setMessage] = useState("");
+
   useEffect(() => {
+
     let active = true;
+
     void (async () => {
+
       try {
+
         const { data: { user }, error: authError } = await client.auth.getUser();
+
         if (authError) throw authError;
+
         if (!user) throw new Error("Log in om je materiaal door te geven.");
+
         const { data: isLo, error: roleError } = await client.rpc("sneeuwstage_materiaal_lo");
+
         if (roleError) throw roleError;
+
         if (isLo) {
+
           if (active) { setReadOnly(true); setAllowed(true); }
+
           return;
+
         }
+
         const { data: stage, error } = await client.from("sneeuwstages").select("id").eq("slug", "sneeuwstage-2026").single();
+
         if (error) throw error;
+
         const { data: eligible, error: checkError } = await client.rpc("sneeuwstage_materiaal_deelnemer", { stage_id: stage.id });
+
         if (checkError) throw checkError;
+
         if (!eligible) throw new Error("Dit formulier is alleen voor actieve deelnemers aan de sneeuwstage.");
+
         const { data: answer, error: answerError } = await client.from("sneeuwstage_materiaal").select("*").eq("sneeuwstage_id", stage.id).eq("leerling_id", user.id).maybeSingle();
+
         if (answerError) throw answerError;
+
         if (active) {
+
           setStageId(stage.id); setAllowed(true);
+
           if (answer) {
+
             setValues(Object.fromEntries(materiaalVelden.map(([key]) => [key, answer[key] === true])));
+
             // Eerdere losse onderdelen blijven bewaard; laat de leerling de nieuwe keuze bevestigen.
+
           setVolledigeSet(typeof answer.volledige_set === "boolean" ? (answer.volledige_set ? "ja" : "nee") : "");
+
           setOpmerking(answer.opmerking ?? "");
+
           }
+
         }
+
       } catch (error) {
+
         if (active) setMessage(error instanceof Error ? error.message : String((error as { message?: string }).message ?? "Kon het formulier niet laden."));
+
       } finally { if (active) setLoading(false); }
+
     })();
+
     return () => { active = false; };
+
   }, [client]);
+
   async function save() {
+
     if (readOnly || !allowed || !stageId || saving) return;
+
     if (!volledigeSet) { setMessage("Kies eerst ja of nee bij de volledige set."); return; }
+
     setSaving(true); setMessage("");
+
     try {
+
       const { data: { user }, error: authError } = await client.auth.getUser();
+
       if (authError) throw authError;
+
       if (!user) throw new Error("Log opnieuw in.");
+
       const { error } = await client.from("sneeuwstage_materiaal").upsert({
+
         sneeuwstage_id: stageId, leerling_id: user.id,
+
         volledige_set: volledigeSet === "ja",
+
         opmerking: opmerking.trim(),
+
       }, { onConflict: "sneeuwstage_id,leerling_id" });
+
       if (error) throw error;
+
       setMessage("Opgeslagen. De LO-leerkrachten kunnen je antwoord bekijken.");
+
     } catch (error) { setMessage(error instanceof Error ? error.message : String((error as { message?: string }).message ?? "Opslaan mislukt.")); }
+
     finally { setSaving(false); }
+
   }
+
   return <section className="mt-4" style={styles.panel}>
+
     <SectionTitle title="🎿 Ski- & snowboardmateriaal" />
+
     <p className="text-sm leading-6 text-white/70">
+
       Een volledige set bestaat uit ski’s of een snowboard, schoenen en een helm, plus stokken voor skiërs. Alleen een volledige set geeft €25 korting.
+
     </p>
+
     <p className="text-sm leading-6 text-white/70">
+
       Neem je enkel losse onderdelen mee? Kies nee en vermeld ze bij opmerkingen. Hiervoor krijg je geen korting.
+
     </p>
+
     {readOnly && <p className="rounded-xl border border-white/20 bg-white/5 p-3 text-sm text-white/80">Je bekijkt als LO-leerkracht het leerlingformulier. Invullen en opslaan zijn uitgeschakeld. De antwoorden vind je onder Leerkrachten LO → Extramurale sportactiviteiten → Sneeuwstage.</p>}
+
     {loading ? <p>Formulier laden…</p> : allowed && <>
+
       <label className="mt-5 block text-sm font-bold" htmlFor="volledige-set">
+
         Ik neem een volledige ski- of snowboardset mee
+
       </label>
+
       <select id="volledige-set" disabled={saving || readOnly} value={volledigeSet}
+
         onChange={e => { setVolledigeSet(e.target.value as "" | "ja" | "nee"); setMessage(""); }}
+
         className="mt-2 w-full rounded-xl border border-white/20 bg-slate-900 p-3 text-white">
+
         <option value="">Kies ja of nee</option>
+
         <option value="ja">Ja — ik neem een volledige set mee (€25 korting)</option>
+
         <option value="nee">Nee — ik neem geen volledige set mee (geen korting)</option>
+
       </select>
+
       {Object.values(values).some(Boolean) && <p className="mt-2 text-xs leading-5 text-white/60">Je gaf eerder deze losse onderdelen door: {materiaalVelden.filter(([key]) => values[key]).map(([, label]) => label).join(", ")}. Bevestig hierboven of je een volledige set meeneemt en vermeld eventuele losse onderdelen bij opmerkingen.</p>}
+
       <label className="mt-4 block text-sm">Opmerkingen (optioneel)
+
         <textarea placeholder="Bijvoorbeeld: ik neem enkel mijn skischoenen en helm mee." maxLength={1000} disabled={saving || readOnly} value={opmerking} onChange={e => { setOpmerking(e.target.value); setMessage(""); }} className="mt-2 w-full rounded-xl border border-white/20 bg-black/20 p-3 text-white" rows={3} />
+
       </label>
+
       {!readOnly && <button type="button" onClick={save} disabled={saving || readOnly || !volledigeSet} className="mt-4 rounded-xl border border-white/30 bg-white/10 px-5 py-3 font-bold disabled:opacity-50">{saving ? "Opslaan…" : "Mijn materiaal opslaan"}</button>}
+
     </>}
+
     {message && <p role="status" className="mt-4 text-sm text-white">{message}</p>}
+
   </section>;
+
 }
