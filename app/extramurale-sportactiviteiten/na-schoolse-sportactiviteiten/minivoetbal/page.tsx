@@ -491,6 +491,18 @@ export default function MinivoetbalPage() {
           </div>
         </section>
 
+        {/* OPVALLENDE KNOP NAAR DE PEILING */}
+        {!laden && isLeerling && !gesloten && (
+          <a
+            href="#minivoetbal-peiling"
+            className="group flex w-full items-center justify-center gap-3 rounded-[22px] border border-emerald-300/40 bg-gradient-to-r from-emerald-400 via-green-400 to-cyan-400 px-5 py-5 text-center text-base font-black uppercase tracking-wide text-slate-950 shadow-[0_16px_42px_rgba(16,185,129,0.25)] transition hover:-translate-y-0.5 hover:brightness-110 sm:text-xl"
+          >
+            <span aria-hidden="true">⚽</span>
+            <span>Ik heb interesse – vul de peiling in</span>
+            <span aria-hidden="true" className="transition group-hover:translate-y-1">↓</span>
+          </a>
+        )}
+
         {/* CATEGORIEEN EN DATUMS */}
         <section className={panel}>
           <h2 className="text-xl font-black text-white">
@@ -556,7 +568,7 @@ export default function MinivoetbalPage() {
           </section>
         ) : isLeerling ? (
           /* LEERLINGENPEILING */
-          <section className={panel}>
+          <section id="minivoetbal-peiling" className={`${panel} scroll-mt-24`}>
             <div className="mb-6">
               <div className="text-xs font-black uppercase tracking-widest text-cyan-300">
                 Voor leerlingen
@@ -624,19 +636,23 @@ export default function MinivoetbalPage() {
                   </label>
 
                   <div className="flex flex-wrap gap-3">
-                    <Keuze
-                      actief={
-                        formulier.interesse === true
-                      }
+                    <button
+                      type="button"
+                      aria-pressed={formulier.interesse === true}
                       onClick={() =>
                         setFormulier((v) => ({
                           ...v,
                           interesse: true,
                         }))
                       }
+                      className={`w-full rounded-2xl border px-5 py-4 text-base font-black transition sm:w-auto ${
+                        formulier.interesse === true
+                          ? "border-emerald-200 bg-emerald-400 text-slate-950 shadow-[0_0_24px_rgba(52,211,153,0.22)]"
+                          : "border-emerald-400/50 bg-emerald-400/15 text-emerald-200 hover:bg-emerald-400/25"
+                      }`}
                     >
                       ✅ Ja, ik heb interesse
-                    </Keuze>
+                    </button>
 
                     <Keuze
                       actief={
