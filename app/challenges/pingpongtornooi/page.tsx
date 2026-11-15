@@ -191,7 +191,33 @@ export default function PingpongtornooiPage() {
     const isEigen = uid === w.speler1_id || uid === w.speler2_id;
     return <div key={w.id} style={{ ...paneel, padding: 15, display: "grid", gap: 10 }}>
       <div className="ping-flex ping-between"><span style={muted}>{w.ronde === "poule" ? `Poule ${pouleMap.get(w.poule_id ?? "") ?? "?"}` : w.ronde}</span><Status status={w.status} scoreIngediend={!!w.score_ingediend_door} /></div>
-      <div className="ping-flex ping-between" style={{ gap: 12 }}><strong>{naam(w.speler1_id)} <span style={{ color: "#9eb0c2" }}>vs.</span> {naam(w.speler2_id)}</strong>{w.status === "gespeeld" && <strong style={{ color: "#9fe2ba" }}>{w.score1} – {w.score2}</strong>}</div>
+      {(() => {
+        const heeftScore = w.score1 !== null && w.score2 !== null;
+        const definitief = w.status === "gespeeld";
+        const winnaar1 = definitief && heeftScore && w.score1! > w.score2!;
+        const winnaar2 = definitief && heeftScore && w.score2! > w.score1!;
+        return <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto minmax(0,1fr)", alignItems: "center", gap: 8, padding: "14px 2px" }}>
+          <div style={{ textAlign: "center", minWidth: 0 }}>
+            <div aria-hidden="true" style={{ fontSize: 20, marginBottom: 5 }}>{winnaar1 ? "🏆" : "🏓"}</div>
+            <strong style={{ display: "block", fontSize: 13, color: winnaar1 ? "#9fe2ba" : "#eaf0ff", overflowWrap: "anywhere" }}>{naam(w.speler1_id)}</strong>
+            {winnaar1 && <span style={{ color: "#9fe2ba", fontSize: 11 }}>Winnaar</span>}
+          </div>
+          {heeftScore ? <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            {[w.score1, w.score2].map((score, i) => {
+              const gewonnen = definitief && (i === 0 ? winnaar1 : winnaar2);
+              return <React.Fragment key={i}>
+                {i === 1 && <span style={{ color: "#91a6ba" }}>–</span>}
+                <div style={{ minWidth: 38, padding: "9px 5px", textAlign: "center", borderRadius: 11, fontSize: 21, fontWeight: 900, fontVariantNumeric: "tabular-nums", background: gewonnen ? "rgba(137,194,170,.24)" : "rgba(255,255,255,.08)", color: gewonnen ? "#9fe2ba" : "#eaf0ff", border: `1px solid ${gewonnen ? "#89C2AA" : "rgba(255,255,255,.13)"}` }}>{score}</div>
+              </React.Fragment>;
+            })}
+          </div> : <span style={{ color: "#91a6ba", fontWeight: 800 }}>VS</span>}
+          <div style={{ textAlign: "center", minWidth: 0 }}>
+            <div aria-hidden="true" style={{ fontSize: 20, marginBottom: 5 }}>{winnaar2 ? "🏆" : "🏓"}</div>
+            <strong style={{ display: "block", fontSize: 13, color: winnaar2 ? "#9fe2ba" : "#eaf0ff", overflowWrap: "anywhere" }}>{naam(w.speler2_id)}</strong>
+            {winnaar2 && <span style={{ color: "#9fe2ba", fontSize: 11 }}>Winnaar</span>}
+          </div>
+        </div>;
+      })()}
       <div style={muted}>🕒 {slotTekst(w.speelslot_id)}</div>
       {persoonlijk && isEigen && <>
         {v && eigenAkkoord === null && <div style={{ display: "grid", gap: 9 }}><p style={muted}>Voorstel beantwoorden vóór {new Date(v.vervalt_op).toLocaleString("nl-BE")}. Voorgesteld moment: {slotTekst(v.speelslot_id)}</p><div className="ping-flex">{pauzes.map(p => <label key={p.id} style={muted}><input type="checkbox" checked={nietPauzes.includes(p.id)} onChange={e => setNietPauzes(old => e.target.checked ? [...old, p.id] : old.filter(x => x !== p.id))} /> {p.naam} niet beschikbaar</label>)}</div><div className="ping-flex"><button style={knop} disabled={busy} onClick={() => antwoord(v, true)}>✓ Akkoord</button><button style={knop} disabled={busy} onClick={() => antwoord(v, false)}>✕ Niet akkoord</button></div></div>}
