@@ -62,6 +62,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   const [name, setName] = useState("Volleybal – les 3");
   const [date, setDate] = useState(today());
   const [year, setYear] = useState(5);
+  const [finalities, setFinalities] = useState<string[]>(["AM", "DF", "DS"]);
   const [classFilter, setClassFilter] = useState("");
   const [filter, setFilter] = useState("");
   const [creating, setCreating] = useState(false);
@@ -140,9 +141,16 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   const observerDone = new Set(submitted.map(x=>x.observator_id).filter(Boolean));
   const selfDone = new Set(selfs.filter(x=>x.status==="ingediend").map(x=>x.deelnemer_id));
   const reserved=new Set(state?.reserved_ids??[]);
-  const studentCandidates=useMemo(()=>smart.filter(s=>s.klas_naam.startsWith(String(year)) && (!classFilter||s.klas_naam===classFilter)
-    && (`${s.volledige_naam} ${s.klas_naam}`).toLowerCase().includes(filter.toLowerCase())).sort((a,b)=>a.klas_naam.localeCompare(b.klas_naam,"nl-BE")||a.volledige_naam.localeCompare(b.volledige_naam,"nl-BE")),[smart,year,classFilter,filter]);
-  const classNames=useMemo(()=>[...new Set(smart.filter(s=>s.klas_naam.startsWith(String(year))).map(s=>s.klas_naam))].sort(),[smart,year]);
+  // Het leerjaar en de gekozen finaliteiten beperken zowel de klaskeuze als de leerlingenlijst.
+  const matchingStudents = useMemo(() => smart.filter(s => {
+    const klas = s.klas_naam.trim().toUpperCase();
+    return klas.startsWith(String(year)) && finalities.some(f => klas.includes(f));
+  }), [smart, year, finalities]);
+  const studentCandidates = useMemo(() => matchingStudents.filter(s =>
+    (!classFilter || s.klas_naam === classFilter) &&
+    (`${s.volledige_naam} ${s.klas_naam}`).toLowerCase().includes(filter.toLowerCase())
+  ).sort((a,b) => a.klas_naam.localeCompare(b.klas_naam,"nl-BE") || a.volledige_naam.localeCompare(b.volledige_naam,"nl-BE")), [matchingStudents, classFilter, filter]);
+  const classNames = useMemo(() => [...new Set(matchingStudents.map(s => s.klas_naam))].sort((a,b) => a.localeCompare(b,"nl-BE")), [matchingStudents]);
   const findName=(id?:string|null)=>participants.find(p=>p.id===id)?.volledige_naam??"—";
   const paperPerson=participants.find(p=>p.id===paperStudent);
   const paperExisting=peers.find(p=>p.beoordeelde_id===paperStudent);
@@ -242,7 +250,22 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
         <div className="grid gap-3 sm:grid-cols-3"><label>Lesnaam<input className={field} value={name} onChange={e=>setName(e.target.value)}/></label>
           <label>Datum<input type="date" className={field} value={date} onChange={e=>setDate(e.target.value)}/></label>
           <label>Leerjaar<select className={field} value={year} onChange={e=>{setYear(Number(e.target.value));setClassFilter("");setSelected([]);}}><option value={5}>5e jaar</option><option value={6}>6e jaar</option></select></label></div>
-        <label className="mt-4 block">Klas<select className={field} value={classFilter} onChange={e=>{setClassFilter(e.target.value);setSelected([]);}}><option value="">Alle klassen van dit leerjaar</option>{classNames.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
+        <fieldset className="mt-4">
+          <legend className="mb-2 text-sm font-bold">Finaliteit</legend>
+          <div className="flex flex-wrap gap-4">
+            {["AM", "DF", "DS"].map(f => (
+              <label key={f} className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={finalities.includes(f)} onChange={() => {
+                  setFinalities(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]);
+                  setClassFilter(""); setSelected([]);
+                }} />
+                {f}
+              </label>
+            ))}
+          </div>
+          <p className="mt-1 text-xs text-white/60">Selecteer een of meerdere finaliteiten. De klas- en leerlingenlijst wordt automatisch gefilterd.</p>
+        </fieldset>
+        <label className="mt-4 block">Klas<select className={field} value={classFilter} onChange={e=>{setClassFilter(e.target.value);setSelected([]);}}><option value="">Alle klassen van de gekozen finaliteiten</option>{classNames.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">Leerlingen ({selected.length} geselecteerd)</h3><button type="button" className={button} onClick={()=>setSelected(studentCandidates.map(s=>normalEmail(s.email)))}>Alle zichtbare selecteren</button></div>
         <input className={`${field} my-3`} value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Zoek leerling of klas"/>
         <div className="grid max-h-[360px] gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">{studentCandidates.map(s=><label key={s.email} className="flex gap-2 rounded-lg border border-white/15 bg-white/5 p-2 text-sm">
