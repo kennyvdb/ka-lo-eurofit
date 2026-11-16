@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -41,6 +42,13 @@ export default function LeerkrachtenLOLesPage() {
             icon="🏑"
             title="Hockey"
             desc="Lesvoorbereiding, groepsindeling, timer en leerlingenweergave."
+          />
+
+          <BaseTile
+            href="/leerkrachten-lo/les-lo/volleybal"
+            icon="🏐"
+            title="Volleybal"
+            desc="Les 3 · Peerevaluatie, zelfevaluatie en live opvolging."
           />
         </div>
       </section>

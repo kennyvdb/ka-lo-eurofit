@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -38,6 +39,13 @@ export default function LessenPage() {
             icon="🏑"
             title="Hockey"
             desc="Stations, groepsindeling en observaties"
+          />
+
+          <BaseTile
+            href="/les-lo/les/volleybal"
+            icon="🏐"
+            title="Volleybal"
+            desc="Les 3 · Peerevaluatie en zelfevaluatie"
           />
         </div>
       </section>
