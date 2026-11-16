@@ -80,7 +80,7 @@ export default function HockeyLesModule({ omgeving }: { omgeving: "leerling" | "
  const [now,setNow]=useState(Date.now()); const [tab,setTab]=useState<"voorbereiding"|"groepen"|"les"|"resultaten">("voorbereiding");
  const [activeAssignment,setActiveAssignment]=useState<string|null>(null); const [draft,setDraft]=useState<Record<string,number>>({}); const [saveState,setSaveState]=useState("");
  const [selfDraft,setSelfDraft]=useState<Record<string,number>>({}); const [selectedResult,setSelectedResult]=useState<string|null>(null);
- const [paperOpen,setPaperOpen]=useState(false); const [paperAssignmentId,setPaperAssignmentId]=useState(""); const [paperDraft,setPaperDraft]=useState<Record<string,number>>({});
+ const [paperOpen,setPaperOpen]=useState(false); const [paperStudentId,setPaperStudentId]=useState(""); const [paperDrafts,setPaperDrafts]=useState<Record<string,Record<string,number>>>({});
  const [classFilter,setClassFilter]=useState(""); const [studentSearch,setStudentSearch]=useState(""); const [showAll,setShowAll]=useState(false);
  const [showTeacherSelect,setShowTeacherSelect]=useState(false);
  const [assignmentNames,setAssignmentNames]=useState<Record<string,string>>({});
@@ -98,9 +98,23 @@ export default function HockeyLesModule({ omgeving }: { omgeving: "leerling" | "
   const studentsForYear=useMemo(()=>smart.filter(s=>s.schooljaar===schoolYear() && s.klas_naam.startsWith(String(year)) && finalities.some(f=>s.klas_naam.toUpperCase().includes(f)) && (!classFilter||s.klas_naam===classFilter) && (s.volledige_naam+" "+s.klas_naam).toLowerCase().includes(studentSearch.toLowerCase())).sort((a,b)=>a.klas_naam.localeCompare(b.klas_naam,"nl-BE")||a.volledige_naam.localeCompare(b.volledige_naam,"nl-BE")),[smart,year,finalities,classFilter,studentSearch]);
  const groupCodes=useMemo(()=>Array.from({length:(lesson?.aantal_circuits??circuits)*5},(_,i)=>`${i<5?"A":"B"}${i%5+1}`),[lesson,circuits]);
  const myAssignments=useMemo(()=>assignments.filter(a=>a.observator_id===myParticipant?.id && a.ronde===currentRound),[assignments,myParticipant,currentRound]);
- const paperAssignments=useMemo(()=>assignments.filter(a=>a.status!=="ingediend" && !evaluations.some(e=>e.observatie_id===a.id && e.status==="ingediend")).sort((a,b)=>a.ronde-b.ronde || pupilNameForSort(a.observator_id).localeCompare(pupilNameForSort(b.observator_id),"nl-BE")),[assignments,evaluations,participants]);
- function pupilNameForSort(id:string){return participants.find(p=>p.id===id)?.volledige_naam??"";}
- const paperAssignment=assignments.find(a=>a.id===paperAssignmentId);
+  const paperStudents=useMemo(()=>[...participants].filter(p=>p.aanwezigheid==="aanwezig").sort((a,b)=>a.volledige_naam.localeCompare(b.volledige_naam,"nl-BE")),[participants]);
+  const paperStudent=participants.find(p=>p.id===paperStudentId);
+  const studentAssignments=useMemo(()=>assignments.filter(a=>a.beoordeelde_id===paperStudentId).sort((a,b)=>a.ronde-b.ronde),[assignments,paperStudentId]);
+  const studentSelfEvaluation=evaluations.find(e=>e.beoordeelde_id===paperStudentId && e.type==="samenwerken");
+  function selectPaperStudent(id:string){
+    setPaperStudentId(id);
+    const next:Record<string,Record<string,number>>={};
+    for(const a of assignments.filter(a=>a.beoordeelde_id===id)){
+      next[a.id]=evaluations.find(e=>e.observatie_id===a.id)?.rubrics??{};
+    }
+    next.samenwerken=evaluations.find(e=>e.beoordeelde_id===id && e.type==="samenwerken")?.rubrics??{};
+    setPaperDrafts(next);
+  }
+  function updatePaperDraft(id:string,key:string,value:number){
+    setPaperDrafts(prev=>({...prev,[id]:{...(prev[id]??{}),[key]:value}}));
+  }
+  function pupilNameForSort(id:string){return participants.find(p=>p.id===id)?.volledige_naam??"";}
  useEffect(()=>{
   if(!lessonId || teacher || !uid){setAssignmentNames({});return;}
   let cancelled=false;
@@ -198,16 +212,25 @@ export default function HockeyLesModule({ omgeving }: { omgeving: "leerling" | "
  async function clockOwner(id:string){await run(async()=>{const {error:e}=await supabase.rpc("hockey_stel_klokbeheerder_in",{p_les_id:lessonId,p_leerkracht_id:id});if(e)throw e;},"Klokbeheerder ingesteld.");}
  async function clock(action:string){await run(async()=>{const {error:e}=await supabase.rpc("hockey_bedien_timer",{p_les_id:lessonId,p_actie:action});if(e)throw e;},"Timer bijgewerkt.");}
  async function closeExpiredLesson(){if(!lessonId||!lesson||!window.confirm("Deze verlopen Hockeyles definitief afsluiten? Ingediende evaluaties blijven bewaard. Niet-ingediende beoordelingen kunnen daarna niet meer worden ingediend."))return;await run(async()=>{const {error:e}=await supabase.rpc("hockey_sluit_les_af",{p_les_id:lessonId});if(e)throw e;setLessons(prev=>prev.map(l=>l.id===lessonId?{...l,status:"afgerond"}:l));},"De Hockeyles is afgesloten. Alle ingediende beoordelingen blijven bewaard.");}
- async function savePaper(){
-  if(!paperAssignment)return;
-  const required=RUBRICS[paperAssignment.type];
-  if(required.some(r=>!Number.isInteger(paperDraft[r.key]) || paperDraft[r.key]<1 || paperDraft[r.key]>4)){setError("Vul eerst alle beoordelingscriteria in.");return;}
-  if(!window.confirm(`Papieren ${paperAssignment.type}evaluatie definitief invoeren voor ${pupilName(paperAssignment.beoordeelde_id)}?`))return;
+ async function savePaper(kind:"techniek"|"wedstrijd"|"samenwerken",assignmentId?:string){
+  if(!paperStudentId)return;
+  const key=kind==="samenwerken"?"samenwerken":assignmentId??"";
+  if(!key)return;
+  const values=paperDrafts[key]??{};
+  if(RUBRICS[kind].some(r=>!Number.isInteger(values[r.key]) || values[r.key]<1 || values[r.key]>4)){
+    setError("Vul eerst alle criteria van deze evaluatie in.");return;
+  }
+  const a=kind==="samenwerken"?null:assignments.find(x=>x.id===assignmentId && x.beoordeelde_id===paperStudentId && x.type===kind);
+  if(kind!=="samenwerken" && !a){setError("Geen bijbehorende observatieopdracht gevonden.");return;}
+  const submitted=kind==="samenwerken"?studentSelfEvaluation?.status==="ingediend":evaluations.some(e=>e.observatie_id===assignmentId && e.status==="ingediend");
+  if(submitted){setError("Deze evaluatie is al definitief ingediend en kan niet opnieuw worden opgeslagen.");return;}
+  if(!window.confirm(`${kind==='samenwerken'?'Samenwerken (zelfevaluatie)':kind} definitief opslaan voor ${paperStudent?.volledige_naam}?`))return;
   await run(async()=>{
-   const {error:e}=await supabase.rpc("hockey_bewaar_papierevaluatie",{p_observatie_id:paperAssignment.id,p_rubrics:paperDraft});
-   if(e)throw e;
-   setPaperAssignmentId("");setPaperDraft({});setPaperOpen(false);
-  },"Papieren evaluatie definitief opgeslagen en verwerkt in de resultaten.");
+    const result=kind==="samenwerken"
+      ? await supabase.rpc("hockey_bewaar_papieren_zelfevaluatie",{p_les_id:lessonId,p_deelnemer_id:paperStudentId,p_rubrics:values})
+      : await supabase.rpc("hockey_bewaar_papierevaluatie",{p_observatie_id:assignmentId!,p_rubrics:values});
+    if(result.error)throw result.error;
+  },"Papieren evaluatie definitief opgeslagen.");
  }
  async function savePeer(values:Record<string,number>,submit=false){if(!activeAssignment)return;setSaveState("Opslaan...");try{
   const {error:e}=await supabase.rpc("hockey_bewaar_peerevaluatie",{p_observatie_id:activeAssignment,p_rubrics:values,p_indienen:submit});if(e)throw e;
@@ -255,19 +278,33 @@ export default function HockeyLesModule({ omgeving }: { omgeving: "leerling" | "
       <div className="flex flex-wrap gap-2"><button className={primary} type="button" onClick={()=>setPaperOpen(v=>!v)}>➕ Papieren evaluatie invoeren</button><button className={btn} onClick={downloadReport}>⬇ CSV-lesrapport</button></div>
      </div>
      {paperOpen&&<div className="mt-5 rounded-2xl border border-[#89C2AA]/40 bg-black/25 p-4 sm:p-5">
-      <h3 className="text-lg font-black">Papieren beoordeling overnemen</h3>
-      <p className="mt-1 text-sm text-white/65">Kies de oorspronkelijke observatieopdracht. Alleen nog niet definitief ingediende opdrachten zijn beschikbaar, ook bij een afgelopen les.</p>
-      <label className="mt-4 block text-sm font-bold">Observator → beoordeelde leerling · ronde · type
-       <select className={`${input} mt-2`} value={paperAssignmentId} onChange={e=>{setPaperAssignmentId(e.target.value);const old=evaluations.find(x=>x.observatie_id===e.target.value);setPaperDraft(old?.status==="concept"?old.rubrics??{}:{});}}>
-        <option value="">Selecteer een bestaande opdracht...</option>
-        {paperAssignments.map(a=><option key={a.id} value={a.id}>{pupilName(a.observator_id)} → {pupilName(a.beoordeelde_id)} · ronde {a.ronde} · {a.type}</option>)}
-       </select>
-      </label>
-      {paperAssignments.length===0&&<p className="mt-3 text-sm text-emerald-100">Alle observatieopdrachten zijn al definitief ingediend, of er zijn nog geen opdrachten aangemaakt.</p>}
-      {paperAssignment&&<div className="mt-5">
-       <div className="mb-3 rounded-xl bg-white/5 p-3 text-sm"><strong>Observator:</strong> {pupilName(paperAssignment.observator_id)}<br/><strong>Beoordeelde:</strong> {pupilName(paperAssignment.beoordeelde_id)}<br/><strong>Ronde:</strong> {paperAssignment.ronde} · {paperAssignment.type}</div>
-       <div className="space-y-3">{RUBRICS[paperAssignment.type].map(item=><div key={item.key} className="rounded-xl border border-white/10 bg-black/20 p-3"><div className="mb-2 text-sm font-semibold">{item.label}</div><div className="grid grid-cols-4 gap-2">{LEVELS.map((level,i)=><button type="button" key={i} onClick={()=>setPaperDraft(prev=>({...prev,[item.key]:i+1}))} className={`${paperDraft[item.key]===i+1?"border-[#89C2AA] bg-[#4B8E8D]/70":"border-white/15 bg-white/5"} rounded-xl border py-2 font-black`}>{level}</button>)}</div></div>)}</div>
-       <div className="mt-4 flex flex-wrap gap-2"><button type="button" className={primary} disabled={busy||RUBRICS[paperAssignment.type].some(r=>!paperDraft[r.key])} onClick={()=>void savePaper()}>✓ Definitief opslaan</button><button type="button" className={btn} onClick={()=>{setPaperAssignmentId("");setPaperDraft({});setPaperOpen(false);}}>Annuleren</button></div>
+      <h3 className="text-lg font-black">Papieren evaluaties per leerling</h3>
+      <p className="mt-1 text-sm text-white/65">Klik op een leerling. Je ziet techniek, wedstrijd en samenwerken samen. Definitief ingediende beoordelingen zijn alleen leesbaar.</p>
+      <input className={`${input} mt-3`} placeholder="Zoek leerling op naam..." value={studentSearch} onChange={e=>setStudentSearch(e.target.value)} />
+      <div className="mt-3 grid max-h-52 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+       {paperStudents.filter(p=>(p.volledige_naam+" "+(p.klas_naam??"")).toLowerCase().includes(studentSearch.toLowerCase())).map(p=><button type="button" key={p.id} onClick={()=>selectPaperStudent(p.id)} className={`${paperStudentId===p.id?primary:btn} text-left`}>{p.volledige_naam}<span className="block text-xs font-normal opacity-70">{p.klas_naam??""}</span></button>)}
+      </div>
+      {paperStudent&&<div className="mt-5 space-y-5">
+       <h4 className="text-lg font-black text-[#b4e8d1]">{paperStudent.volledige_naam} · drie evaluatiedelen</h4>
+       {(["techniek","wedstrijd","samenwerken"] as const).map(kind=>{
+        const matching=kind==="samenwerken"?[null]:studentAssignments.filter(a=>a.type===kind);
+        return <section key={kind} className="rounded-2xl border border-white/15 bg-white/5 p-4">
+         <h5 className="text-base font-black capitalize">{kind}{kind==="samenwerken"?" · zelfevaluatie":""}</h5>
+         {matching.length===0?<p className="mt-2 text-sm text-amber-100">Voor deze leerling is nog geen {kind}observatieopdracht gegenereerd. Maak eerst de observatieopdrachten aan.</p>:
+          matching.map(a=>{
+           const old=a?evaluations.find(e=>e.observatie_id===a.id):studentSelfEvaluation;
+           const key=a?.id??"samenwerken";
+           const locked=old?.status==="ingediend";
+           const values=locked?old?.rubrics??{}:paperDrafts[key]??{};
+           return <div key={key} className="mt-4 border-t border-white/10 pt-3">
+            <div className="mb-3 text-sm text-white/70">{a?`Ronde ${a.ronde} · observator: ${pupilName(a.observator_id)}`:"Zelfevaluatie samenwerken"} · {locked?"✓ Definitief ingediend":old?.status==="concept"?"Concept":"Nog niet ingediend"}</div>
+            <div className="space-y-3">{RUBRICS[kind].map(item=><div key={item.key} className="rounded-xl border border-white/10 bg-black/20 p-3"><div className="mb-2 text-sm font-semibold">{item.label}</div><div className="grid grid-cols-4 gap-2">{LEVELS.map((level,i)=><button type="button" key={i} disabled={busy||locked} onClick={()=>updatePaperDraft(key,item.key,i+1)} className={`${values[item.key]===i+1?"border-[#89C2AA] bg-[#4B8E8D]/70":"border-white/15 bg-white/5"} rounded-xl border py-2 font-black disabled:opacity-60`}>{level}</button>)}</div></div>)}</div>
+            {!locked&&<button type="button" className={`${primary} mt-4`} disabled={busy||RUBRICS[kind].some(r=>!values[r.key])} onClick={()=>void savePaper(kind,a?.id)}>✓ {kind} definitief opslaan</button>}
+           </div>;
+          })}
+        </section>;
+       })}
+       <button type="button" className={btn} onClick={()=>selectPaperStudent("")}>Andere leerling kiezen</button>
       </div>}
      </div>}
      <p className="mt-2 text-sm text-white/60">Gemiddelden op schaal 1–4. Klik op een leerling om de oorspronkelijke beoordelingen te bekijken. Resultaten zijn ook tijdens een actieve les zichtbaar. Geen klassement.</p>
