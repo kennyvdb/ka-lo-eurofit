@@ -24,7 +24,7 @@ const PEER_CRITERIA = [
   { key: "coaching", title: "Medespelers coachen", detail: "Coacht en communiceert met de medespelers." },
 ] as const;
 type Criterion = typeof PEER_CRITERIA[number]["key"];
-type PeerDraft = Partial<Record<Criterion, boolean>>;
+type PeerDraft = Partial<Record<Criterion, number>>;
 const SELF_QUESTIONS = [
   { key: "spelregels" as const, title: "Ik pas de afgesproken spelregels toe", levels: [
     "Ik houd me niet aan de afgesproken spelregels.",
@@ -40,8 +40,12 @@ const SELF_QUESTIONS = [
   ]},
 ];
 const SYMBOLS = ["−", "+/−", "+", "++"];
-const scorePeer = (c: PeerDraft) => { const n = PEER_CRITERIA.filter(k => c[k.key] === true).length; return SYMBOLS[Math.max(0, n-1)]; };
-const peerComplete = (c: PeerDraft) => PEER_CRITERIA.every(x => typeof c[x.key] === "boolean");
+const PEER_LEVELS = ["Nooit", "Soms", "Vaak", "Altijd"] as const;
+const peerComplete = (c: PeerDraft) => PEER_CRITERIA.every(x => Number.isInteger(c[x.key]) && (c[x.key] ?? 0) >= 1 && (c[x.key] ?? 0) <= 4);
+// Gemiddelde van 4 rubrics (1–4), afgerond naar het dichtstbijzijnde niveau.
+const scorePeer = (c: PeerDraft) => peerComplete(c)
+  ? SYMBOLS[Math.max(0, Math.min(3, Math.round(PEER_CRITERIA.reduce((sum, x) => sum + (c[x.key] ?? 0), 0) / 4) - 1))]
+  : "—";
 
 type Lesson = { id:string; naam:string; lesdatum:string; schooljaar:string; fase:"voorbereiding"|"peer"|"self"|"afgerond"; aangemaakt_op:string };
 type Participant = { id:string; les_id:string; leerling_email:string; profiel_id:string|null; volledige_naam:string; klas_naam:string|null; aanwezigheid:"aanwezig"|"afwezig" };
@@ -77,8 +81,10 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   const [paperPeer, setPaperPeer] = useState<PeerDraft>({});
   const [paperRules, setPaperRules] = useState<number|null>(null);
   const [paperLevel, setPaperLevel] = useState<number|null>(null);
-  const [tab, setTab] = useState<"overzicht"|"papier"|"resultaten">("overzicht");
+  const [tab, setTab] = useState<"overzicht"|"papier"|"resultaten"|"leerling">("overzicht");
   const [controlFilter, setControlFilter] = useState<"iedereen"|"niet_ingediend"|"niet_beoordeeld"|"zelf_open">("iedereen");
+  const [previewId, setPreviewId] = useState("");
+  const previewMode = tab === "leerling";
 
   const refresh = useCallback(async (id:string) => {
     if (!id) return;
@@ -127,7 +133,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   const participants=state?.participants??[];
   const peers=state?.peer??[];
   const selfs=state?.self??[];
-  const me=participants.find(p=>p.id===state?.my_id);
+  const me=participants.find(p=>p.id===(previewMode ? previewId : state?.my_id));
   const mine=peers.find(p=>p.observator_id===me?.id);
   const mySelf=selfs.find(s=>s.deelnemer_id===me?.id);
   useEffect(()=>{
@@ -199,7 +205,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   function downloadCsv(){
     const rows=[ ["Naam","Klas","Aanwezig","Observator","Peerevaluatie ingediend","Wedstrijdscore","Bovenhandse opslag","Aanval","Verdediging","Coaching","Zelfevaluatie ingediend","Spelregels","Deelnameniveau"],
       ...participants.map(p=>{const peer=peers.find(x=>x.beoordeelde_id===p.id),self=selfs.find(x=>x.deelnemer_id===p.id);
-        return [p.volledige_naam,p.klas_naam??"",p.aanwezigheid,findName(peer?.observator_id),peer?.status??"niet begonnen",peer?.status==="ingediend"?scorePeer(peer.criteria):"",...PEER_CRITERIA.map(c=>peer?.criteria[c.key]===undefined?"":peer?.criteria[c.key]?"Ja":"Nee"),self?.status??"niet begonnen",self?.spelregels?SYMBOLS[self.spelregels-1]:"",self?.spelniveau?SYMBOLS[self.spelniveau-1]:""]; }) ];
+        return [p.volledige_naam,p.klas_naam??"",p.aanwezigheid,findName(peer?.observator_id),peer?.status??"niet begonnen",peer?.status==="ingediend"?scorePeer(peer.criteria):"",...PEER_CRITERIA.map(c=>peer?.criteria[c.key]===undefined?"":PEER_LEVELS[(peer?.criteria[c.key] ?? 1)-1]??""),self?.status??"niet begonnen",self?.spelregels?SYMBOLS[self.spelregels-1]:"",self?.spelniveau?SYMBOLS[self.spelniveau-1]:""]; }) ];
     const csv="\uFEFF"+rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\r\n");
     const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
     const a=document.createElement("a");a.href=url;a.download=`volleybal-les3-${state?.les.lesdatum??today()}.csv`;a.click();URL.revokeObjectURL(url);
@@ -209,14 +215,16 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
     (controlFilter==="niet_beoordeeld"&&!rated.has(p.id))||
     (controlFilter==="zelf_open"&&!selfDone.has(p.id)));
   const showTeacher=teacher && omgeving!=="leerling";
+  const studentView=!showTeacher || previewMode;
   const isFinished=state?.les.fase==="afgerond";
 
   function PeerQuestions({value,onChange,locked}:{value:PeerDraft;onChange:(next:PeerDraft)=>void;locked:boolean}){
     return <div className="space-y-3">{PEER_CRITERIA.map(item=><div key={item.key} className="rounded-xl border border-white/15 bg-black/20 p-3">
       <div className="font-bold">{item.title}</div><p className="mb-3 text-sm text-white/70">{item.detail}</p>
-      <div className="grid grid-cols-2 gap-2">{[true,false].map(v=><button key={String(v)} type="button" disabled={locked}
-      onClick={()=>onChange({...value,[item.key]:v})}
-      className={`${value[item.key]===v?primary:button} disabled:opacity-50`}>{v?"✓ Ja, uitgevoerd":"✕ Nee"}</button>)}</div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{PEER_LEVELS.map((label,i)=><button key={label} type="button" disabled={locked}
+      onClick={()=>onChange({...value,[item.key]:i+1})}
+      aria-pressed={value[item.key]===i+1}
+      className={`${value[item.key]===i+1?primary:button} disabled:opacity-50`}>{label}</button>)}</div>
     </div>)}<p className="font-bold text-[#b4e8d1]">Eindscore: {peerComplete(value)?scorePeer(value):"Vul eerst alle vier criteria in"}</p></div>;
   }
   function SelfQuestions({spelregels,spelniveau,onRules,onLevel,locked}:{spelregels:number|null;spelniveau:number|null;onRules:(n:number)=>void;onLevel:(n:number)=>void;locked:boolean}){
@@ -239,7 +247,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
       {!uid&&<section className={shell}>Log in om de module te gebruiken.</section>}
       {uid&&<section className={shell}>
         <label className="block text-sm font-bold">{showTeacher?"Kies een volleyballes":"Mijn volleyballes"}</label>
-        <select className={`${field} mt-2`} value={lessonId} onChange={e=>{setLessonId(e.target.value);setTab("overzicht");}}>
+        <select className={`${field} mt-2`} value={lessonId} onChange={e=>{setLessonId(e.target.value);setTab("overzicht");setPreviewId("");}}>
           <option value="">Selecteer een les</option>
           {lessons.map(l=><option key={l.id} value={l.id}>{l.naam} · {l.lesdatum} · {l.fase}</option>)}
         </select>
@@ -274,7 +282,25 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
         <button type="button" className={`${primary} mt-4`} disabled={busy||!selected.length} onClick={()=>void createLesson()}>Les met {selected.length} leerlingen aanmaken</button>
       </section>}
       {state&&showTeacher&&<>
-        <div className="flex flex-wrap gap-2">{(["overzicht","papier","resultaten"] as const).map(t=><button key={t} className={tab===t?primary:button} onClick={()=>setTab(t)}>{({overzicht:"Live les",papier:"Papieren evaluaties",resultaten:"Resultaten"})[t]}</button>)}</div>
+        <nav aria-label="Volleybal lestabbladen" className="flex flex-wrap gap-2">
+          {(["overzicht","papier","resultaten","leerling"] as const).map(t=><button
+            type="button" key={t} aria-current={tab===t?"page":undefined}
+            className={tab===t?primary:button}
+            onClick={()=>{setTab(t);setPreviewId("");}}
+          >{({overzicht:"Live les",papier:"Papieren evaluaties",resultaten:"Resultaten",leerling:"👁 Leerlingweergave"})[t]}</button>)}
+        </nav>
+        {tab==="leerling"&&<section className={shell}>
+          <h2 className="text-xl font-black">Leerlingweergave · alleen lezen</h2>
+          <p className="mt-2 text-sm text-white/70">Volg het huidige scherm van een leerling in de gekozen les. De gegevens worden elke vijf seconden vernieuwd. Je kunt geen antwoorden wijzigen of indienen.</p>
+          <label className="mt-4 block text-sm font-bold">Kies een leerling
+            <select className={`${field} mt-2`} value={previewId} onChange={e=>setPreviewId(e.target.value)}>
+              <option value="">Selecteer een leerling…</option>
+              {[...participants].sort((a,b)=>a.volledige_naam.localeCompare(b.volledige_naam,"nl-BE")).map(p=><option value={p.id} key={p.id}>{p.volledige_naam} · {p.klas_naam??""}{p.aanwezigheid==="afwezig"?" (afwezig)":""}</option>)}
+            </select>
+          </label>
+          {previewId&&<p className="mt-3 rounded-xl border border-sky-400/30 bg-sky-400/10 p-3 text-sm text-sky-100">Voorbeeldmodus actief: alle invulvelden en indienknoppen zijn geblokkeerd.</p>}
+        </section>}
+        {tab!=="leerling"&&<>
         {tab==="overzicht"&&<>
           <section className={shell}>
             <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">Lesbediening</h2><span className="rounded-lg bg-white/10 px-3 py-1 text-sm">Fase: {state.les.fase}</span></div>
@@ -323,13 +349,14 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
             </div></div>}
         </section>}
         {tab==="resultaten"&&<section className={shell}><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">Resultatenmatrix</h2><button className={primary} onClick={downloadCsv}>⬇ CSV exporteren</button></div>
-          <p className="mt-2 text-sm text-white/65">De wedstrijdscore volgt uit de vier ja/nee-criteria. Zelfevaluaties blijven twee afzonderlijke scores.</p>
+          <p className="mt-2 text-sm text-white/65">De wedstrijdscore is het afgeronde gemiddelde van de vier criteria (Nooit / Soms / Vaak / Altijd). Zelfevaluaties blijven twee afzonderlijke scores.</p>
           <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="border-b border-white/15"><th className="p-2">Leerling</th><th>Wedstrijd</th><th>Spelregels</th><th>Deelnameniveau</th><th>Status</th></tr></thead><tbody>
           {participants.map(p=>{const peer=peers.find(x=>x.beoordeelde_id===p.id),s=selfs.find(x=>x.deelnemer_id===p.id);return <tr key={p.id} className="border-b border-white/10"><td className="p-2">{p.volledige_naam}</td><td>{peer?.status==="ingediend"?scorePeer(peer.criteria):"—"}</td><td>{s?.status==="ingediend"&&s.spelregels?SYMBOLS[s.spelregels-1]:"—"}</td><td>{s?.status==="ingediend"&&s.spelniveau?SYMBOLS[s.spelniveau-1]:"—"}</td><td className="text-white/60">{p.aanwezigheid}</td></tr>;})}
           </tbody></table></div>
         </section>}
+        </>}
       </>}
-      {state&&!showTeacher&&me&&<>
+      {state&&studentView&&me&&<>
         <section className={shell}><h2 className="text-xl font-black">Welkom, {me.volledige_naam}</h2><p className="mt-2 text-white/70">{state.les.naam} · {state.les.lesdatum}</p>
           <div className="mt-3 rounded-lg bg-white/10 p-3 font-bold">{state.les.fase==="voorbereiding"?"De leerkracht start de peerevaluatie binnenkort.":state.les.fase==="peer"?"Fase 1 – Peerevaluatie (gesimuleerde wedstrijd 3 tegen 3)":state.les.fase==="self"?"Fase 2 – Zelfevaluatie (wedstrijd 4 tegen 4)":"De les is definitief afgesloten."}</div>
         </section>
@@ -339,23 +366,23 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
           !mine&&state.les.fase==="self"?<p className="mt-3 text-amber-100">Er werd nog geen leerling gekozen tijdens fase 1. Meld dit aan de leerkracht.</p>:
           <div className="mt-4 space-y-4">
             {!mine&&<><p className="text-sm text-white/70">Spreek met je medeleerling af wie wie beoordeelt. Een leerling kan slechts eenmaal gekozen worden.</p>
-              <select className={field} value={selectedTarget} onChange={e=>setSelectedTarget(e.target.value)}><option value="">Kies de leerling die jij beoordeelt…</option>
+              <select disabled={previewMode} className={field} value={selectedTarget} onChange={e=>setSelectedTarget(e.target.value)}><option value="">Kies de leerling die jij beoordeelt…</option>
                 {present.filter(p=>p.id!==me.id&&!reserved.has(p.id)).map(p=><option value={p.id} key={p.id}>{p.volledige_naam} · {p.klas_naam}</option>)}</select>
-              <button className={primary} disabled={busy||!selectedTarget} onClick={()=>void claim(selectedTarget)}>Leerling vastleggen</button></>}
+              <button className={primary} disabled={previewMode||busy||!selectedTarget} onClick={()=>void claim(selectedTarget)}>Leerling vastleggen</button></>}
             {mine&&<><p className="text-sm">Ik beoordeel: <strong>{findName(mine.beoordeelde_id)}</strong></p>
-              <PeerQuestions value={peerDraft} onChange={setPeerDraft} locked={busy}/>
-              <div className="flex flex-wrap gap-2"><button className={button} disabled={busy} onClick={()=>void savePeer(false)}>Concept opslaan</button>
-                <button className={primary} disabled={busy||!peerComplete(peerDraft)} onClick={()=>void savePeer(true)}>Definitief indienen</button></div></>}
+              <PeerQuestions value={peerDraft} onChange={setPeerDraft} locked={previewMode||busy}/>
+              <div className="flex flex-wrap gap-2"><button className={button} disabled={previewMode||busy} onClick={()=>void savePeer(false)}>Concept opslaan</button>
+                <button className={primary} disabled={previewMode||busy||!peerComplete(peerDraft)} onClick={()=>void savePeer(true)}>Definitief indienen</button></div></>}
           </div>}
         </section>}
         {state.les.fase==="self"&&<section className={shell}><h2 className="text-xl font-black">Mijn zelfevaluatie · wedstrijd 4 tegen 4</h2>
           {mySelf?.status==="ingediend"?<p className="mt-3 text-emerald-200">✓ Mijn zelfevaluatie is definitief ingediend.</p>:
-          <div className="mt-4"><SelfQuestions spelregels={rules} spelniveau={level} onRules={setRules} onLevel={setLevel} locked={busy}/>
-            <div className="mt-4 flex flex-wrap gap-2"><button className={button} disabled={busy} onClick={()=>void saveSelf(false)}>Concept opslaan</button>
-              <button className={primary} disabled={busy||rules===null||level===null} onClick={()=>void saveSelf(true)}>Mijn zelfevaluatie definitief indienen</button></div></div>}
+          <div className="mt-4"><SelfQuestions spelregels={rules} spelniveau={level} onRules={setRules} onLevel={setLevel} locked={previewMode||busy}/>
+            <div className="mt-4 flex flex-wrap gap-2"><button className={button} disabled={previewMode||busy} onClick={()=>void saveSelf(false)}>Concept opslaan</button>
+              <button className={primary} disabled={previewMode||busy||rules===null||level===null} onClick={()=>void saveSelf(true)}>Mijn zelfevaluatie definitief indienen</button></div></div>}
         </section>}
       </>}
-      {state&&!showTeacher&&!me&&<section className={shell}>Je bent niet als leerling gekoppeld aan deze les.</section>}
+      {state&&studentView&&!me&&<section className={shell}>{previewMode?"Selecteer hierboven een leerling om de leerlingenpagina te bekijken.":"Je bent niet als leerling gekoppeld aan deze les."}</section>}
       {!state&&!loading&&uid&&!showTeacher&&<section className={shell}>Je hebt nog geen volleyballes toegewezen gekregen.</section>}
     </main>
   </AppShell>;
