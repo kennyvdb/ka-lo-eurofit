@@ -1,38 +1,76 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
 import { createClient } from "@/lib/supabase/client";
 
 const supabase = createClient();
+
 type Group = { id: string; naam: string; schooljaar: string };
 type Member = { leerling_email: string; volledige_naam: string | null; klas_naam: string | null; positie: number | null; family_name: string | null; given_name: string | null };
-type Participant = { id: string; les_id: string; leerling_email: string | null };
-type Evaluation = { les_id: string; beoordeelde_id: string; type: string; rubrics: Record<string, unknown> | null; status: string };
-type Lesson = { id: string; naam: string; lesdatum: string };
+type Lesson = { id: string; naam: string; lesdatum: string; schooljaar?: string };
+type HockeyParticipant = { id: string; les_id: string; leerling_email: string | null };
+type HockeyEvaluation = { les_id: string; beoordeelde_id: string; type: string; rubrics: Record<string, unknown> | null; status: string };
+type VolleyParticipant = { id: string; leerling_email: string; les_id: string };
+type VolleyPeer = { beoordeelde_id: string; criteria: Record<string, unknown> | null; status: string };
+type VolleySelf = { deelnemer_id: string; spelregels: number | null; spelniveau: number | null; status: string };
+type VolleyState = { les: Lesson; participants: VolleyParticipant[]; peer: VolleyPeer[]; self: VolleySelf[] };
+type Sport = "hockey" | "volleybal";
+type Metric = { id: string; label: string; sport: Sport; mode: "mean" | "single" };
 type Cell = { score: number | null; count: number };
-const TYPES = ["techniek", "wedstrijd", "samenwerken"] as const;
-const LABELS: Record<string, string> = { techniek: "Hockey: techniek", wedstrijd: "Hockey: wedstrijd", samenwerken: "Hockey: samenwerken" };
+
+// Nieuwe sporten later toevoegen via een extra configuratie én datakoppeling.
+const METRICS: Metric[] = [
+  { id: "hockey:techniek", label: "🏑 Hockey · techniek", sport: "hockey", mode: "mean" },
+  { id: "hockey:wedstrijd", label: "🏑 Hockey · wedstrijd", sport: "hockey", mode: "mean" },
+  { id: "hockey:samenwerken", label: "🏑 Hockey · samenwerken", sport: "hockey", mode: "mean" },
+  { id: "volleybal:peer", label: "🏐 Volleybal · peerevaluatie", sport: "volleybal", mode: "mean" },
+  { id: "volleybal:spelregels", label: "🏐 Volleybal · zelfevaluatie spelregels", sport: "volleybal", mode: "single" },
+  { id: "volleybal:spelniveau", label: "🏐 Volleybal · zelfevaluatie spelniveau", sport: "volleybal", mode: "single" },
+];
+const PEER_KEYS = ["opslag", "aanval", "verdediging", "coaching"] as const;
+const emailKey = (v: unknown) => String(v ?? "").trim().toLowerCase();
 function schooljaarNu() { const d = new Date(); const y = d.getFullYear() - (d.getMonth() < 8 ? 1 : 0); return `${y}-${y + 1}`; }
-function normalize(v: unknown) { return String(v ?? "").trim().toLowerCase(); }
-function symbol(v: number | null) {
-  if (v === null) return { label: "—", color: "text-white/35", bg: "bg-white/5" };
-  if (v < 1.75) return { label: "−", color: "text-red-200", bg: "bg-red-500/30" };
-  if (v < 2.5) return { label: "+/−", color: "text-orange-200", bg: "bg-orange-500/30" };
-  if (v < 3.25) return { label: "+", color: "text-sky-200", bg: "bg-sky-500/30" };
-  return { label: "++", color: "text-green-200", bg: "bg-green-500/30" };
+function leerjaar(m: Member, g: Group | undefined): number | null {
+  // Een klas zoals 5DSA of 4AM bepaalt het leerjaar; de groep is enkel een fallback.
+  for (const raw of [m.klas_naam, g?.naam]) {
+    const match = String(raw ?? "").match(/(?:^|[^\d])([3-6])\s*(?:e|de|ste|[A-Za-z]|\b)/i);
+    if (match) return Number(match[1]);
+  }
+  return null;
+}
+function sportVoor(m: Member, g: Group | undefined): Sport | null {
+  const year = leerjaar(m, g);
+  return year === 3 || year === 4 ? "hockey" : year === 5 || year === 6 ? "volleybal" : null;
 }
 function displayName(m: Member) {
   const family = String(m.family_name ?? "").trim();
   const given = String(m.given_name ?? "").trim();
   return family && given ? `${family} ${given}` : m.volledige_naam || m.leerling_email;
 }
-async function allRows<T>(makeQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
+function symbol(v: number | null) {
+  if (v === null) return { label: "—", color: "text-white/35", bg: "bg-white/5" };
+  // Hockey: oorspronkelijke drempels; Volleybal: afgerond gemiddelde op schaal 1–4.
+  if (v < 1.75) return { label: "−", color: "text-red-200", bg: "bg-red-500/30" };
+  if (v < 2.5) return { label: "+/−", color: "text-orange-200", bg: "bg-orange-500/30" };
+  if (v < 3.25) return { label: "+", color: "text-sky-200", bg: "bg-sky-500/30" };
+  return { label: "++", color: "text-green-200", bg: "bg-green-500/30" };
+}
+function volleySymbol(v: number | null) {
+  if (v === null) return symbol(null);
+  const rounded = Math.max(1, Math.min(4, Math.round(v)));
+  return [symbol(null), { label: "−", color: "text-red-200", bg: "bg-red-500/30" }, { label: "+/−", color: "text-orange-200", bg: "bg-orange-500/30" }, { label: "+", color: "text-sky-200", bg: "bg-sky-500/30" }, { label: "++", color: "text-green-200", bg: "bg-green-500/30" }][rounded];
+}
+function numeric(v: unknown): number | null {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+  return Number.isFinite(n) && n >= 1 && n <= 4 ? n : null;
+}
+async function allRows<T>(query: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>): Promise<T[]> {
   const result: T[] = [];
   for (let from = 0; ; from += 1000) {
-    const { data, error } = await makeQuery(from, from + 999);
+    const { data, error } = await query(from, from + 999);
     if (error) throw new Error(error.message);
     const batch = data ?? [];
     result.push(...batch);
@@ -40,6 +78,7 @@ async function allRows<T>(makeQuery: (from: number, to: number) => PromiseLike<{
   }
   return result;
 }
+
 export default function EvaluatiesLeerkrachtenPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -49,9 +88,11 @@ export default function EvaluatiesLeerkrachtenPage() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [groupId, setGroupId] = useState("");
   const [members, setMembers] = useState<Member[]>([]);
-  const [lessons, setLessons] = useState<Lesson[]>([]);
-  const [participants, setParticipants] = useState<Participant[]>([]);
-  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
+  const [hockeyLessons, setHockeyLessons] = useState<Lesson[]>([]);
+  const [hockeyParticipants, setHockeyParticipants] = useState<HockeyParticipant[]>([]);
+  const [hockeyEvaluations, setHockeyEvaluations] = useState<HockeyEvaluation[]>([]);
+  const [volleyLessons, setVolleyLessons] = useState<Lesson[]>([]);
+  const [volleyStates, setVolleyStates] = useState<VolleyState[]>([]);
   const [selectedLesson, setSelectedLesson] = useState("all");
 
   useEffect(() => {
@@ -66,43 +107,71 @@ export default function EvaluatiesLeerkrachtenPage() {
         if (!["lo_leerkracht", "admin"].includes(String(profile?.rol))) throw new Error("Geen toegang: enkel LO-leerkrachten en admins.");
         const gs = await allRows<Group>((from, to) => supabase.from("lo_klasgroepen")
           .select("id,naam,schooljaar").eq("leerkracht_id", auth.user!.id).order("naam").range(from, to));
-        if (active) { setAllowed(true); setGroups(gs); if (!gs.some(g => g.schooljaar === schooljaar) && gs.length) setSchooljaar([...gs].sort((a,b)=>b.schooljaar.localeCompare(a.schooljaar))[0].schooljaar); }
+        if (active) {
+          setAllowed(true);
+          setGroups(gs);
+          if (!gs.some(g => g.schooljaar === schooljaar) && gs.length) setSchooljaar([...gs].sort((a, b) => b.schooljaar.localeCompare(a.schooljaar))[0].schooljaar);
+        }
       } catch (e) { if (active) setError(e instanceof Error ? e.message : "Kon klasgroepen niet laden."); }
       finally { if (active) setLoading(false); }
     })();
     return () => { active = false; };
-  }, []); // initiële controle
+  }, []);
 
   useEffect(() => {
     let active = true;
-    setMembers([]); setLessons([]); setParticipants([]); setEvaluations([]); setSelectedLesson("all");
+    setMembers([]); setHockeyLessons([]); setHockeyParticipants([]); setHockeyEvaluations([]);
+    setVolleyLessons([]); setVolleyStates([]); setSelectedLesson("all");
     if (!groupId) return;
     setBusy(true); setError("");
     (async () => {
       try {
         const group = groups.find(g => g.id === groupId);
         if (!group) return;
-        const [ms, ls] = await Promise.all([
-          allRows<Member>((from, to) => supabase.from("lo_klasgroep_leden_view")
-            .select("leerling_email,volledige_naam,klas_naam,positie,family_name,given_name")
-            .eq("klasgroep_id", groupId).order("positie", { ascending: true }).range(from, to)),
-          allRows<Lesson>((from, to) => supabase.from("hockey_lessen")
-            .select("id,naam,lesdatum").eq("schooljaar", group.schooljaar).order("lesdatum", { ascending: false }).range(from, to)),
+        const ms = await allRows<Member>((from, to) => supabase.from("lo_klasgroep_leden_view")
+          .select("leerling_email,volledige_naam,klas_naam,positie,family_name,given_name")
+          .eq("klasgroep_id", groupId).order("positie", { ascending: true }).range(from, to));
+        if (!active) return;
+        setMembers(ms);
+        const needed = new Set(ms.map(m => sportVoor(m, group)));
+        const loadHockey = async () => {
+          const ls = await allRows<Lesson>((from, to) => supabase.from("hockey_lessen")
+            .select("id,naam,lesdatum").eq("schooljaar", group.schooljaar).order("lesdatum", { ascending: false }).range(from, to));
+          const ps: HockeyParticipant[] = [], es: HockeyEvaluation[] = [];
+          for (let i = 0; i < ls.length; i += 50) {
+            const ids = ls.slice(i, i + 50).map(l => l.id);
+            const [part, ev] = await Promise.all([
+              allRows<HockeyParticipant>((from, to) => supabase.from("hockey_deelnemers").select("id,les_id,leerling_email").in("les_id", ids).range(from, to)),
+              allRows<HockeyEvaluation>((from, to) => supabase.from("hockey_evaluaties").select("les_id,beoordeelde_id,type,rubrics,status").in("les_id", ids).eq("status", "ingediend").range(from, to)),
+            ]);
+            ps.push(...part); es.push(...ev);
+          }
+          return { ls, ps, es };
+        };
+        const loadVolley = async () => {
+          // De Volleybal-tabellen zijn bewust afgeschermd; uitsluitend bestaande teacher-RPC's gebruiken.
+          const { data, error: listError } = await supabase.rpc("volleybal_lessen_lijst");
+          if (listError) throw listError;
+          const ls = (Array.isArray(data) ? data : [] as Lesson[]).filter((l: Lesson) => l.schooljaar === group.schooljaar);
+          const states: VolleyState[] = [];
+          for (let i = 0; i < ls.length; i += 5) {
+            const batch = await Promise.all(ls.slice(i, i + 5).map(async (l: Lesson) => {
+              const { data: state, error: stateError } = await supabase.rpc("volleybal_les_state", { p_les_id: l.id });
+              if (stateError) throw stateError;
+              return state as VolleyState;
+            }));
+            states.push(...batch);
+          }
+          return { ls, states };
+        };
+        // Laad geen sporten die niet tot de klasgroep behoren.
+        const [hockey, volley] = await Promise.all([
+          needed.has("hockey") ? loadHockey() : Promise.resolve(null),
+          needed.has("volleybal") ? loadVolley() : Promise.resolve(null),
         ]);
         if (!active) return;
-        setMembers(ms); setLessons(ls);
-        if (!ls.length) return;
-        const ps: Participant[] = [];
-        const es: Evaluation[] = [];
-        for (let i = 0; i < ls.length; i += 50) {
-          const ids = ls.slice(i, i + 50).map(l => l.id);
-          const [part, ev] = await Promise.all([
-            allRows<Participant>((from, to) => supabase.from("hockey_deelnemers").select("id,les_id,leerling_email").in("les_id", ids).range(from, to)),
-            allRows<Evaluation>((from, to) => supabase.from("hockey_evaluaties").select("les_id,beoordeelde_id,type,rubrics,status").in("les_id", ids).eq("status", "ingediend").range(from, to)),
-          ]);
-          ps.push(...part); es.push(...ev);
-        }
-        if (active) { setParticipants(ps); setEvaluations(es); }
+        if (hockey) { setHockeyLessons(hockey.ls); setHockeyParticipants(hockey.ps); setHockeyEvaluations(hockey.es); }
+        if (volley) { setVolleyLessons(volley.ls); setVolleyStates(volley.states); }
       } catch (e) { if (active) setError(e instanceof Error ? e.message : "Kon evaluaties niet laden."); }
       finally { if (active) setBusy(false); }
     })();
@@ -111,40 +180,68 @@ export default function EvaluatiesLeerkrachtenPage() {
 
   const schooljaren = useMemo(() => [...new Set([schooljaar, ...groups.map(g => g.schooljaar)])].sort().reverse(), [groups, schooljaar]);
   const availableGroups = useMemo(() => groups.filter(g => g.schooljaar === schooljaar), [groups, schooljaar]);
-  const sortedMembers = useMemo(() => [...members].sort((a,b) => {
+  const group = groups.find(g => g.id === groupId);
+  const sortedMembers = useMemo(() => [...members].sort((a, b) => {
     const cls = String(a.klas_naam ?? "").localeCompare(String(b.klas_naam ?? ""), "nl-BE", { numeric: true });
     return cls || Number(a.positie ?? 0) - Number(b.positie ?? 0);
   }), [members]);
+  const sports = useMemo(() => new Set(sortedMembers.map(m => sportVoor(m, group))), [sortedMembers, group]);
+  const metrics = useMemo(() => METRICS.filter(m => sports.has(m.sport)), [sports]);
+  const lessons = useMemo(() => [
+    ...hockeyLessons.map(l => ({ ...l, sport: "hockey" as Sport })),
+    ...volleyLessons.map(l => ({ ...l, sport: "volleybal" as Sport })),
+  ].sort((a, b) => b.lesdatum.localeCompare(a.lesdatum)), [hockeyLessons, volleyLessons]);
+
   const matrix = useMemo(() => {
-    const valid = new Set(sortedMembers.map(m => normalize(m.leerling_email)));
-    const byParticipant = new Map(participants.filter(p => valid.has(normalize(p.leerling_email)) && (selectedLesson === "all" || p.les_id === selectedLesson)).map(p => [p.id, normalize(p.leerling_email)]));
-    const scores = new Map<string, number[]>();
-    const counts = new Map<string, number>();
-    for (const e of evaluations) {
-      const mail = byParticipant.get(e.beoordeelde_id);
-      if (!mail || !TYPES.some(t => t === e.type)) continue;
-      const key = `${mail}|${e.type}`;
-      const values = Object.values(e.rubrics ?? {}).map(Number).filter(v => Number.isFinite(v) && v >= 1 && v <= 4);
-      if (!values.length) continue;
-      scores.set(key, [...(scores.get(key) ?? []), ...values]);
+    const valid = new Set(sortedMembers.map(m => emailKey(m.leerling_email)));
+    const values = new Map<string, number[]>(), counts = new Map<string, number>();
+    const add = (mail: string | null | undefined, metric: string, score: number) => {
+      const email = emailKey(mail);
+      if (!valid.has(email)) return;
+      const key = `${email}|${metric}`;
+      values.set(key, [...(values.get(key) ?? []), score]);
       counts.set(key, (counts.get(key) ?? 0) + 1);
+    };
+    const hIdToEmail = new Map(hockeyParticipants.filter(p => selectedLesson === "all" || selectedLesson === `hockey:${p.les_id}`).map(p => [p.id, p.leerling_email]));
+    for (const e of hockeyEvaluations) {
+      const mail = hIdToEmail.get(e.beoordeelde_id);
+      if (!mail || !["techniek", "wedstrijd", "samenwerken"].includes(e.type)) continue;
+      const rubricValues = Object.values(e.rubrics ?? {}).map(numeric).filter((n): n is number => n !== null);
+      // Bestaande Hockey-matrix middelt de afzonderlijke rubricwaarden.
+      rubricValues.forEach(v => add(mail, `hockey:${e.type}`, v));
     }
-    const out = new Map<string, Cell>();
-    for (const m of sortedMembers) for (const t of TYPES) {
-      const key = `${normalize(m.leerling_email)}|${t}`;
-      const nums = scores.get(key) ?? [];
-      out.set(key, { score: nums.length ? nums.reduce((a,b)=>a+b,0)/nums.length : null, count: counts.get(key) ?? 0 });
+    for (const state of volleyStates) {
+      if (selectedLesson !== "all" && selectedLesson !== `volleybal:${state.les.id}`) continue;
+      const idToEmail = new Map(state.participants.map(p => [p.id, p.leerling_email]));
+      for (const e of state.peer ?? []) {
+        if (e.status !== "ingediend") continue;
+        const nums = PEER_KEYS.map(k => numeric(e.criteria?.[k]));
+        if (nums.some(n => n === null)) continue;
+        const avg = (nums as number[]).reduce((a, b) => a + b, 0) / nums.length;
+        add(idToEmail.get(e.beoordeelde_id), "volleybal:peer", avg);
+      }
+      for (const e of state.self ?? []) {
+        if (e.status !== "ingediend") continue;
+        const rules = numeric(e.spelregels), level = numeric(e.spelniveau);
+        if (rules !== null) add(idToEmail.get(e.deelnemer_id), "volleybal:spelregels", rules);
+        if (level !== null) add(idToEmail.get(e.deelnemer_id), "volleybal:spelniveau", level);
+      }
     }
-    return out;
-  }, [sortedMembers, participants, evaluations, selectedLesson]);
-  const group = groups.find(g => g.id === groupId);
+    const result = new Map<string, Cell>();
+    for (const [key, nums] of values) result.set(key, { score: nums.reduce((a, b) => a + b, 0) / nums.length, count: counts.get(key) ?? 0 });
+    return result;
+  }, [sortedMembers, selectedLesson, hockeyParticipants, hockeyEvaluations, volleyStates]);
+
   return (
     <AppShell title="KA LO App" subtitle="Evaluaties LO">
-      <BaseHero label="LEERKRACHTEN LO" title={<>Evaluaties <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">per klasgroep</span></>}
-        description="Alle evaluaties samen, met dezelfde leerlingvolgorde als bij Klasgroepen."
+      <BaseHero
+        label="LEERKRACHTEN LO"
+        title={<>Evaluaties <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">per klasgroep</span></>}
+        description="Alle evaluaties samen, met dezelfde leerlingvolgorde als bij Klasgroepen. Hockey voor 3e–4e, Volleybal voor 5e–6e."
         imageSrc="/functional/functionalfitness.png" imageAlt="Evaluaties lichamelijke opvoeding"
         quoteTitle="Evalueren om te groeien" quote="Observeer. Leer. Verbeter."
-        actions={<Link href="/leerkrachten-lo" className="inline-flex h-11 items-center rounded-2xl border border-white/20 bg-black/40 px-5 font-bold text-white">← Terug naar Leerkrachten LO</Link>} />
+        actions={<Link href="/leerkrachten-lo" className="inline-flex h-11 items-center rounded-2xl border border-white/20 bg-black/40 px-5 font-bold text-white">← Terug naar Leerkrachten LO</Link>}
+      />
       <main className="mx-auto w-full max-w-[1500px] px-4 py-6 text-white">
         {error && <div role="alert" className="mb-4 rounded-xl border border-red-400/40 bg-red-500/10 p-4 text-red-100">{error}</div>}
         {loading ? <p>Evaluaties laden...</p> : !allowed ? <p>Je hebt geen toegang tot dit overzicht.</p> : <>
@@ -153,7 +250,7 @@ export default function EvaluatiesLeerkrachtenPage() {
             <div className="mb-4 flex flex-wrap items-center gap-3">
               <label htmlFor="evaluatie-schooljaar" className="text-sm font-bold text-white/75">Schooljaar</label>
               <select id="evaluatie-schooljaar" value={schooljaar} onChange={e => { setSchooljaar(e.target.value); setGroupId(""); }} className="rounded-xl border border-white/20 bg-[#152632] px-3 py-2 text-white">
-                {schooljaren.map(y => <option key={y}>{y}</option>)}
+                {schooljaren.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -164,29 +261,38 @@ export default function EvaluatiesLeerkrachtenPage() {
           {group && <section className="rounded-3xl border border-white/15 bg-white/5 p-4 sm:p-6">
             <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
               <div><h2 className="text-2xl font-black">{group.naam}</h2><p className="text-sm text-white/60">{sortedMembers.length} leerlingen · {group.schooljaar}</p></div>
-              <label className="flex items-center gap-2 text-sm">Hockeylessen
-                <select value={selectedLesson} onChange={e => setSelectedLesson(e.target.value)} className="max-w-[240px] rounded-xl border border-white/20 bg-[#152632] p-2 text-white">
+              <label className="flex items-center gap-2 text-sm">Evaluatieles
+                <select value={selectedLesson} onChange={e => setSelectedLesson(e.target.value)} className="max-w-[260px] rounded-xl border border-white/20 bg-[#152632] p-2 text-white">
                   <option value="all">Alle lessen samen</option>
-                  {lessons.map(l => <option key={l.id} value={l.id}>{l.naam} ({l.lesdatum})</option>)}
+                  {lessons.map(l => <option key={`${l.sport}:${l.id}`} value={`${l.sport}:${l.id}`}>{l.sport === "hockey" ? "🏑" : "🏐"} {l.naam} ({l.lesdatum})</option>)}
                 </select>
               </label>
             </div>
             {busy ? <p>Resultaten laden...</p> : !sortedMembers.length ? <p>Geen leerlingen gevonden in deze klasgroep.</p> : <>
-              <p className="mb-3 text-xs text-white/65">Horizontaal scrollen om alle leerlingen te bekijken. — = nog geen ingediende evaluatie. Klik op een score om het gemiddelde te zien.</p>
+              <p className="mb-3 text-xs text-white/65">— = nog geen ingediende evaluatie. Beweeg over een score om het gemiddelde te bekijken. Horizontaal scrollen voor alle leerlingen.</p>
+              {sortedMembers.some(m => !sportVoor(m, group)) && <p className="mb-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100">Bij sommige leerlingen kon het leerjaar niet worden bepaald uit de klasnaam. Controleer hun klasgegevens.</p>}
               <div className="overflow-x-auto rounded-2xl border border-white/15">
                 <table className="w-max min-w-full border-collapse text-sm">
                   <thead><tr className="bg-[#203846]">
-                    <th className="sticky left-0 z-20 min-w-[175px] border-r border-white/20 bg-[#203846] p-3 text-left">Evaluatie</th>
-                    {sortedMembers.map((m,i) => <th key={`${m.leerling_email}-${i}`} className="min-w-[95px] border-r border-white/10 p-2 text-center align-bottom"><span className="inline-block max-w-[110px] break-words">{displayName(m)}</span><span className="mt-1 block text-xs font-normal text-white/60">{m.klas_naam}</span></th>)}
+                    <th className="sticky left-0 z-20 min-w-[210px] border-r border-white/20 bg-[#203846] p-3 text-left">Evaluatie</th>
+                    {sortedMembers.map((m, i) => <th key={`${m.leerling_email}-${i}`} className="min-w-[95px] border-r border-white/10 p-2 text-center align-bottom"><span className="inline-block max-w-[110px] break-words">{displayName(m)}</span><span className="mt-1 block text-xs font-normal text-white/60">{m.klas_naam}</span></th>)}
                   </tr></thead>
-                  <tbody>{TYPES.map((t,i) => <tr key={t} className={i%2 ? "bg-white/[0.04]" : "bg-black/10"}>
-                    <th scope="row" className="sticky left-0 z-10 border-r border-white/15 bg-[#182b37] p-3 text-left font-bold">{LABELS[t]}</th>
-                    {sortedMembers.map((m,j) => { const c = matrix.get(`${normalize(m.leerling_email)}|${t}`) ?? { score: null, count: 0 }; const s = symbol(c.score); return <td key={`${m.leerling_email}-${j}`} className="border-r border-white/10 p-3 text-center"><span title={c.score === null ? "Nog geen beoordeling" : `Gemiddelde ${c.score.toFixed(2)}/4 · ${c.count} ingediend`} className={`inline-flex min-w-12 items-center justify-center rounded-xl px-2 py-2 text-base font-black ${s.bg} ${s.color}`}>{s.label}</span></td>; })}
+                  <tbody>{metrics.map((metric, i) => <tr key={metric.id} className={i % 2 ? "bg-white/[0.04]" : "bg-black/10"}>
+                    <th scope="row" className="sticky left-0 z-10 border-r border-white/15 bg-[#182b37] p-3 text-left font-bold">{metric.label}</th>
+                    {sortedMembers.map((m, j) => {
+                      const relevant = sportVoor(m, group) === metric.sport;
+                      const cell = relevant ? matrix.get(`${emailKey(m.leerling_email)}|${metric.id}`) : undefined;
+                      const v = cell?.score ?? null;
+                      const s = metric.sport === "volleybal" ? volleySymbol(v) : symbol(v);
+                      const title = !relevant ? "Andere graad" : v === null ? "Nog geen ingediende beoordeling" : `${metric.mode === "mean" ? "Gemiddelde" : "Score"} ${v.toFixed(2)}/4 · ${cell?.count ?? 0} beoordeling(en)`;
+                      return <td key={`${m.leerling_email}-${j}`} className="border-r border-white/10 p-3 text-center"><span title={title} className={`inline-flex min-w-12 items-center justify-center rounded-xl px-2 py-2 text-base font-black ${relevant ? s.bg : "bg-transparent"} ${relevant ? s.color : "text-white/20"}`}>{relevant ? s.label : "·"}</span></td>;
+                    })}
                   </tr>)}</tbody>
                 </table>
               </div>
+              {!metrics.length && <p className="mt-4 text-white/70">Geen evaluatiesport gekoppeld aan deze leerjaren.</p>}
               <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-white/70"><span>🔴 − onvoldoende</span><span>🟠 +/− bijna voldoende</span><span>🔵 + goed</span><span>🟢 ++ zeer goed</span></div>
-              <p className="mt-3 text-xs text-white/50">Dit overzicht toont momenteel Hockey. Nieuwe evaluatiesporten kunnen later als extra rijen worden toegevoegd.</p>
+              <p className="mt-3 text-xs text-white/50">Hockey (3e–4e) en Volleybal (5e–6e). De gemiddelden worden berekend uit ingediende beoordelingen. Nieuwe sporten kunnen later als extra rijen worden gekoppeld.</p>
             </>}
           </section>}
         </>}
