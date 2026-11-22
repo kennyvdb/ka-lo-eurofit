@@ -48,7 +48,7 @@ const scorePeer = (c: PeerDraft) => peerComplete(c)
   : "—";
 
 type Lesson = { id:string; naam:string; lesdatum:string; schooljaar:string; fase:"voorbereiding"|"peer"|"self"|"afgerond"; aangemaakt_op:string };
-type Participant = { id:string; les_id:string; leerling_email:string; profiel_id:string|null; volledige_naam:string; klas_naam:string|null; aanwezigheid:"aanwezig"|"afwezig" };
+type Participant = { id:string; les_id:string; leerling_email:string; profiel_id:string|null; volledige_naam:string; klas_naam:string|null; aanwezigheid:"aanwezig"|"afwezig"; geblesseerd:boolean; toestel_beschikbaar:boolean };
 type Peer = { id:string; observator_id:string|null; beoordeelde_id:string; criteria:PeerDraft; status:"concept"|"ingediend"; invoermethode:string };
 type SelfReview = { deelnemer_id:string; spelregels:number|null; spelniveau:number|null; status:"concept"|"ingediend"; invoermethode:string };
 type State = { les:Lesson; teacher:boolean; my_id:string|null; participants:Participant[]; peer:Peer[]; self:SelfReview[]; reserved_ids:string[] };
@@ -157,6 +157,8 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   },[mine?.id,mine?.status,JSON.stringify(mine?.criteria??{})]);
   useEffect(()=>{setRules(mySelf?.spelregels??null);setLevel(mySelf?.spelniveau??null);},[mySelf?.spelregels,mySelf?.spelniveau]);
   const present=participants.filter(p=>p.aanwezigheid==="aanwezig");
+  const eligibleForAssessment=present.filter(p=>!p.geblesseerd);
+  const expectedObservers=present.filter(p=>p.toestel_beschikbaar);
   const submitted = peers.filter(p=>p.status==="ingediend");
   const rated = new Set(submitted.map(x=>x.beoordeelde_id));
   const observerDone = new Set(submitted.map(x=>x.observator_id).filter(Boolean));
@@ -189,8 +191,8 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
     if(e)throw e;setLessonId(data as string);setCreating(false);setSelected([]);
   },"Volleybalsles aangemaakt. Controleer eerst de aanwezigheid.");}
   async function move(phase:"start"|"volgende"|"afsluiten"){
-    if(phase==="volgende" && (present.some(p=>!observerDone.has(p.id)) || present.some(p=>!rated.has(p.id)))){
-      if(!window.confirm(`Er ontbreken nog ${present.filter(p=>!observerDone.has(p.id)).length} ingediende peerevaluaties en ${present.filter(p=>!rated.has(p.id)).length} beoordelingen. Toch doorgaan naar zelfevaluatie?`))return;
+    if(phase==="volgende" && (expectedObservers.some(p=>!observerDone.has(p.id)) || eligibleForAssessment.some(p=>!rated.has(p.id)))){
+      if(!window.confirm(`Er ontbreken nog ${expectedObservers.filter(p=>!observerDone.has(p.id)).length} ingediende peerevaluaties en ${eligibleForAssessment.filter(p=>!rated.has(p.id)).length} beoordelingen. Toch doorgaan naar zelfevaluatie?`))return;
     }
     if(phase==="afsluiten" && !window.confirm("Les definitief afsluiten? Leerlingen kunnen daarna geen evaluaties meer invoeren of aanpassen."))return;
     await action(async()=>{const {error:e}=await supabase.rpc("volleybal_fase",{p_les_id:lessonId,p_actie:phase});if(e)throw e;},"Lesfase aangepast.");
@@ -218,17 +220,17 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
     setPaperPeer(peer?.criteria??{});setPaperRules(self?.spelregels??null);setPaperLevel(self?.spelniveau??null);
   }
   function downloadCsv(){
-    const rows=[ ["Naam","Klas","Aanwezig","Observator","Peerevaluatie ingediend","Wedstrijdscore","Bovenhandse opslag","Aanval","Verdediging","Coaching","Zelfevaluatie ingediend","Spelregels","Deelnameniveau"],
+    const rows=[ ["Naam","Klas","Aanwezig","Geblesseerd","Gsm beschikbaar","Observator","Peerevaluatie ingediend","Wedstrijdscore","Bovenhandse opslag","Aanval","Verdediging","Coaching","Zelfevaluatie ingediend","Spelregels","Deelnameniveau"],
       ...participants.map(p=>{const peer=peers.find(x=>x.beoordeelde_id===p.id),self=selfs.find(x=>x.deelnemer_id===p.id);
-        return [p.volledige_naam,p.klas_naam??"",p.aanwezigheid,findName(peer?.observator_id),peer?.status??"niet begonnen",peer?.status==="ingediend"?scorePeer(peer.criteria):"",...PEER_CRITERIA.map(c=>peer?.criteria[c.key]===undefined?"":PEER_LEVELS[(peer?.criteria[c.key] ?? 1)-1]??""),self?.status??"niet begonnen",self?.spelregels?SYMBOLS[self.spelregels-1]:"",self?.spelniveau?SYMBOLS[self.spelniveau-1]:""]; }) ];
+        return [p.volledige_naam,p.klas_naam??"",p.aanwezigheid,p.geblesseerd?"Ja":"Nee",p.toestel_beschikbaar?"Ja":"Nee",findName(peer?.observator_id),peer?.status??"niet begonnen",peer?.status==="ingediend"?scorePeer(peer.criteria):"",...PEER_CRITERIA.map(c=>peer?.criteria[c.key]===undefined?"":PEER_LEVELS[(peer?.criteria[c.key] ?? 1)-1]??""),self?.status??"niet begonnen",self?.spelregels?SYMBOLS[self.spelregels-1]:"",self?.spelniveau?SYMBOLS[self.spelniveau-1]:""]; }) ];
     const csv="\uFEFF"+rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\r\n");
     const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
     const a=document.createElement("a");a.href=url;a.download=`volleybal-les3-${state?.les.lesdatum??today()}.csv`;a.click();URL.revokeObjectURL(url);
   }
   const visiblePresent=present.filter(p=>controlFilter==="iedereen"||
-    (controlFilter==="niet_ingediend"&&!observerDone.has(p.id))||
-    (controlFilter==="niet_beoordeeld"&&!rated.has(p.id))||
-    (controlFilter==="zelf_open"&&!selfDone.has(p.id)));
+    (controlFilter==="niet_ingediend"&&p.toestel_beschikbaar&&!observerDone.has(p.id))||
+    (controlFilter==="niet_beoordeeld"&&!p.geblesseerd&&!rated.has(p.id))||
+    (controlFilter==="zelf_open"&&!p.geblesseerd&&!selfDone.has(p.id)));
   const showTeacher=teacher && omgeving!=="leerling";
   const studentView=!showTeacher;
   const isFinished=state?.les.fase==="afgerond";
@@ -371,24 +373,30 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
               {isFinished&&<p className="text-emerald-200">De les is afgesloten; leerlingbewerkingen zijn geblokkeerd.</p>}
             </div>
           </section>
-          {state.les.fase==="voorbereiding"&&<section className={shell}><h2 className="mb-3 font-black">Aanwezigheden</h2>
-            <div className="grid gap-2 sm:grid-cols-2">{participants.map(p=><label key={p.id} className="flex items-center gap-3 rounded-xl bg-white/5 p-3">
-              <input type="checkbox" checked={p.aanwezigheid==="aanwezig"} disabled={busy}
-                onChange={e=>void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_aanwezigheid",{p_deelnemer_id:p.id,p_aanwezig:e.target.checked});if(ae)throw ae;},"Aanwezigheid aangepast.")}/>
-              <span>{p.volledige_naam} <small className="text-white/60">{p.klas_naam}</small></span></label>)}</div>
+          {state.les.fase==="voorbereiding"&&<section className={shell}>
+            <h2 className="mb-2 font-black">Aanwezigheid en hulpmiddelen</h2>
+            <p className="mb-3 text-sm text-white/65">Geblesseerden kunnen observeren, maar hoeven niet zelf beoordeeld te worden. Leerlingen zonder gsm worden op papier beoordeeld.</p>
+            <div className="grid gap-2 sm:grid-cols-2">{participants.map(p=><div key={p.id} className="rounded-xl bg-white/5 p-3">
+              <p className="mb-2 font-semibold">{p.volledige_naam} <small className="font-normal text-white/60">{p.klas_naam}</small></p>
+              <div className="flex flex-wrap gap-4 text-sm">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={p.aanwezigheid==="afwezig"} disabled={busy} onChange={e=>void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_aanwezigheid",{p_deelnemer_id:p.id,p_aanwezig:!e.target.checked});if(ae)throw ae;},"Aanwezigheid aangepast.")}/>Afwezig</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={p.geblesseerd??false} disabled={busy||p.aanwezigheid==="afwezig"} onChange={e=>void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_wijzig_hulpmiddelen",{p_deelnemer_id:p.id,p_geblesseerd:e.target.checked,p_toestel_beschikbaar:p.toestel_beschikbaar??true});if(ae)throw ae;},"Leerlingstatus bijgewerkt.")}/>Geblesseerd</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={!(p.toestel_beschikbaar??true)} disabled={busy||p.aanwezigheid==="afwezig"} onChange={e=>void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_wijzig_hulpmiddelen",{p_deelnemer_id:p.id,p_geblesseerd:p.geblesseerd??false,p_toestel_beschikbaar:!e.target.checked});if(ae)throw ae;},"Leerlingstatus bijgewerkt.")}/>Geen gsm</label>
+              </div>
+            </div>)}</div>
           </section>}
           <section className={shell}>
             <h2 className="mb-4 text-xl font-black">Live evaluatiecontrole</h2>
             <div className="grid gap-3 sm:grid-cols-3">
-              {[["Peerevaluaties ingediend",observerDone.size],["Leerlingen beoordeeld",rated.size],["Zelfevaluaties ingediend",selfDone.size]].map(([label,value])=><div key={String(label)} className="rounded-xl bg-black/20 p-4"><p className="text-sm text-white/65">{label}</p><p className="text-2xl font-black">{value} / {present.length}</p></div>)}
+              {[["Peerevaluaties ingediend",expectedObservers.filter(p=>observerDone.has(p.id)).length],["Leerlingen beoordeeld",eligibleForAssessment.filter(p=>rated.has(p.id)).length],["Zelfevaluaties ingediend",eligibleForAssessment.filter(p=>selfDone.has(p.id)).length]].map(([label,value])=><div key={String(label)} className="rounded-xl bg-black/20 p-4"><p className="text-sm text-white/65">{label}</p><p className="text-2xl font-black">{value} / {String(label)==="Peerevaluaties ingediend"?expectedObservers.length:eligibleForAssessment.length}</p></div>)}
             </div>
             <div className="mt-4 flex flex-wrap gap-2">{([ ["iedereen","Alle leerlingen"],["niet_ingediend","Niet ingediend"],["niet_beoordeeld","Niet beoordeeld"],["zelf_open","Zelfevaluatie open"] ] as const).map(([key,label])=><button key={key} className={controlFilter===key?primary:button} onClick={()=>setControlFilter(key)}>{label}</button>)}</div>
             <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="border-b border-white/20 text-white/70"><th className="p-2">Leerling</th><th>Als observator</th><th>Beoordeeld door</th><th>Zelfevaluatie</th></tr></thead><tbody>
               {visiblePresent.map(p=>{const authored=peers.find(r=>r.observator_id===p.id),received=peers.find(r=>r.beoordeelde_id===p.id),self=selfs.find(r=>r.deelnemer_id===p.id);
-                return <tr key={p.id} className="border-b border-white/10"><td className="p-2 font-semibold">{p.volledige_naam}<small className="block font-normal text-white/55">{p.klas_naam}</small></td>
-                  <td>{authored?.status==="ingediend"?"✓ Ingediend":authored?"◷ Concept":"✕ Niet ingediend"}</td>
-                  <td>{received?.status==="ingediend"?`✓ ${findName(received.observator_id)}`:received?"◷ Gekozen, nog niet ingediend":"✕ Nog niet gekozen"}</td>
-                  <td>{self?.status==="ingediend"?"✓ Ingediend":self?"◷ Concept":"✕ Niet ingediend"}</td></tr>;})}
+                return <tr key={p.id} className="border-b border-white/10"><td className="p-2 font-semibold">{p.volledige_naam}<small className="block font-normal text-white/55">{p.klas_naam}{p.geblesseerd?" · geblesseerd":""}{!p.toestel_beschikbaar?" · geen gsm (papier)":""}</small></td>
+                  <td>{authored?.status==="ingediend"?"✓ Ingediend":!p.toestel_beschikbaar?"📝 Papier nodig":authored?"◷ Concept":"✕ Niet ingediend"}</td>
+                  <td>{p.geblesseerd?"Niet van toepassing":received?.status==="ingediend"?`✓ ${findName(received.observator_id)}`:received?"◷ Gekozen, nog niet ingediend":"✕ Nog niet gekozen"}</td>
+                  <td>{p.geblesseerd?"Niet van toepassing":self?.status==="ingediend"?"✓ Ingediend":!p.toestel_beschikbaar?"📝 Papier nodig":self?"◷ Concept":"✕ Niet ingediend"}</td></tr>;})}
             </tbody></table></div>
             {visiblePresent.length===0&&<p className="mt-4 text-sm text-white/60">Geen leerlingen voor dit filter.</p>}
           </section>
@@ -419,14 +427,15 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
         <section className={shell}><h2 className="text-xl font-black">Welkom, {me.volledige_naam}</h2><p className="mt-2 text-white/70">{state.les.naam} · {state.les.lesdatum}</p>
           <div className="mt-3 rounded-lg bg-white/10 p-3 font-bold">{state.les.fase==="voorbereiding"?"De leerkracht start de peerevaluatie binnenkort.":state.les.fase==="peer"?"Fase 1 – Peerevaluatie (gesimuleerde wedstrijd 3 tegen 3)":state.les.fase==="self"?"Fase 2 – Zelfevaluatie (wedstrijd 4 tegen 4)":"De les is definitief afgesloten."}</div>
         </section>
-        {(state.les.fase==="peer"||state.les.fase==="self")&&<section className={shell}>
+        {me.aanwezigheid==="aanwezig"&&!me.toestel_beschikbaar&&<section className={shell}>Je staat geregistreerd als leerling zonder gsm. De leerkracht kan je evaluatie op papier invoeren.</section>}
+        {(state.les.fase==="peer"||state.les.fase==="self")&&me.aanwezigheid==="aanwezig"&&me.toestel_beschikbaar&&<section className={shell}>
           <h2 className="text-xl font-black">Peerevaluatie · wedstrijd 3 tegen 3</h2>
           {mine?.status==="ingediend"?<p className="mt-3 text-emerald-200">✓ Definitief ingediend voor {findName(mine.beoordeelde_id)}. Je kunt deze niet meer aanpassen.</p>:
           !mine&&state.les.fase==="self"?<p className="mt-3 text-amber-100">Er werd nog geen leerling gekozen tijdens fase 1. Meld dit aan de leerkracht.</p>:
           <div className="mt-4 space-y-4">
             {!mine&&<><p className="text-sm text-white/70">Spreek met je medeleerling af wie wie beoordeelt. Een leerling kan slechts eenmaal gekozen worden.</p>
               <select disabled={previewMode} className={field} value={selectedTarget} onChange={e=>setSelectedTarget(e.target.value)}><option value="">Kies de leerling die jij beoordeelt…</option>
-                {present.filter(p=>p.id!==me.id&&!reserved.has(p.id)).map(p=><option value={p.id} key={p.id}>{p.volledige_naam} · {p.klas_naam}</option>)}</select>
+                {eligibleForAssessment.filter(p=>p.id!==me.id&&!reserved.has(p.id)).map(p=><option value={p.id} key={p.id}>{p.volledige_naam} · {p.klas_naam}</option>)}</select>
               <button className={primary} disabled={previewMode||busy||!selectedTarget} onClick={()=>void claim(selectedTarget)}>Leerling vastleggen</button></>}
             {mine&&<><p className="text-sm">Ik beoordeel: <strong>{findName(mine.beoordeelde_id)}</strong></p>
               <PeerQuestions value={peerDraft} onChange={setPeerDraft} locked={previewMode||busy}/>
@@ -434,7 +443,8 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
                 <button className={primary} disabled={previewMode||busy||!peerComplete(peerDraft)} onClick={()=>void savePeer(true)}>Definitief indienen</button></div></>}
           </div>}
         </section>}
-        {state.les.fase==="self"&&<section className={shell}><h2 className="text-xl font-black">Mijn zelfevaluatie · wedstrijd 4 tegen 4</h2>
+        {me.geblesseerd&&<section className={shell}>Je bent als geblesseerd aangeduid. Je hoeft niet zelf beoordeeld te worden, maar kunt eventueel mee observeren.</section>}
+        {state.les.fase==="self"&&me.aanwezigheid==="aanwezig"&&!me.geblesseerd&&me.toestel_beschikbaar&&<section className={shell}><h2 className="text-xl font-black">Mijn zelfevaluatie · wedstrijd 4 tegen 4</h2>
           {mySelf?.status==="ingediend"?<p className="mt-3 text-emerald-200">✓ Mijn zelfevaluatie is definitief ingediend.</p>:
           <div className="mt-4"><SelfQuestions spelregels={rules} spelniveau={level} onRules={setRules} onLevel={setLevel} locked={previewMode||busy}/>
             <div className="mt-4 flex flex-wrap gap-2"><button className={button} disabled={previewMode||busy} onClick={()=>void saveSelf(false)}>Concept opslaan</button>
