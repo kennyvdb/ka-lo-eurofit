@@ -67,7 +67,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   const [date, setDate] = useState(today());
   const [year, setYear] = useState(5);
   const [finalities, setFinalities] = useState<string[]>(["AM", "DF", "DS"]);
-  const [classFilter, setClassFilter] = useState("");
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -170,9 +170,9 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
     return klas.startsWith(String(year)) && finalities.some(f => klas.includes(f));
   }), [smart, year, finalities]);
   const studentCandidates = useMemo(() => matchingStudents.filter(s =>
-    (!classFilter || s.klas_naam === classFilter) &&
+    (selectedClasses.length === 0 || selectedClasses.includes(s.klas_naam)) &&
     (`${s.volledige_naam} ${s.klas_naam}`).toLowerCase().includes(filter.toLowerCase())
-  ).sort((a,b) => a.klas_naam.localeCompare(b.klas_naam,"nl-BE") || a.volledige_naam.localeCompare(b.volledige_naam,"nl-BE")), [matchingStudents, classFilter, filter]);
+  ).sort((a,b) => a.klas_naam.localeCompare(b.klas_naam,"nl-BE") || a.volledige_naam.localeCompare(b.volledige_naam,"nl-BE")), [matchingStudents, selectedClasses, filter]);
   const classNames = useMemo(() => [...new Set(matchingStudents.map(s => s.klas_naam))].sort((a,b) => a.localeCompare(b,"nl-BE")), [matchingStudents]);
   const findName=(id?:string|null)=>participants.find(p=>p.id===id)?.volledige_naam??"—";
   const paperPerson=participants.find(p=>p.id===paperStudent);
@@ -274,7 +274,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
         <h2 className="mb-4 text-xl font-black">Nieuwe volleyballes · les 3</h2>
         <div className="grid gap-3 sm:grid-cols-3"><label>Lesnaam<input className={field} value={name} onChange={e=>setName(e.target.value)}/></label>
           <label>Datum<input type="date" className={field} value={date} onChange={e=>setDate(e.target.value)}/></label>
-          <label>Leerjaar<select className={field} value={year} onChange={e=>{setYear(Number(e.target.value));setClassFilter("");setSelected([]);}}><option value={5}>5e jaar</option><option value={6}>6e jaar</option></select></label></div>
+          <label>Leerjaar<select className={field} value={year} onChange={e=>{setYear(Number(e.target.value));setSelectedClasses([]);setSelected([]);}}><option value={5}>5e jaar</option><option value={6}>6e jaar</option></select></label></div>
         <fieldset className="mt-4">
           <legend className="mb-2 text-sm font-bold">Finaliteit</legend>
           <div className="flex flex-wrap gap-4">
@@ -282,7 +282,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
               <label key={f} className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={finalities.includes(f)} onChange={() => {
                   setFinalities(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]);
-                  setClassFilter(""); setSelected([]);
+                  setSelectedClasses([]); setSelected([]);
                 }} />
                 {f}
               </label>
@@ -290,8 +290,30 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
           </div>
           <p className="mt-1 text-xs text-white/60">Selecteer een of meerdere finaliteiten. De klas- en leerlingenlijst wordt automatisch gefilterd.</p>
         </fieldset>
-        <label className="mt-4 block">Klas<select className={field} value={classFilter} onChange={e=>{setClassFilter(e.target.value);setSelected([]);}}><option value="">Alle klassen van de gekozen finaliteiten</option>{classNames.map(c=><option key={c} value={c}>{c}</option>)}</select></label>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2"><h3 className="font-black">Leerlingen ({selected.length} geselecteerd)</h3><button type="button" className={button} onClick={()=>setSelected(studentCandidates.map(s=>normalEmail(s.email)))}>Alle zichtbare selecteren</button></div>
+        <fieldset className="mt-4 rounded-xl border border-white/15 bg-white/5 p-3">
+          <legend className="px-2 text-sm font-bold">Klassen (meerdere mogelijk)</legend>
+          <p className="mb-3 text-xs text-white/65">Vink bijvoorbeeld twee klassen aan. Zonder vinkjes worden alle klassen van de gekozen finaliteiten getoond.</p>
+          <div className="flex flex-wrap gap-2">
+            {classNames.map(c => (
+              <label key={c} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm ${selectedClasses.includes(c) ? "border-[#89C2AA] bg-[#4B8E8D]/30" : "border-white/15 bg-black/20"}`}>
+                <input type="checkbox" checked={selectedClasses.includes(c)} onChange={e => setSelectedClasses(prev => e.target.checked ? [...prev, c] : prev.filter(x => x !== c))} />
+                {c}
+              </label>
+            ))}
+          </div>
+          {classNames.length === 0 && <p className="text-sm text-amber-100">Geen klassen gevonden voor dit leerjaar en deze finaliteiten.</p>}
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button type="button" className={button} onClick={() => setSelectedClasses([])}>Alle klassen tonen</button>
+            <span className="text-xs text-white/65">{selectedClasses.length ? `${selectedClasses.length} klas(sen) gekozen` : "Alle klassen zichtbaar"}</span>
+          </div>
+        </fieldset>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-black">Leerlingen ({selected.length} geselecteerd)</h3>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className={button} onClick={()=>setSelected(prev => [...new Set([...prev, ...studentCandidates.map(s=>normalEmail(s.email))])])}>Alle zichtbare selecteren</button>
+            <button type="button" className={button} onClick={()=>setSelected(prev => prev.filter(x => !studentCandidates.some(s => normalEmail(s.email) === x)))}>Zichtbare deselecteren</button>
+          </div>
+        </div>
         <input className={`${field} my-3`} value={filter} onChange={e=>setFilter(e.target.value)} placeholder="Zoek leerling of klas"/>
         <div className="grid max-h-[360px] gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">{studentCandidates.map(s=><label key={s.email} className="flex gap-2 rounded-lg border border-white/15 bg-white/5 p-2 text-sm">
           <input type="checkbox" checked={selected.includes(normalEmail(s.email))} onChange={e=>setSelected(prev=>e.target.checked?[...prev,normalEmail(s.email)]:prev.filter(x=>x!==normalEmail(s.email)))}/>
