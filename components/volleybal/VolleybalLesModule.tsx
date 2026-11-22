@@ -85,6 +85,21 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   const [controlFilter, setControlFilter] = useState<"iedereen"|"niet_ingediend"|"niet_beoordeeld"|"zelf_open">("iedereen");
   const [previewId, setPreviewId] = useState("");
   const previewMode = tab === "leerling";
+  // Afzonderlijke lokale simulatie: nooit schrijven naar de leerlingenresultaten.
+  const [previewPhase, setPreviewPhase] = useState<"peer"|"self">("peer");
+  const [previewTarget, setPreviewTarget] = useState("");
+  const [previewPeerDraft, setPreviewPeerDraft] = useState<PeerDraft>({});
+  const [previewRules, setPreviewRules] = useState<number|null>(null);
+  const [previewLevel, setPreviewLevel] = useState<number|null>(null);
+  const [previewPeerSent, setPreviewPeerSent] = useState(false);
+  const [previewSelfSent, setPreviewSelfSent] = useState(false);
+  const [previewClaimed, setPreviewClaimed] = useState(false);
+  const resetPreview = () => {
+    setPreviewTarget(""); setPreviewPeerDraft({});
+    setPreviewRules(null); setPreviewLevel(null);
+    setPreviewPeerSent(false); setPreviewSelfSent(false);
+    setPreviewClaimed(false); setPreviewPhase("peer");
+  };
 
   const refresh = useCallback(async (id:string) => {
     if (!id) return;
@@ -215,7 +230,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
     (controlFilter==="niet_beoordeeld"&&!rated.has(p.id))||
     (controlFilter==="zelf_open"&&!selfDone.has(p.id)));
   const showTeacher=teacher && omgeving!=="leerling";
-  const studentView=!showTeacher || previewMode;
+  const studentView=!showTeacher;
   const isFinished=state?.les.fase==="afgerond";
 
   function PeerQuestions({value,onChange,locked}:{value:PeerDraft;onChange:(next:PeerDraft)=>void;locked:boolean}){
@@ -286,19 +301,63 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
           {(["overzicht","papier","resultaten","leerling"] as const).map(t=><button
             type="button" key={t} aria-current={tab===t?"page":undefined}
             className={tab===t?primary:button}
-            onClick={()=>{setTab(t);setPreviewId("");}}
+            onClick={()=>{setTab(t);setPreviewId("");resetPreview();}}
           >{({overzicht:"Live les",papier:"Papieren evaluaties",resultaten:"Resultaten",leerling:"👁 Leerlingweergave"})[t]}</button>)}
         </nav>
         {tab==="leerling"&&<section className={shell}>
-          <h2 className="text-xl font-black">Leerlingweergave · alleen lezen</h2>
-          <p className="mt-2 text-sm text-white/70">Volg het huidige scherm van een leerling in de gekozen les. De gegevens worden elke vijf seconden vernieuwd. Je kunt geen antwoorden wijzigen of indienen.</p>
-          <label className="mt-4 block text-sm font-bold">Kies een leerling
-            <select className={`${field} mt-2`} value={previewId} onChange={e=>setPreviewId(e.target.value)}>
+          <h2 className="text-xl font-black">👁 Leerlingweergave · interactieve test</h2>
+          <p className="mt-2 text-sm text-white/70">Kies een leerling en probeer zelf alle knoppen uit, zoals een leerling dat zou doen. De test gebruikt uitsluitend tijdelijke antwoorden in jouw browser: er wordt <strong>niets opgeslagen in Supabase</strong>.</p>
+          <label className="mt-4 block text-sm font-bold">Bekijk als leerling
+            <select className={`${field} mt-2`} value={previewId} onChange={e=>{setPreviewId(e.target.value);resetPreview();}}>
               <option value="">Selecteer een leerling…</option>
               {[...participants].sort((a,b)=>a.volledige_naam.localeCompare(b.volledige_naam,"nl-BE")).map(p=><option value={p.id} key={p.id}>{p.volledige_naam} · {p.klas_naam??""}{p.aanwezigheid==="afwezig"?" (afwezig)":""}</option>)}
             </select>
           </label>
-          {previewId&&<p className="mt-3 rounded-xl border border-sky-400/30 bg-sky-400/10 p-3 text-sm text-sky-100">Voorbeeldmodus actief: alle invulvelden en indienknoppen zijn geblokkeerd.</p>}
+          {previewId&&<>
+            <p className="mt-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100">Testmodus: je kunt alles aanklikken, maar echte leerlinggegevens, keuzes en ingediende evaluaties blijven ongewijzigd.</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button type="button" className={previewPhase==="peer"?primary:button} onClick={()=>setPreviewPhase("peer")}>1 · Peerevaluatie</button>
+              <button type="button" className={previewPhase==="self"?primary:button} onClick={()=>setPreviewPhase("self")}>2 · Zelfevaluatie</button>
+              <button type="button" className={button} onClick={resetPreview}>↺ Test opnieuw starten</button>
+            </div>
+            <div className="mt-4 rounded-xl border border-white/15 bg-black/20 p-4">
+              <p className="font-black">Welkom, {findName(previewId)}</p>
+              <p className="mt-1 text-sm text-white/60">Werkelijke lesfase: {state.les.fase} · Gesimuleerde fase: {previewPhase==="peer"?"Peerevaluatie 3 tegen 3":"Zelfevaluatie 4 tegen 4"}</p>
+              <p className="mt-2 text-xs text-white/60">Dit is een oefenscherm, niet de daadwerkelijk ingediende evaluatie van de gekozen leerling.</p>
+            </div>
+            {previewPhase==="peer"&&<div className="mt-5 space-y-4">
+              <h3 className="text-lg font-black">Peerevaluatie · wedstrijd 3 tegen 3</h3>
+              {previewPeerSent?<p className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-3 text-emerald-100">✓ Testevaluatie ingediend. Eindscore: {scorePeer(previewPeerDraft)}. Er is niets echt ingediend.</p>:
+                <>
+                  <label className="block text-sm font-bold">Ik beoordeel
+                    <select className={`${field} mt-2`} disabled={previewClaimed} value={previewTarget} onChange={e=>setPreviewTarget(e.target.value)}>
+                      <option value="">Kies een leerling…</option>
+                      {present.filter(p=>p.id!==previewId).map(p=><option value={p.id} key={p.id}>{p.volledige_naam} · {p.klas_naam}</option>)}
+                    </select>
+                  </label>
+                  {!previewClaimed?<button type="button" className={primary} disabled={!previewTarget} onClick={()=>setPreviewClaimed(true)}>Leerling vastleggen (test)</button>:
+                    <>
+                      <p className="text-sm">Ik beoordeel: <strong>{findName(previewTarget)}</strong></p>
+                      <PeerQuestions value={previewPeerDraft} onChange={setPreviewPeerDraft} locked={false}/>
+                      <div className="flex flex-wrap gap-2">
+                        <button type="button" className={button} onClick={()=>setNotice("Testconcept in de browser bijgehouden. Er is niets opgeslagen in Supabase.")}>Concept opslaan (test)</button>
+                        <button type="button" className={primary} disabled={!peerComplete(previewPeerDraft)} onClick={()=>setPreviewPeerSent(true)}>Definitief indienen (test)</button>
+                      </div>
+                    </>}
+                </>}
+            </div>}
+            {previewPhase==="self"&&<div className="mt-5 space-y-4">
+              <h3 className="text-lg font-black">Mijn zelfevaluatie · wedstrijd 4 tegen 4</h3>
+              {previewSelfSent?<p className="rounded-xl border border-emerald-400/30 bg-emerald-400/10 p-3 text-emerald-100">✓ Zelfevaluatie in de test ingediend. Er is niets echt opgeslagen.</p>:
+                <>
+                  <SelfQuestions spelregels={previewRules} spelniveau={previewLevel} onRules={setPreviewRules} onLevel={setPreviewLevel} locked={false}/>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" className={button} onClick={()=>setNotice("Testconcept in de browser bijgehouden. Er is niets opgeslagen in Supabase.")}>Concept opslaan (test)</button>
+                    <button type="button" className={primary} disabled={previewRules===null||previewLevel===null} onClick={()=>setPreviewSelfSent(true)}>Mijn zelfevaluatie definitief indienen (test)</button>
+                  </div>
+                </>}
+            </div>}
+          </>}
         </section>}
         {tab!=="leerling"&&<>
         {tab==="overzicht"&&<>
