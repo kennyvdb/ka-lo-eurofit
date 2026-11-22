@@ -64,6 +64,8 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   const [smart, setSmart] = useState<StudentRow[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [name, setName] = useState("Volleybal – les 3");
+  const [editingLessonName, setEditingLessonName] = useState(false);
+  const [lessonNameDraft, setLessonNameDraft] = useState("");
   const [date, setDate] = useState(today());
   const [year, setYear] = useState(5);
   const [finalities, setFinalities] = useState<string[]>(["AM", "DF", "DS"]);
@@ -184,6 +186,19 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
     try{await work();setNotice(message);await refreshList();if(lessonId)await refresh(lessonId);}
     catch(e){setError(errText(e));}finally{setBusy(false);}
   }
+  async function renameLesson(){
+    if (!state || state.les.id !== lessonId) return;
+    const newName = lessonNameDraft.trim();
+    if (!newName) { setError("Vul een lesnaam in."); return; }
+    if (newName === state.les.naam) { setEditingLessonName(false); return; }
+    await action(async () => {
+      const {error:e} = await supabase.rpc("volleybal_hernoem_les", {
+        p_les_id: lessonId, p_nieuwe_naam: newName,
+      });
+      if (e) throw e;
+      setEditingLessonName(false);
+    }, "Naam van de volleyballes aangepast.");
+  }
   async function createLesson(){await action(async()=>{
     const pupils=smart.filter(s=>selected.includes(normalEmail(s.email))).map(s=>({email:normalEmail(s.email),volledige_naam:s.volledige_naam,klas_naam:s.klas_naam,profiel_id:s.profiel_id}));
     if(pupils.length===0)throw new Error("Selecteer eerst leerlingen.");
@@ -264,11 +279,26 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
       {!uid&&<section className={shell}>Log in om de module te gebruiken.</section>}
       {uid&&<section className={shell}>
         <label className="block text-sm font-bold">{showTeacher?"Kies een volleyballes":"Mijn volleyballes"}</label>
-        <select className={`${field} mt-2`} value={lessonId} onChange={e=>{setLessonId(e.target.value);setTab("overzicht");setPreviewId("");}}>
+        <select className={`${field} mt-2`} value={lessonId} onChange={e=>{setLessonId(e.target.value);setTab("overzicht");setPreviewId("");setEditingLessonName(false);}}>
           <option value="">Selecteer een les</option>
           {lessons.map(l=><option key={l.id} value={l.id}>{l.naam} · {l.lesdatum} · {l.fase}</option>)}
         </select>
         {showTeacher&&<button type="button" className={`${button} mt-3`} onClick={()=>{setCreating(!creating);}}> {creating?"Annuleer nieuwe les":"＋ Nieuwe volleyballes"}</button>}
+        {showTeacher && state?.les.id===lessonId && !creating && <div className="mt-4 rounded-xl border border-white/15 bg-white/5 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div><span className="block text-xs text-white/60">Naam van de evaluatie</span><strong>{state.les.naam}</strong></div>
+            {state.les.fase!=="afgerond" && !editingLessonName && <button type="button" className={button} disabled={busy} onClick={()=>{setLessonNameDraft(state.les.naam);setEditingLessonName(true);}}>✎ Naam wijzigen</button>}
+          </div>
+          {editingLessonName && state.les.fase!=="afgerond" && <div className="mt-3 space-y-2">
+            <label className="block text-sm font-bold" htmlFor="volleybal-naam-wijzigen">Nieuwe naam</label>
+            <input id="volleybal-naam-wijzigen" className={field} maxLength={120} value={lessonNameDraft} onChange={e=>setLessonNameDraft(e.target.value)} onKeyDown={e=>{if(e.key==="Enter"){e.preventDefault();if(!busy)void renameLesson();}}}/>
+            <div className="flex gap-2">
+              <button type="button" className={primary} disabled={busy||!lessonNameDraft.trim()} onClick={()=>void renameLesson()}>Naam opslaan</button>
+              <button type="button" className={button} disabled={busy} onClick={()=>setEditingLessonName(false)}>Annuleren</button>
+            </div>
+          </div>}
+          {state.les.fase==="afgerond" && <p className="mt-2 text-xs text-white/55">Deze les is afgesloten. De naam kan niet meer worden gewijzigd.</p>}
+        </div>}
       </section>}
       {showTeacher&&creating&&<section className={shell}>
         <h2 className="mb-4 text-xl font-black">Nieuwe volleyballes · les 3</h2>
