@@ -9,6 +9,7 @@ const supabase = createClient();
 /* ============================================================
    TYPES
 \============================================================ */
+type LeerkrachtTab = "overzicht" | "keuzes" | "kamers";
 type Profiel = {
   id: string;
   volledige_naam: string | null;
@@ -107,6 +108,7 @@ function ervaringLabel(value: string | null) {
    PAGE
 \============================================================ */
 export default function SneeuwstageLeerkrachtPage() {
+  const [actieveTab, setActieveTab] = useState<LeerkrachtTab>("overzicht");
   const [loading, setLoading] = useState(true);
   const [allowed, setAllowed] = useState(false);
   const [profiel, setProfiel] = useState<Profiel | null>(null);
@@ -543,7 +545,7 @@ export default function SneeuwstageLeerkrachtPage() {
             </span>
           </>
         }
-        description="Beheer de deelnemers en volg hier de ski- en snowboardkeuzes van de leerlingen op."
+        description="Volg de sneeuwstage op, bekijk de ski- en snowboardkeuzes en beheer de kamers per tabblad."
         imageSrc="/eurofit/eurofittest.png"
         imageAlt="Sneeuwstage 2026"
         quoteTitle="Ahrntal · Italië"
@@ -572,7 +574,34 @@ export default function SneeuwstageLeerkrachtPage() {
           <b>Oeps:</b> {error}
         </div>
       ) : null}
-      <SneeuwstageKamers beheer />
+      <nav className="snow-tabs" aria-label="Sneeuwstage leerkrachten – tabbladen">
+        {([
+          { id: "overzicht", icoon: "📊", titel: "Overzicht" },
+          { id: "keuzes", icoon: "🎿", titel: "Ski & materiaal" },
+          { id: "kamers", icoon: "🛏️", titel: "Kamerverdeling" },
+        ] as const).map((tab) => (
+          <button
+            key={tab.id}
+            id={`snow-tab-${tab.id}`}
+            type="button"
+            role="tab"
+            aria-selected={actieveTab === tab.id}
+            aria-controls={`snow-panel-${tab.id}`}
+            onClick={() => setActieveTab(tab.id)}
+            className={`snow-tab ${actieveTab === tab.id ? "active" : ""}`}
+          >
+            <span aria-hidden="true">{tab.icoon}</span>
+            <span>{tab.titel}</span>
+          </button>
+        ))}
+      </nav>
+      {actieveTab === "kamers" && (
+        <div id="snow-panel-kamers" role="tabpanel" aria-labelledby="snow-tab-kamers">
+          <SneeuwstageKamers beheer />
+        </div>
+      )}
+      {actieveTab === "overzicht" && (
+        <div id="snow-panel-overzicht" role="tabpanel" aria-labelledby="snow-tab-overzicht">
 
       {/* ====================================================
           REISINFO
@@ -664,41 +693,45 @@ export default function SneeuwstageLeerkrachtPage() {
           </div>
         </div>
         <div className="snow-level-grid">
-          <button type="button" className="snow-level" onClick={() => { setFilter("ski"); setErvaringFilter("0_weken"); } }>
+          <button type="button" className="snow-level" onClick={() => { setFilter("ski"); setErvaringFilter("0_weken"); setActieveTab("keuzes"); } }>
             <span>Beginner</span>
             <strong>
               {skiGroepen["0_weken"]}
             </strong>
             <small>0 weken</small>
           </button>
-          <button type="button" className="snow-level" onClick={() => { setFilter("ski"); setErvaringFilter("1_2_weken"); } }>
+          <button type="button" className="snow-level" onClick={() => { setFilter("ski"); setErvaringFilter("1_2_weken"); setActieveTab("keuzes"); } }>
             <span>Basis</span>
             <strong>
               {skiGroepen["1_2_weken"]}
             </strong>
             <small>1–2 weken</small>
           </button>
-          <button type="button" className="snow-level" onClick={() => { setFilter("ski"); setErvaringFilter("3_4_weken"); } }>
+          <button type="button" className="snow-level" onClick={() => { setFilter("ski"); setErvaringFilter("3_4_weken"); setActieveTab("keuzes"); } }>
             <span>Gevorderd</span>
             <strong>
               {skiGroepen["3_4_weken"]}
             </strong>
             <small>3–4 weken</small>
           </button>
-          <button type="button" className="snow-level" onClick={() => { setFilter("ski"); setErvaringFilter("5_plus_weken"); } }>
+          <button type="button" className="snow-level" onClick={() => { setFilter("ski"); setErvaringFilter("5_plus_weken"); setActieveTab("keuzes"); } }>
             <span>Ervaren</span>
             <strong>
               {skiGroepen["5_plus_weken"]}
             </strong>
             <small>5+ weken</small>
           </button>
-          <button type="button" className="snow-level snowboard-level" onClick={() => { setFilter("snowboard"); setErvaringFilter(""); }}>
+          <button type="button" className="snow-level snowboard-level" onClick={() => { setFilter("snowboard"); setErvaringFilter(""); setActieveTab("keuzes"); }}>
             <span>Snowboard</span>
             <strong>{aantalSnowboard}</strong>
             <small>Klik om de namen te bekijken</small>
           </button>
         </div>
       </section>
+        </div>
+      )}
+      {actieveTab === "keuzes" && (
+        <div id="snow-panel-keuzes" role="tabpanel" aria-labelledby="snow-tab-keuzes">
       {/* ====================================================
           FILTERS
       \==================================================== */}
@@ -917,6 +950,8 @@ export default function SneeuwstageLeerkrachtPage() {
           ) : null}
         </div>
       </section>
+        </div>
+      )}
     </AppShell>
   );
 }
@@ -924,6 +959,13 @@ export default function SneeuwstageLeerkrachtPage() {
    CSS
 \============================================================ */
 const css = `
+  .snow-tabs { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; margin-bottom: 18px; padding: 8px; border-radius: 20px; border: 1px solid rgba(255,255,255,.12); background: rgba(7,28,41,.68); }
+  .snow-tab { flex: 1 1 175px; min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 9px; border-radius: 14px; padding: 12px 16px; border: 1px solid transparent; color: rgba(234,240,255,.74); background: transparent; font-size: 14px; font-weight: 800; cursor: pointer; transition: background .18s, color .18s; }
+  .snow-tab:hover { background: rgba(255,255,255,.08); color: white; }
+  .snow-tab.active { background: linear-gradient(110deg,#255971,#4B8E8D); color: white; border-color: rgba(137,194,170,.65); box-shadow: 0 3px 12px rgba(0,0,0,.16); }
+  .snow-tab:focus-visible { outline: 3px solid #89C2AA; outline-offset: 2px; }
+  @media (max-width: 650px) { .snow-tabs { gap: 5px; padding: 6px; } .snow-tab { flex: 1 1 95px; padding: 10px 5px; font-size: 12px; flex-direction: column; gap: 4px; } }
+
   .snow-hero-actions {
     display: flex;
     gap: 10px;
