@@ -1,5 +1,6 @@
 "use client";
 import AppShell from "@/components/AppShell";
+import SneeuwstageKamers from "@/components/sneeuwstage/SneeuwstageKamers";
 import BaseHero from "@/components/heroes/BaseHero";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
@@ -571,6 +572,8 @@ export default function SneeuwstageLeerkrachtPage() {
           <b>Oeps:</b> {error}
         </div>
       ) : null}
+      <SneeuwstageKamers beheer />
+
       {/* ====================================================
           REISINFO
       \==================================================== */}

@@ -1,6 +1,7 @@
 "use client";
 
 import AppShell from "@/components/AppShell";
+import SneeuwstageKamers from "@/components/sneeuwstage/SneeuwstageKamers";
 
 import BaseHero from "@/components/heroes/BaseHero";
 
@@ -1954,19 +1955,7 @@ export default function SneeuwstagePage() {
 
       \=================================================== */}
 
-      {activeTab === "kamers" && (
-
-        <ComingSoon
-
-          icon="🛏️"
-
-          title="Kamerverdeling"
-
-          description="De kamerverdeling wordt later door het LO-team gepubliceerd."
-
-        />
-
-      )}
+      {activeTab === "kamers" && <SneeuwstageKamers />}
 
       {/* ===================================================
 
