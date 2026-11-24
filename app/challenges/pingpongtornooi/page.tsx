@@ -19,7 +19,7 @@ type Voorstel = { id: string; wedstrijd_id: string; speelslot_id: string; status
 type Beschikbaarheid = { id: string; pauze: string; beschikbaar: boolean };
 type Afwezigheid = { id: string; van_datum: string; tot_datum: string; reden: string | null };
 type Melding = { id: string; bericht: string; gelezen_op: string | null; aangemaakt_op: string };
-type Stand = { poule_id: string; leerling_id: string; gespeeld: number; gewonnen: number; verloren: number; punten: number };
+type Stand = { poule_id: string; leerling_id: string; gespeeld: number; gewonnen: number; verloren: number; gelijk: number; punten: number };
 type Tab = "wedstrijden" | "klassement" | "knockout" | "regels" | "mijn";
 
 const pauzes = [
@@ -116,7 +116,7 @@ export default function PingpongtornooiPage() {
         supabase.from("pingpong_wedstrijden").select("*").eq("tornooi_id", t.id),
         supabase.from("pingpong_speelslots").select("id,speeldatum,pauze,tafel,volgnummer").eq("tornooi_id", t.id),
         supabase.from("pingpong_poule_leden").select("poule_id,inschrijving_id"),
-        supabase.from("pingpong_klassement").select("poule_id,leerling_id,gespeeld,gewonnen,verloren,punten").eq("tornooi_id", t.id),
+        supabase.from("pingpong_klassement").select("poule_id,leerling_id,gespeeld,gewonnen,verloren,punten,gelijk").eq("tornooi_id", t.id),
       ]);
       for (const r of [ir, por, wr, sr, lr, kr]) if (r.error) throw r.error;
       const ii = (ir.data ?? []) as Inschrijving[];
@@ -207,7 +207,7 @@ export default function PingpongtornooiPage() {
             <strong style={{ display: "block", fontSize: 13, color: winnaar1 ? "#9fe2ba" : "#eaf0ff", overflowWrap: "anywhere" }}>{naam(w.speler1_id)}</strong>
             {winnaar1 && <span style={{ color: "#9fe2ba", fontSize: 11 }}>Winnaar</span>}
           </div>
-          {heeftScore ? <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          {definitief && w.winnaar_id === null && !heeftScore ? <strong style={{color:"#fcd34d"}}>DRAW</strong> : heeftScore ? <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
             {[w.score1, w.score2].map((score, i) => {
               const gewonnen = definitief && (i === 0 ? winnaar1 : winnaar2);
               return <React.Fragment key={i}>
@@ -243,7 +243,7 @@ export default function PingpongtornooiPage() {
           </div>
           <button disabled={busy} style={{ ...knop, background: "#89C2AA", color: "#10243a", fontWeight: 850, padding: "13px 16px" }} onClick={() => scoreIndienen(w)}>✓ Uitslag publiceren</button>
         </div>}
-        {w.status === "gespeeld" && w.score_ingediend_door && w.score_ingediend_door !== uid && <div style={{ display: "grid", gap: 8 }}>
+        {w.status === "gespeeld" && w.score_ingediend_door && w.score_ingediend_door !== uid && (w.score_ingediend_door === w.speler1_id || w.score_ingediend_door === w.speler2_id) && <div style={{ display: "grid", gap: 8 }}>
           <p style={{ ...muted, margin: 0 }}>Klopt de gepubliceerde uitslag niet? Je kunt ze betwisten.</p>
           <button disabled={busy} style={{ ...knop, borderColor: "#fda4af", color: "#fff", background: "rgba(190,40,65,.24)" }} onClick={() => scoreBetwisten(w)}>⚠ Score betwisten</button>
         </div>}
@@ -276,13 +276,13 @@ export default function PingpongtornooiPage() {
           {gefilterd.length === 0 ? <p style={muted}>Geen wedstrijden gevonden. {wedstrijden.length === 0 ? "Als er wel wedstrijden in Supabase staan, controleer de SELECT-toegang (RLS) voor leerlingen." : "Pas eventueel je filters aan."}</p> : <div style={{ display: "grid", gap: 10 }}>{gefilterd.map(w => wedstrijdKaart(w))}</div>}
         </Sectie>}
         {tab === "klassement" && <Sectie titel="🏆 Pouleklassementen">
-          <p style={muted}>3 punten per overwinning. Ingevoerde uitslagen tellen meteen mee; betwiste uitslagen tijdelijk niet. Bij een gelijke stand is de definitieve rangschikking afhankelijk van de tornooiregels.</p>
+          <p style={muted}>3 punten per overwinning, 1 per gelijkspel. Ingevoerde uitslagen tellen meteen mee; betwiste uitslagen tijdelijk niet. Bij een gelijke stand is de definitieve rangschikking afhankelijk van de tornooiregels.</p>
           {poules.length === 0 && <p style={muted}>Nog geen poules zichtbaar.</p>}
           {[...poules].sort((a,b)=>a.naam.localeCompare(b.naam)).map(p => {
             const spelers = leden.filter(l => l.poule_id === p.id).map(l => inschrijvingMap.get(l.inschrijving_id)).filter((x): x is string => !!x);
             const rijen = spelers.map(id => ({ id, s: stand.find(x => x.poule_id === p.id && x.leerling_id === id) }));
             rijen.sort((a,b) => (b.s?.punten ?? 0) - (a.s?.punten ?? 0) || (b.s?.gewonnen ?? 0) - (a.s?.gewonnen ?? 0) || naam(a.id).localeCompare(naam(b.id)));
-            return <div key={p.id} style={{ marginBottom: 22 }}><h3 style={{ marginBottom: 8 }}>Poule {p.naam}</h3><div style={{ overflowX: "auto" }}><table className="ping-table"><thead><tr><th>#</th><th>Leerling</th><th>G</th><th>W</th><th>V</th><th>Ptn</th></tr></thead><tbody>{rijen.map((r, i) => <tr key={r.id} style={{ background: r.id === uid ? "rgba(137,194,170,.12)" : undefined }}><td>{i + 1}</td><td>{naam(r.id)}{r.id === uid ? " (jij)" : ""}</td><td>{r.s?.gespeeld ?? 0}</td><td>{r.s?.gewonnen ?? 0}</td><td>{r.s?.verloren ?? 0}</td><td><strong>{r.s?.punten ?? 0}</strong></td></tr>)}</tbody></table>{rijen.length === 0 && <p style={muted}>De pouleleden zijn niet zichtbaar. Controleer de leesrechten.</p>}</div></div>;
+            return <div key={p.id} style={{ marginBottom: 22 }}><h3 style={{ marginBottom: 8 }}>Poule {p.naam}</h3><div style={{ overflowX: "auto" }}><table className="ping-table"><thead><tr><th>#</th><th>Leerling</th><th>G</th><th>W</th><th>V</th><th>GL</th><th>Ptn</th></tr></thead><tbody>{rijen.map((r, i) => <tr key={r.id} style={{ background: r.id === uid ? "rgba(137,194,170,.12)" : undefined }}><td>{i + 1}</td><td>{naam(r.id)}{r.id === uid ? " (jij)" : ""}</td><td>{r.s?.gespeeld ?? 0}</td><td>{r.s?.gewonnen ?? 0}</td><td>{r.s?.verloren ?? 0}</td><td>{r.s?.gelijk ?? 0}</td><td><strong>{r.s?.punten ?? 0}</strong></td></tr>)}</tbody></table>{rijen.length === 0 && <p style={muted}>De pouleleden zijn niet zichtbaar. Controleer de leesrechten.</p>}</div></div>;
           })}
         </Sectie>}
         {tab === "knockout" && <Sectie titel="🥇 Weg naar de finale">
