@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 
 const supabase = createClient();
 type Row = Record<string, any>;
-type Lesson = { id: string; naam: string; schooljaar: string; lesdatum: string; leerjaar: number; finaliteiten: string[]; aantal_circuits: number; eindtijd: string | null; status: string; aangemaakt_door: string; zelfevaluatie_seconden: number };
+type Lesson = { id: string; naam: string; schooljaar: string; lesdatum: string; leerjaar: number; leerjaren?: number[] | null; finaliteiten: string[]; aantal_circuits: number; eindtijd: string | null; status: string; aangemaakt_door: string; zelfevaluatie_seconden: number };
 type Participant = { id: string; les_id: string; leerling_email: string; leerling_username: string | null; profiel_id: string | null; volledige_naam: string; klas_naam: string | null; geslacht: string | null; aanwezigheid: string; geblesseerd: boolean; toestel_beschikbaar: boolean; groep_code: string | null };
 type Assignment = { id: string; les_id: string; ronde: number; type: "techniek" | "wedstrijd"; observator_id: string; beoordeelde_id: string; status: string; blanco_blessure?: boolean; invoermethode?: "digitaal" | "papier" };
 type Evaluation = { id: string; les_id: string; observatie_id: string | null; beoordeelde_id: string; type: string; rubrics: Record<string, number>; status: string };
@@ -57,7 +57,7 @@ function score(evals: Evaluation[], type: string) { return mean(evals.filter(e=>
 function clockDisplay(s: number) { return `${Math.floor(s/60).toString().padStart(2,"0")}:${Math.floor(s%60).toString().padStart(2,"0")}`; }
 function lessonLabel(l: Lesson, pupils: Participant[] = []) {
  const classes = [...new Set(pupils.map(p => p.klas_naam?.trim()).filter((v): v is string => !!v))].sort((a,b)=>a.localeCompare(b,"nl-BE"));
- return `${l.naam} · ${l.lesdatum} · ${classes.length ? classes.join(" + ") : `${l.leerjaar}e jaar`}`;
+ return `${l.naam} · ${l.lesdatum} · ${classes.length ? classes.join(" + ") : `${(l.leerjaren?.length ? l.leerjaren : [l.leerjaar]).join(" + ")}e jaar`}`;
 }
 const STATIONS: Record<number,{title:string;detail:string}> = {
  1:{title:"Techniek observeren",detail:"Observeer de techniek van de leerlingen op station 2."},
@@ -75,7 +75,7 @@ export default function HockeyLesModule({ omgeving }: { omgeving: "leerling" | "
  const [participants,setParticipants]=useState<Participant[]>([]); const [assignments,setAssignments]=useState<Assignment[]>([]); const [evaluations,setEvaluations]=useState<Evaluation[]>([]); const [timer,setTimer]=useState<Timer|null>(null);
  const [teachers,setTeachers]=useState<{leerkracht_id:string}[]>([]); const [teacherOptions,setTeacherOptions]=useState<{id:string;volledige_naam:string}[]>([]);
  const [smart,setSmart]=useState<SmartStudent[]>([]); const [selected,setSelected]=useState<Set<string>>(new Set());
- const [year,setYear]=useState(3); const [finalities,setFinalities]=useState<string[]>(["AM","DF","DS"]); const [circuits,setCircuits]=useState(1);
+ const [years,setYears]=useState<number[]>([3,4]); const [finalities,setFinalities]=useState<string[]>(["AM","DF","DS"]); const [circuits,setCircuits]=useState(1);
  const [name,setName]=useState("Hockey evaluatieles"); const [editLessonName,setEditLessonName]=useState(""); const [isEditingLessonName,setIsEditingLessonName]=useState(false); const [date,setDate]=useState(localDate()); const [endTime,setEndTime]=useState("15:00");
  const [now,setNow]=useState(Date.now()); const [tab,setTab]=useState<"voorbereiding"|"groepen"|"les"|"resultaten">("voorbereiding");
  const [activeAssignment,setActiveAssignment]=useState<string|null>(null); const [draft,setDraft]=useState<Record<string,number>>({}); const [saveState,setSaveState]=useState("");
@@ -98,8 +98,8 @@ export default function HockeyLesModule({ omgeving }: { omgeving: "leerling" | "
  const myParticipant=useMemo(()=>participants.find(p=>previewId ? p.id===previewId : (p.profiel_id===uid || (profileEmail!=="" && email(p.leerling_email)===profileEmail)))??null,[participants,uid,profileEmail,previewId]);
  const currentSeconds=useMemo(()=>timer ? Math.max(0,timer.loopt&&timer.eindigt_op ? Math.ceil((new Date(timer.eindigt_op).getTime()-now)/1000) : (timer.resterende_seconden??0)) : 0,[timer,now]);
  const currentRound=timer?.huidige_ronde??1;
- const classOptions=useMemo(()=>[...new Set(smart.filter(s=>s.schooljaar===schoolYear() && s.klas_naam.startsWith(String(year)) && finalities.some(f=>s.klas_naam.toUpperCase().includes(f))).map(s=>s.klas_naam))].sort((a,b)=>a.localeCompare(b,"nl-BE")),[smart,year,finalities]);
-  const studentsForYear=useMemo(()=>smart.filter(s=>s.schooljaar===schoolYear() && s.klas_naam.startsWith(String(year)) && finalities.some(f=>s.klas_naam.toUpperCase().includes(f)) && (!selectedClasses.length||selectedClasses.includes(s.klas_naam)) && (s.volledige_naam+" "+s.klas_naam).toLowerCase().includes(studentSearch.toLowerCase())).sort((a,b)=>a.klas_naam.localeCompare(b.klas_naam,"nl-BE")||a.volledige_naam.localeCompare(b.volledige_naam,"nl-BE")),[smart,year,finalities,selectedClasses,studentSearch]);
+ const classOptions=useMemo(()=>[...new Set(smart.filter(s=>s.schooljaar===schoolYear() && years.some(y=>s.klas_naam.startsWith(String(y))) && finalities.some(f=>s.klas_naam.toUpperCase().includes(f))).map(s=>s.klas_naam))].sort((a,b)=>a.localeCompare(b,"nl-BE")),[smart,years,finalities]);
+  const studentsForYear=useMemo(()=>smart.filter(s=>s.schooljaar===schoolYear() && years.some(y=>s.klas_naam.startsWith(String(y))) && finalities.some(f=>s.klas_naam.toUpperCase().includes(f)) && (!selectedClasses.length||selectedClasses.includes(s.klas_naam)) && (s.volledige_naam+" "+s.klas_naam).toLowerCase().includes(studentSearch.toLowerCase())).sort((a,b)=>a.klas_naam.localeCompare(b.klas_naam,"nl-BE")||a.volledige_naam.localeCompare(b.volledige_naam,"nl-BE")),[smart,years,finalities,selectedClasses,studentSearch]);
  const groupCodes=useMemo(()=>Array.from({length:(lesson?.aantal_circuits??circuits)*5},(_,i)=>`${i<5?"A":"B"}${i%5+1}`),[lesson,circuits]);
  const myAssignments=useMemo(()=>assignments.filter(a=>a.observator_id===myParticipant?.id && a.ronde<=currentRound && (a.ronde===currentRound || (a.status!=="ingediend" && !evaluations.some(e=>e.observatie_id===a.id && e.status==="ingediend")))).sort((a,b)=>a.ronde-b.ronde),[assignments,myParticipant,currentRound,evaluations]);
  const pendingAssignments=useMemo(()=>assignments.filter(a=>a.ronde<=currentRound && a.status!=="ingediend" && !evaluations.some(e=>e.observatie_id===a.id && e.status==="ingediend")).sort((a,b)=>a.ronde-b.ronde||pupilNameForSort(a.observator_id).localeCompare(pupilNameForSort(b.observator_id),"nl-BE")),[assignments,evaluations,currentRound,participants]);
@@ -149,7 +149,7 @@ export default function HockeyLesModule({ omgeving }: { omgeving: "leerling" | "
   const classNamesForLesson=useCallback((l:Lesson)=>{
    const classNames=l.id===lessonId ? participants.map(p=>p.klas_naam) : [];
    const unique=[...new Set(classNames.filter((v):v is string=>!!v))].sort((a,b)=>a.localeCompare(b,"nl-BE"));
-   return `${l.naam} · ${l.lesdatum} · ${unique.length ? unique.join(" + ") : `${l.leerjaar}e jaar`}`;
+   return `${l.naam} · ${l.lesdatum} · ${unique.length ? unique.join(" + ") : `${(l.leerjaren?.length ? l.leerjaren : [l.leerjaar]).join(" + ")}e jaar`}`;
   },[lessonId,participants]);
 
  const loadLesson=useCallback(async(id:string)=>{
@@ -228,10 +228,13 @@ export default function HockeyLesModule({ omgeving }: { omgeving: "leerling" | "
  async function run(action:()=>Promise<unknown>,success:string){setBusy(true);setError("");setNotice("");try{await action();setNotice(success);await refresh();}catch(e){setError(getError(e));}finally{setBusy(false);}}
  async function createLesson(){await run(async()=>{
   if(!selected.size)throw new Error("Selecteer eerst leerlingen.");
+  const chosen=smart.filter(s=>s.schooljaar===schoolYear() && selected.has(email(s.email)));
+  const chosenYears=[...new Set(chosen.map(s=>Number(s.klas_naam.charAt(0))))].sort();
+  if(!chosen.length || chosenYears.some(y=>y!==3&&y!==4))throw new Error("Selecteer leerlingen uit het derde of vierde jaar.");
+  const chosenFinalities=[...new Set(chosen.flatMap(s=>["AM","DF","DS"].filter(f=>s.klas_naam.toUpperCase().includes(f))))];
   const iso=new Date(`${date}T${endTime}:00`).toISOString();
-  const {data:l,error:le}=await supabase.from("hockey_lessen").insert({schooljaar:schoolYear(),naam:name,lesdatum:date,leerjaar:year,finaliteiten:finalities,aantal_circuits:circuits,eindtijd:iso,zelfevaluatie_seconden:120,aangemaakt_door:uid}).select("*").single();if(le)throw le;
+  const {data:l,error:le}=await supabase.from("hockey_lessen").insert({schooljaar:schoolYear(),naam:name,lesdatum:date,leerjaar:chosenYears[0],leerjaren:chosenYears,finaliteiten:chosenFinalities,aantal_circuits:circuits,eindtijd:iso,zelfevaluatie_seconden:120,aangemaakt_door:uid}).select("*").single();if(le)throw le;
   const id=l.id as string;
-  const chosen=smart.filter(s=>selected.has(email(s.email)));
   for(let i=0;i<chosen.length;i+=150){const {error:e}=await supabase.from("hockey_deelnemers").insert(chosen.slice(i,i+150).map(s=>({les_id:id,leerling_email:email(s.email),leerling_username:s.username,profiel_id:s.profiel_id,volledige_naam:s.volledige_naam,klas_naam:s.klas_naam,geslacht:s.geslacht})));if(e)throw e;}
   const {error:te}=await supabase.from("hockey_leerkrachten").insert({les_id:id,leerkracht_id:uid});if(te)throw te;
   const {error:ce}=await supabase.rpc("hockey_stel_klokbeheerder_in",{p_les_id:id,p_leerkracht_id:uid});if(ce)throw ce;
@@ -345,7 +348,7 @@ export default function HockeyLesModule({ omgeving }: { omgeving: "leerling" | "
      {preview&&<p className="mt-3 rounded-xl border border-teal-400/30 bg-teal-400/10 p-3 text-sm text-teal-100">Voorbeeldweergave actief: alle invoervelden zijn geblokkeerd.</p>}
     </section>}
     {showTeacher&&<nav className="flex flex-wrap gap-2">{(["voorbereiding","groepen","les","resultaten"] as const).map(t=><button key={t} onClick={()=>setTab(t)} className={tab===t?primary:btn}>{({voorbereiding:"Lesvoorbereiding",groepen:"Groepen",les:"Live les",resultaten:"Resultaten"})[t]}</button>)}</nav>}
-   {showTeacher&&tab==="voorbereiding"&&(!lesson||creating)&&<section className={panel}><h2 className="mb-4 text-xl font-black">Nieuwe Hockey-les</h2><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label>Naam<input className={input} value={name} onChange={e=>setName(e.target.value)}/></label><label>Datum<input type="date" className={input} value={date} onChange={e=>setDate(e.target.value)}/></label><label>Eindtijd<input type="time" className={input} value={endTime} onChange={e=>setEndTime(e.target.value)}/></label><label>Leerjaar<select className={input} value={year} onChange={e=>{setYear(Number(e.target.value));setSelectedClasses([]);setSelected(new Set());}}><option value={3}>3e jaar</option><option value={4}>4e jaar</option></select></label><label>Circuits<select className={input} value={circuits} onChange={e=>setCircuits(Number(e.target.value))}><option value={1}>1 circuit (5 groepen)</option><option value={2}>2 circuits (10 groepen)</option></select></label></div><div className="mt-4 flex flex-wrap gap-4">{["AM","DF","DS"].map(f=><label key={f} className="flex items-center gap-2"><input type="checkbox" checked={finalities.includes(f)} onChange={()=>{setFinalities(p=>p.includes(f)?p.filter(x=>x!==f):[...p,f]);setSelectedClasses([]);setSelected(new Set());}}/>{f}</label>)}</div><div className="mt-4">
+   {showTeacher&&tab==="voorbereiding"&&(!lesson||creating)&&<section className={panel}><h2 className="mb-4 text-xl font-black">Nieuwe Hockey-les</h2><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><label>Naam<input className={input} value={name} onChange={e=>setName(e.target.value)}/></label><label>Datum<input type="date" className={input} value={date} onChange={e=>setDate(e.target.value)}/></label><label>Eindtijd<input type="time" className={input} value={endTime} onChange={e=>setEndTime(e.target.value)}/></label><fieldset><legend>Leerjaren</legend><div className="flex flex-wrap gap-3">{[3,4].map(y=><label key={y} className="flex items-center gap-2"><input type="checkbox" checked={years.includes(y)} onChange={()=>{setYears(p=>p.includes(y)?p.filter(x=>x!==y):[...p,y]);setSelectedClasses([]);}}/>{y}e jaar</label>)}</div></fieldset><label>Circuits<select className={input} value={circuits} onChange={e=>setCircuits(Number(e.target.value))}><option value={1}>1 circuit (5 groepen)</option><option value={2}>2 circuits (10 groepen)</option></select></label></div><div className="mt-4 flex flex-wrap gap-4">{["AM","DF","DS"].map(f=><label key={f} className="flex items-center gap-2"><input type="checkbox" checked={finalities.includes(f)} onChange={()=>{setFinalities(p=>p.includes(f)?p.filter(x=>x!==f):[...p,f]);setSelectedClasses([]);}}/>{f}</label>)}</div><div className="mt-4">
     <div className="flex flex-wrap items-center justify-between gap-2">
      <span className="block text-sm font-bold">Klassen (meerdere mogelijk)</span>
      <button type="button" className={btn} onClick={()=>setSelectedClasses([])}>Toon alle klassen</button>
@@ -356,8 +359,8 @@ export default function HockeyLesModule({ omgeving }: { omgeving: "leerling" | "
       {c}
      </label>)}
     </div>
-    <p className="mt-2 text-xs text-white/60">Vink bijvoorbeeld 3DSA en 3DSB aan. Zonder aangevinkte klas worden alle klassen getoond. Eerder geselecteerde leerlingen blijven behouden.</p>
-   </div><div className="my-4 flex items-center justify-between"><h3 className="font-black">Leerlingen ({selected.size} geselecteerd)</h3><button className={btn} onClick={()=>setSelected(prev=>new Set([...prev,...studentsForYear.map(s=>email(s.email))]))}>Alle zichtbare selecteren</button></div><input placeholder="Zoek naam of klas" className={input} value={studentSearch} onChange={e=>setStudentSearch(e.target.value)}/><div className="mt-3 grid max-h-[400px] gap-2 overflow-auto sm:grid-cols-2 lg:grid-cols-3">{studentsForYear.map(s=><label key={s.email} className="flex gap-2 rounded-xl border border-white/10 bg-white/5 p-2"><input type="checkbox" checked={selected.has(email(s.email))} onChange={()=>setSelected(prev=>{const next=new Set(prev);const key=email(s.email);next.has(key)?next.delete(key):next.add(key);return next;})}/><span>{s.volledige_naam} <small className="block text-white/55">{s.klas_naam}{!s.profiel_id?" · geen profiel":""}</small></span></label>)}</div><button className={`${primary} mt-5`} disabled={busy||selected.size===0} onClick={()=>void createLesson()}>Les met {selected.size} leerlingen aanmaken</button></section>}
+    <p className="mt-2 text-xs text-white/60">Vink bijvoorbeeld 4AM en 3DF aan. Zonder aangevinkte klas worden alle klassen getoond. Eerder geselecteerde leerlingen blijven behouden.</p>
+   </div><div className="my-4 flex items-center justify-between"><h3 className="font-black">Leerlingen ({selected.size} geselecteerd)</h3><button className={btn} onClick={()=>setSelected(prev=>new Set([...prev,...studentsForYear.map(s=>email(s.email))]))}>Alle zichtbare selecteren</button><button type="button" className={btn} onClick={()=>setSelected(new Set())}>Selectie wissen</button></div><input placeholder="Zoek naam of klas" className={input} value={studentSearch} onChange={e=>setStudentSearch(e.target.value)}/><div className="mt-3 grid max-h-[400px] gap-2 overflow-auto sm:grid-cols-2 lg:grid-cols-3">{studentsForYear.map(s=><label key={s.email} className="flex gap-2 rounded-xl border border-white/10 bg-white/5 p-2"><input type="checkbox" checked={selected.has(email(s.email))} onChange={()=>setSelected(prev=>{const next=new Set(prev);const key=email(s.email);next.has(key)?next.delete(key):next.add(key);return next;})}/><span>{s.volledige_naam} <small className="block text-white/55">{s.klas_naam}{!s.profiel_id?" · geen profiel":""}</small></span></label>)}</div><button className={`${primary} mt-5`} disabled={busy||selected.size===0} onClick={()=>void createLesson()}>Les met {selected.size} leerlingen aanmaken</button></section>}
    {showTeacher&&lesson&&tab==="voorbereiding"&&<section className={panel}><h2 className="text-xl font-black">{lessonLabel(lesson,participants)}</h2>
     <div className="mt-4 rounded-2xl border border-white/15 bg-black/15 p-4">
      <div className="flex flex-wrap items-center justify-between gap-3">

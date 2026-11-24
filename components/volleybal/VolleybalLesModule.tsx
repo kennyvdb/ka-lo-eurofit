@@ -148,6 +148,13 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
     return()=>{active=false;clearInterval(timer);};
   },[lessonId,refresh]);
 
+  // De filter voor de zelfevaluatie is pas beschikbaar in fase 2.
+  useEffect(() => {
+    if (state?.les.fase !== "self" && controlFilter === "zelf_open") {
+      setControlFilter("iedereen");
+    }
+  }, [state?.les.fase, controlFilter]);
+
   const participants=state?.participants??[];
   const peers=state?.peer??[];
   const selfs=state?.self??[];
@@ -458,7 +465,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
             <div className="grid gap-3 sm:grid-cols-3">
               {[["Peerevaluaties ingediend",expectedObservers.filter(p=>observerDone.has(p.id)).length],["Leerlingen beoordeeld",eligibleForAssessment.filter(p=>rated.has(p.id)).length],["Zelfevaluaties ingediend",eligibleForAssessment.filter(p=>selfDone.has(p.id)).length]].map(([label,value])=><div key={String(label)} className="rounded-xl bg-black/20 p-4"><p className="text-sm text-white/65">{label}</p><p className="text-2xl font-black">{value} / {String(label)==="Peerevaluaties ingediend"?expectedObservers.length:eligibleForAssessment.length}</p></div>)}
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">{([ ["iedereen","Alle leerlingen"],["niet_ingediend","Niet ingediend"],["niet_beoordeeld","Niet beoordeeld"],["zelf_open","Zelfevaluatie open"] ] as const).map(([key,label])=><button key={key} className={controlFilter===key?primary:button} onClick={()=>setControlFilter(key)}>{label}</button>)}</div>
+            <div className="mt-4 flex flex-wrap gap-2">{([ ["iedereen","Alle leerlingen"],["niet_ingediend","Niet ingediend"],["niet_beoordeeld","Niet beoordeeld"],...(state.les.fase === "self" ? [["zelf_open","Zelfevaluatie open"]] as const : []) ] as const).map(([key,label])=><button key={key} className={controlFilter===key?primary:button} onClick={()=>setControlFilter(key)}>{label}</button>)}</div>
             <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm"><thead><tr className="border-b border-white/20 text-white/70"><th className="p-2">Leerling</th><th>Als observator</th><th>Beoordeeld door</th><th>Zelfevaluatie</th></tr></thead><tbody>
               {visiblePresent.map(p=>{const authored=peers.find(r=>r.observator_id===p.id),received=peers.find(r=>r.beoordeelde_id===p.id),self=selfs.find(r=>r.deelnemer_id===p.id);
                 return <tr key={p.id} className="border-b border-white/10"><td className="p-2 font-semibold">{p.volledige_naam}<small className="block font-normal text-white/55">{p.klas_naam}{p.geblesseerd?" · geblesseerd":""}{!p.toestel_beschikbaar?" · geen gsm (papier)":""}</small></td>
