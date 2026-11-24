@@ -13,7 +13,7 @@ type Profiel = { id: string; volledige_naam: string | null; klas_naam: string | 
 type Inschrijving = { id: string; leerling_id: string; tornooi_id: string };
 type Poule = { id: string; naam: string; tornooi_id: string };
 type Lid = { poule_id: string; inschrijving_id: string };
-type Wedstrijd = { id: string; tornooi_id: string; poule_id: string | null; ronde: string; speler1_id: string; speler2_id: string; status: string; speelslot_id: string | null; score1: number | null; score2: number | null; winnaar_id: string | null; score_ingediend_door: string | null; score_bevestigd_op: string | null };
+type Wedstrijd = { ko_nummer: number | null; uitslag_vergrendeld: boolean; id: string; tornooi_id: string; poule_id: string | null; ronde: string; speler1_id: string; speler2_id: string; status: string; speelslot_id: string | null; score1: number | null; score2: number | null; winnaar_id: string | null; score_ingediend_door: string | null; score_bevestigd_op: string | null };
 type Slot = { id: string; speeldatum: string; pauze: string; tafel: number; volgnummer: number };
 type Voorstel = { id: string; wedstrijd_id: string; speelslot_id: string; status: string; speler1_akkoord: boolean | null; speler2_akkoord: boolean | null; vervalt_op: string };
 type Beschikbaarheid = { id: string; pauze: string; beschikbaar: boolean };
@@ -181,8 +181,8 @@ export default function PingpongtornooiPage() {
   const antwoord = (v: Voorstel, ok: boolean) => actie(async () => { const { error: e } = await supabase.rpc("pingpong_antwoord_voorstel", { p_voorstel_id: v.id, p_akkoord: ok, p_niet_beschikbaar: ok ? [] : nietPauzes }); if (e) throw e; setNietPauzes([]); setInfo(ok ? "Antwoord opgeslagen." : "We zoeken een ander wedstrijdmoment."); });
   const scoreIndienen = (w: Wedstrijd) => actie(async () => { const s = scores[w.id]; if (!s || s.a === "" || s.b === "") throw Error("Vul beide scores in"); const a = Number(s.a), b = Number(s.b); if (!Number.isInteger(a) || !Number.isInteger(b) || a < 0 || b < 0 || Math.max(a, b) < 11 || Math.abs(a - b) < 2) throw Error("Een geldige set eindigt op minstens 11 punten, met 2 punten verschil."); const { error: e } = await supabase.rpc("pingpong_score_indienen", { p_wedstrijd_id: w.id, p_score1: a, p_score2: b }); if (e) throw e; setInfo("Score opgeslagen en onmiddellijk zichtbaar in het klassement."); });
   const scoreBetwisten = (w: Wedstrijd) => actie(async () => {
-    if (!window.confirm("Klopt deze uitslag niet? De wedstrijd wordt gemarkeerd voor controle door een LO-leerkracht.")) return;
-    const { error: e } = await supabase.rpc("pingpong_score_betwisten", { p_wedstrijd_id: w.id });
+    const reden = window.prompt("Waarom klopt deze uitslag niet? Geef minstens 10 tekens."); if (reden === null) return; if (reden.trim().length < 10) throw Error("Geef minstens 10 tekens motivatie.");
+    const { error: e } = await supabase.rpc("pingpong_score_betwisten", { p_wedstrijd_id: w.id, p_reden: reden.trim() });
     if (e) throw e;
     setInfo("Score betwist. Een LO-leerkracht zal de uitslag controleren.");
   });
@@ -243,7 +243,7 @@ export default function PingpongtornooiPage() {
           </div>
           <button disabled={busy} style={{ ...knop, background: "#89C2AA", color: "#10243a", fontWeight: 850, padding: "13px 16px" }} onClick={() => scoreIndienen(w)}>✓ Uitslag publiceren</button>
         </div>}
-        {w.status === "gespeeld" && w.score_ingediend_door && w.score_ingediend_door !== uid && (w.score_ingediend_door === w.speler1_id || w.score_ingediend_door === w.speler2_id) && <div style={{ display: "grid", gap: 8 }}>
+        {w.status === "gespeeld" && !w.uitslag_vergrendeld && w.score_ingediend_door && w.score_ingediend_door !== uid && (w.score_ingediend_door === w.speler1_id || w.score_ingediend_door === w.speler2_id) && <div style={{ display: "grid", gap: 8 }}>
           <p style={{ ...muted, margin: 0 }}>Klopt de gepubliceerde uitslag niet? Je kunt ze betwisten.</p>
           <button disabled={busy} style={{ ...knop, borderColor: "#fda4af", color: "#fff", background: "rgba(190,40,65,.24)" }} onClick={() => scoreBetwisten(w)}>⚠ Score betwisten</button>
         </div>}
@@ -276,20 +276,20 @@ export default function PingpongtornooiPage() {
           {gefilterd.length === 0 ? <p style={muted}>Geen wedstrijden gevonden. {wedstrijden.length === 0 ? "Als er wel wedstrijden in Supabase staan, controleer de SELECT-toegang (RLS) voor leerlingen." : "Pas eventueel je filters aan."}</p> : <div style={{ display: "grid", gap: 10 }}>{gefilterd.map(w => wedstrijdKaart(w))}</div>}
         </Sectie>}
         {tab === "klassement" && <Sectie titel="🏆 Pouleklassementen">
-          <p style={muted}>3 punten per overwinning, 1 per gelijkspel. Ingevoerde uitslagen tellen meteen mee; betwiste uitslagen tijdelijk niet. Bij een gelijke stand is de definitieve rangschikking afhankelijk van de tornooiregels.</p>
+          <p style={muted}>3 punten per overwinning, 1 per gelijkspel. Ingevoerde uitslagen tellen meteen mee; betwiste uitslagen tijdelijk niet. Bij gelijke punten: onderlinge resultaten, daarna puntensaldo, daarna gescoorde punten. In poule D eindigden drie spelers gelijk; Amir (+14) en Senne (+12) gaan door, Rodion (+7) niet.</p>
           {poules.length === 0 && <p style={muted}>Nog geen poules zichtbaar.</p>}
           {[...poules].sort((a,b)=>a.naam.localeCompare(b.naam)).map(p => {
             const spelers = leden.filter(l => l.poule_id === p.id).map(l => inschrijvingMap.get(l.inschrijving_id)).filter((x): x is string => !!x);
             const rijen = spelers.map(id => ({ id, s: stand.find(x => x.poule_id === p.id && x.leerling_id === id) }));
-            rijen.sort((a,b) => (b.s?.punten ?? 0) - (a.s?.punten ?? 0) || (b.s?.gewonnen ?? 0) - (a.s?.gewonnen ?? 0) || naam(a.id).localeCompare(naam(b.id)));
-            return <div key={p.id} style={{ marginBottom: 22 }}><h3 style={{ marginBottom: 8 }}>Poule {p.naam}</h3><div style={{ overflowX: "auto" }}><table className="ping-table"><thead><tr><th>#</th><th>Leerling</th><th>G</th><th>W</th><th>V</th><th>GL</th><th>Ptn</th></tr></thead><tbody>{rijen.map((r, i) => <tr key={r.id} style={{ background: r.id === uid ? "rgba(137,194,170,.12)" : undefined }}><td>{i + 1}</td><td>{naam(r.id)}{r.id === uid ? " (jij)" : ""}</td><td>{r.s?.gespeeld ?? 0}</td><td>{r.s?.gewonnen ?? 0}</td><td>{r.s?.verloren ?? 0}</td><td>{r.s?.gelijk ?? 0}</td><td><strong>{r.s?.punten ?? 0}</strong></td></tr>)}</tbody></table>{rijen.length === 0 && <p style={muted}>De pouleleden zijn niet zichtbaar. Controleer de leesrechten.</p>}</div></div>;
+            const saldo=(id:string)=>wedstrijden.filter(w=>w.poule_id===p.id&&w.status==="gespeeld"&&(w.speler1_id===id||w.speler2_id===id)).reduce((sum,w)=>sum+(w.speler1_id===id?1:-1)*((w.score1??0)-(w.score2??0)),0);
+            rijen.sort((a,b) => (b.s?.punten ?? 0) - (a.s?.punten ?? 0) || saldo(b.id)-saldo(a.id) || naam(a.id).localeCompare(naam(b.id)));
+            return <div key={p.id} style={{ marginBottom: 22 }}><h3 style={{ marginBottom: 8 }}>Poule {p.naam}</h3><div style={{ overflowX: "auto" }}><table className="ping-table"><thead><tr><th>#</th><th>Leerling</th><th>G</th><th>W</th><th>V</th><th>GL</th><th>Ptn</th><th>Saldo</th></tr></thead><tbody>{rijen.map((r, i) => <tr key={r.id} style={{ background: r.id === uid ? "rgba(137,194,170,.12)" : undefined }}><td>{i + 1}</td><td>{naam(r.id)}{r.id === uid ? " (jij)" : ""}</td><td>{r.s?.gespeeld ?? 0}</td><td>{r.s?.gewonnen ?? 0}</td><td>{r.s?.verloren ?? 0}</td><td>{r.s?.gelijk ?? 0}</td><td><strong>{r.s?.punten ?? 0}</strong></td><td>{saldo(r.id)}</td></tr>)}</tbody></table>{rijen.length === 0 && <p style={muted}>De pouleleden zijn niet zichtbaar. Controleer de leesrechten.</p>}</div></div>;
           })}
         </Sectie>}
         {tab === "knockout" && <Sectie titel="🥇 Weg naar de finale">
-          <p style={muted}>De knock-outwedstrijden worden getoond zodra ze in Supabase zijn aangemaakt. De onderstaande plaatsen zijn voorlopig, zonder automatisch spelers te kwalificeren.</p>
-          {wedstrijden.filter(w => w.ronde !== "poule").length === 0 ?
-            <div className="ping-bracket">{[{ label: "Kwartfinales", count: 4 }, { label: "Halve finales", count: 2 }, { label: "Finale · 26 november", count: 1 }].map(r => <div key={r.label} style={{ ...paneel, padding: 12 }}><h3 style={{ fontSize: 15, margin: "0 0 10px" }}>{r.label}</h3>{Array.from({ length: r.count }, (_, i) => <div key={i} style={{ border: "1px solid rgba(255,255,255,.13)", borderRadius: 12, padding: 10, marginBottom: 8 }}><div style={muted}>{r.count === 1 ? "Finale" : `Wedstrijd ${i + 1}`}</div><strong style={{ fontSize: 13 }}>Nog te bepalen</strong></div>)}</div>)}</div>
-            : <div style={{ display: "grid", gap: 10 }}>{gesorteerd.filter(w => w.ronde !== "poule").map(w => wedstrijdKaart(w))}</div>}
+          <p style={muted}>Kwartfinales 25/11 ochtend en middag. Halve finales 26/11 middag. Finale 27/11 middag. De leerkracht maakt de uitslag definitief voordat de winnaar doorgaat.</p>
+          <div className="ping-bracket">{[{label:"Kwartfinales",ids:[1,2,3,4]},{label:"Halve finales",ids:[5,6]},{label:"Finale",ids:[7]}].map(r=><div key={r.label}><h3>{r.label}</h3>{r.ids.map(n=>{const w=wedstrijden.find(x=>x.ko_nummer===n);return w?<div key={n}>{wedstrijdKaart(w)}</div>:<div key={n} style={paneel}>{n===5?"Winnaars KF 1 en 2":n===6?"Winnaars KF 3 en 4":n===7?"Winnaars HF 1 en 2":`Kwartfinale ${n} – nog niet geactiveerd`}</div>})}</div>)}</div>
+          {wedstrijden.filter(w=>w.ko_nummer===7&&w.uitslag_vergrendeld&&w.winnaar_id).map(w=><h2 key={w.id}>🏆 PingpongCHAMP: {naam(w.winnaar_id!)}</h2>)}
         </Sectie>}
         {tab === "regels" && <Sectie titel="📖 Spelregels en afspraken">
           <div style={{ display: "grid", gap: 11, ...muted }}><div><strong>1. Puntentelling.</strong> Eén set tot 11 punten. Bij 10–10 wordt doorgespeeld tot een speler twee punten verschil heeft.</div><div><strong>2. Opslag.</strong> De opslag wisselt na elke twee punten; vanaf 10–10 na elk punt.</div><div><strong>3. Correct serveren.</strong> Bij de opslag botst de bal eerst op je eigen helft en daarna op de helft van de tegenstander.</div><div><strong>4. Netbal bij opslag.</strong> Een verder correcte opslag die het net raakt, wordt opnieuw gespeeld.</div><div><strong>5. Randbal.</strong> Een bal die de bovenrand van de tafel raakt, is geldig.</div><div><strong>6. Wedstrijdmoment.</strong> Bekijk je ingeplande datum, pauze, tafel en beurt bij Mijn tornooi. De namiddag blijft in de poulefase vrij voor inhaalwedstrijden.</div><div><strong>7. Score.</strong> De winnaar voert de score één keer in. Die verschijnt onmiddellijk online en telt mee. De tegenstander kan de score achteraf betwisten; dan controleert een LO-leerkracht de uitslag.</div><div><strong>8. Afwezig?</strong> Meld dit tijdig en spreek een LO-leerkracht aan. Een afwezigheidsmelding verplaatst een ingeplande wedstrijd niet automatisch.</div><div><strong>9. Fair play.</strong> Respecteer je tegenstander, het materiaal en de beslissing van de begeleidende leerkracht.</div></div>
