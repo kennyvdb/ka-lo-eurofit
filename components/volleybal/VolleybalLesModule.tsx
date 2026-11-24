@@ -49,8 +49,8 @@ const scorePeer = (c: PeerDraft) => peerComplete(c)
 
 type Lesson = { id:string; naam:string; lesdatum:string; schooljaar:string; fase:"voorbereiding"|"peer"|"self"|"afgerond"; aangemaakt_op:string };
 type Participant = { id:string; les_id:string; leerling_email:string; profiel_id:string|null; volledige_naam:string; klas_naam:string|null; aanwezigheid:"aanwezig"|"afwezig"; geblesseerd:boolean; toestel_beschikbaar:boolean };
-type Peer = { id:string; observator_id:string|null; beoordeelde_id:string; criteria:PeerDraft; status:"concept"|"ingediend"; invoermethode:string };
-type SelfReview = { deelnemer_id:string; spelregels:number|null; spelniveau:number|null; status:"concept"|"ingediend"; invoermethode:string };
+type Peer = { id:string; observator_id:string|null; beoordeelde_id:string; criteria:PeerDraft; status:"concept"|"ingediend"; invoermethode:string; blanco_geblesseerd?:boolean };
+type SelfReview = { deelnemer_id:string; spelregels:number|null; spelniveau:number|null; status:"concept"|"ingediend"; invoermethode:string; blanco_geblesseerd?:boolean };
 type State = { les:Lesson; teacher:boolean; my_id:string|null; participants:Participant[]; peer:Peer[]; self:SelfReview[]; reserved_ids:string[] };
 type StudentRow = { email:string; volledige_naam:string; klas_naam:string; profiel_id:string|null; schooljaar:string };
 
@@ -84,6 +84,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   const [paperRules, setPaperRules] = useState<number|null>(null);
   const [paperLevel, setPaperLevel] = useState<number|null>(null);
   const [tab, setTab] = useState<"overzicht"|"papier"|"resultaten"|"leerling">("overzicht");
+  const [statusesOpen, setStatusesOpen] = useState(true);
   const [controlFilter, setControlFilter] = useState<"iedereen"|"niet_ingediend"|"niet_beoordeeld"|"zelf_open">("iedereen");
   const [previewId, setPreviewId] = useState("");
   const previewMode = tab === "leerling";
@@ -156,15 +157,15 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   useEffect(()=>{
     setPeerDraft(mine?.criteria??{});
     setSelectedTarget(mine?.beoordeelde_id??"");
-  },[mine?.id,mine?.status,JSON.stringify(mine?.criteria??{})]);
+  },[mine?.id,mine?.beoordeelde_id,mine?.status,JSON.stringify(mine?.criteria??{})]);
   useEffect(()=>{setRules(mySelf?.spelregels??null);setLevel(mySelf?.spelniveau??null);},[mySelf?.spelregels,mySelf?.spelniveau]);
   const present=participants.filter(p=>p.aanwezigheid==="aanwezig");
   const eligibleForAssessment=present.filter(p=>!p.geblesseerd);
   const expectedObservers=present.filter(p=>p.toestel_beschikbaar);
-  const submitted = peers.filter(p=>p.status==="ingediend");
+  const submitted = peers.filter(p=>p.status==="ingediend" && !p.blanco_geblesseerd);
   const rated = new Set(submitted.map(x=>x.beoordeelde_id));
   const observerDone = new Set(submitted.map(x=>x.observator_id).filter(Boolean));
-  const selfDone = new Set(selfs.filter(x=>x.status==="ingediend").map(x=>x.deelnemer_id));
+  const selfDone = new Set(selfs.filter(x=>x.status==="ingediend" && !x.blanco_geblesseerd).map(x=>x.deelnemer_id));
   const reserved=new Set(state?.reserved_ids??[]);
   // Het leerjaar en de gekozen finaliteiten beperken zowel de klaskeuze als de leerlingenlijst.
   const matchingStudents = useMemo(() => smart.filter(s => {
@@ -212,9 +213,18 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
     if(phase==="afsluiten" && !window.confirm("Les definitief afsluiten? Leerlingen kunnen daarna geen evaluaties meer invoeren of aanpassen."))return;
     await action(async()=>{const {error:e}=await supabase.rpc("volleybal_fase",{p_les_id:lessonId,p_actie:phase});if(e)throw e;},"Lesfase aangepast.");
   }
-  async function claim(target:string){await action(async()=>{
+  async function claim(target:string){
+    if (mine && mine.beoordeelde_id !== target && !window.confirm("Je wijzigt de gekozen leerling. Eventuele nog niet opgeslagen antwoorden gaan verloren. Doorgaan?")) return;
+    await action(async()=>{
     const {error:e}=await supabase.rpc("volleybal_claim_peer",{p_les_id:lessonId,p_doel:target});if(e)throw e;
   },"Leerling gekozen. Je bent nu de enige observator voor deze leerling.");}
+  async function markBlank(p:Participant){
+    if(!window.confirm(`Bevestig dat ${p.volledige_naam} geblesseerd is en zijn/haar beoordeling als geblesseerd zonder score wordt geregistreerd. Bestaande definitieve scores worden NIET overschreven. Deze actie is niet bedoeld voor afwezige leerlingen.`))return;
+    await action(async()=>{
+      const {error:e}=await supabase.rpc("volleybal_dien_geblesseerd_blanco_in",{p_deelnemer_id:p.id});
+      if(e)throw e;
+    },"Als geblesseerd geregistreerd (zonder score).");
+  }
   async function savePeer(final:boolean){await action(async()=>{
     const {error:e}=await supabase.rpc("volleybal_bewaar_peer",{p_les_id:lessonId,p_criteria:peerDraft,p_indienen:final});if(e)throw e;
   },final?"Peerevaluatie definitief ingediend.":"Concept opgeslagen.");}
@@ -224,6 +234,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   async function paperSave(kind:"peer"|"self"){
     await action(async()=>{
       if(!paperStudent)throw new Error("Selecteer een leerling.");
+      if(paperPerson?.geblesseerd)throw new Error("Deze leerling is geblesseerd. Gebruik de knop Als geblesseerd indienen bij Aanwezigheden.");
       const args=kind==="peer"? {p_les_id:lessonId,p_doel:paperStudent,p_criteria:paperPeer}:{p_les_id:lessonId,p_deelnemer:paperStudent,p_spelregels:paperRules,p_spelniveau:paperLevel};
       const {error:e}=kind==="peer"?await supabase.rpc("volleybal_papier_peer",args):await supabase.rpc("volleybal_papier_zelf",args);
       if(e)throw e;
@@ -237,7 +248,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   function downloadCsv(){
     const rows=[ ["Naam","Klas","Aanwezig","Geblesseerd","Gsm beschikbaar","Observator","Peerevaluatie ingediend","Wedstrijdscore","Bovenhandse opslag","Aanval","Verdediging","Coaching","Zelfevaluatie ingediend","Spelregels","Deelnameniveau"],
       ...participants.map(p=>{const peer=peers.find(x=>x.beoordeelde_id===p.id),self=selfs.find(x=>x.deelnemer_id===p.id);
-        return [p.volledige_naam,p.klas_naam??"",p.aanwezigheid,p.geblesseerd?"Ja":"Nee",p.toestel_beschikbaar?"Ja":"Nee",findName(peer?.observator_id),peer?.status??"niet begonnen",peer?.status==="ingediend"?scorePeer(peer.criteria):"",...PEER_CRITERIA.map(c=>peer?.criteria[c.key]===undefined?"":PEER_LEVELS[(peer?.criteria[c.key] ?? 1)-1]??""),self?.status??"niet begonnen",self?.spelregels?SYMBOLS[self.spelregels-1]:"",self?.spelniveau?SYMBOLS[self.spelniveau-1]:""]; }) ];
+        return [p.volledige_naam,p.klas_naam??"",p.aanwezigheid,p.geblesseerd?"Ja":"Nee",p.toestel_beschikbaar?"Ja":"Nee",findName(peer?.observator_id),peer?.blanco_geblesseerd?"Geblesseerd":peer?.status??"niet begonnen",peer?.status==="ingediend"&&!peer.blanco_geblesseerd?scorePeer(peer.criteria):"",...PEER_CRITERIA.map(c=>peer?.criteria[c.key]===undefined?"":PEER_LEVELS[(peer?.criteria[c.key] ?? 1)-1]??""),self?.blanco_geblesseerd?"Geblesseerd":self?.status??"niet begonnen",!self?.blanco_geblesseerd&&self?.spelregels?SYMBOLS[self.spelregels-1]:"",!self?.blanco_geblesseerd&&self?.spelniveau?SYMBOLS[self.spelniveau-1]:""]; }) ];
     const csv="\uFEFF"+rows.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(";")).join("\r\n");
     const url=URL.createObjectURL(new Blob([csv],{type:"text/csv;charset=utf-8"}));
     const a=document.createElement("a");a.href=url;a.download=`volleybal-les3-${state?.les.lesdatum??today()}.csv`;a.click();URL.revokeObjectURL(url);
@@ -392,6 +403,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
                   {!previewClaimed?<button type="button" className={primary} disabled={!previewTarget} onClick={()=>setPreviewClaimed(true)}>Leerling vastleggen (test)</button>:
                     <>
                       <p className="text-sm">Ik beoordeel: <strong>{findName(previewTarget)}</strong></p>
+                       {Object.keys(previewPeerDraft).length===0&&<button type="button" className={button} onClick={()=>{setPreviewClaimed(false);setPreviewTarget("");}}>↻ Andere leerling kiezen (test)</button>}
                       <PeerQuestions value={previewPeerDraft} onChange={setPreviewPeerDraft} locked={false}/>
                       <div className="flex flex-wrap gap-2">
                         <button type="button" className={button} onClick={()=>setNotice("Testconcept in de browser bijgehouden. Er is niets opgeslagen in Supabase.")}>Concept opslaan (test)</button>
@@ -425,18 +437,22 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
               {isFinished&&<p className="text-emerald-200">De les is afgesloten; leerlingbewerkingen zijn geblokkeerd.</p>}
             </div>
           </section>
-          {state.les.fase==="voorbereiding"&&<section className={shell}>
-            <h2 className="mb-2 font-black">Aanwezigheid en hulpmiddelen</h2>
-            <p className="mb-3 text-sm text-white/65">Geblesseerden kunnen observeren, maar hoeven niet zelf beoordeeld te worden. Leerlingen zonder gsm worden op papier beoordeeld.</p>
-            <div className="grid gap-2 sm:grid-cols-2">{participants.map(p=><div key={p.id} className="rounded-xl bg-white/5 p-3">
+          {state.les.fase!=="afgerond"&&<section className={shell}>
+            <div className="flex items-center justify-between gap-3"><h2 className="mb-2 font-black">Aanwezigheid, blessures en gsm</h2><button type="button" className={button} onClick={()=>setStatusesOpen(x=>!x)}>{statusesOpen?"Verbergen":"Opnieuw openen"}</button></div>
+             <p className="mb-3 text-sm text-white/65">Ook na de start kun je een vergeten afwezigheid of blessure corrigeren. Een geblesseerde leerling mag wel nog observeren. Indienen als geblesseerd vereist jouw afzonderlijke bevestiging. Definitief ingediende scores worden nooit automatisch overschreven.</p>
+             {statusesOpen&&<div className="grid gap-2 sm:grid-cols-2">{participants.map(p=><div key={p.id} className="rounded-xl bg-white/5 p-3">
               <p className="mb-2 font-semibold">{p.volledige_naam} <small className="font-normal text-white/60">{p.klas_naam}</small></p>
               <div className="flex flex-wrap gap-4 text-sm">
-                <label className="flex items-center gap-2"><input type="checkbox" checked={p.aanwezigheid==="afwezig"} disabled={busy} onChange={e=>void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_aanwezigheid",{p_deelnemer_id:p.id,p_aanwezig:!e.target.checked});if(ae)throw ae;},"Aanwezigheid aangepast.")}/>Afwezig</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={p.aanwezigheid==="afwezig"} disabled={busy} onChange={e=>{if(e.target.checked&&!window.confirm(`Markeer ${p.volledige_naam} als afwezig? Reeds ingediende evaluaties worden niet gewist.`))return;void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_aanwezigheid",{p_deelnemer_id:p.id,p_aanwezig:!e.target.checked});if(ae)throw ae;},"Aanwezigheid aangepast.");}}/>Afwezig</label>
                 <label className="flex items-center gap-2"><input type="checkbox" checked={p.geblesseerd??false} disabled={busy||p.aanwezigheid==="afwezig"} onChange={e=>void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_wijzig_hulpmiddelen",{p_deelnemer_id:p.id,p_geblesseerd:e.target.checked,p_toestel_beschikbaar:p.toestel_beschikbaar??true});if(ae)throw ae;},"Leerlingstatus bijgewerkt.")}/>Geblesseerd</label>
                 <label className="flex items-center gap-2"><input type="checkbox" checked={!(p.toestel_beschikbaar??true)} disabled={busy||p.aanwezigheid==="afwezig"} onChange={e=>void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_wijzig_hulpmiddelen",{p_deelnemer_id:p.id,p_geblesseerd:p.geblesseerd??false,p_toestel_beschikbaar:!e.target.checked});if(ae)throw ae;},"Leerlingstatus bijgewerkt.")}/>Geen gsm</label>
               </div>
-            </div>)}</div>
-          </section>}
+               {p.aanwezigheid==="aanwezig"&&p.geblesseerd&&<div className="mt-3 flex flex-wrap items-center gap-2">
+                 <button type="button" className={button} disabled={busy||(Boolean(peers.find(x=>x.beoordeelde_id===p.id)?.status==="ingediend"&&!peers.find(x=>x.beoordeelde_id===p.id)?.blanco_geblesseerd)&&Boolean(selfs.find(x=>x.deelnemer_id===p.id)?.status==="ingediend"&&!selfs.find(x=>x.deelnemer_id===p.id)?.blanco_geblesseerd))} onClick={()=>void markBlank(p)}>🩹 Als geblesseerd indienen</button>
+                 {(peers.find(x=>x.beoordeelde_id===p.id)?.blanco_geblesseerd||selfs.find(x=>x.deelnemer_id===p.id)?.blanco_geblesseerd)&&<span className="text-sm text-emerald-200">✓ Geblesseerd geregistreerd</span>}
+               </div>}
+             </div>)}</div>}
+           </section>}
           <section className={shell}>
             <h2 className="mb-4 text-xl font-black">Live evaluatiecontrole</h2>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -447,8 +463,8 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
               {visiblePresent.map(p=>{const authored=peers.find(r=>r.observator_id===p.id),received=peers.find(r=>r.beoordeelde_id===p.id),self=selfs.find(r=>r.deelnemer_id===p.id);
                 return <tr key={p.id} className="border-b border-white/10"><td className="p-2 font-semibold">{p.volledige_naam}<small className="block font-normal text-white/55">{p.klas_naam}{p.geblesseerd?" · geblesseerd":""}{!p.toestel_beschikbaar?" · geen gsm (papier)":""}</small></td>
                   <td>{authored?.status==="ingediend"?"✓ Ingediend":!p.toestel_beschikbaar?"📝 Papier nodig":authored?"◷ Concept":"✕ Niet ingediend"}</td>
-                  <td>{p.geblesseerd?"Niet van toepassing":received?.status==="ingediend"?`✓ ${findName(received.observator_id)}`:received?"◷ Gekozen, nog niet ingediend":"✕ Nog niet gekozen"}</td>
-                  <td>{p.geblesseerd?"Niet van toepassing":self?.status==="ingediend"?"✓ Ingediend":!p.toestel_beschikbaar?"📝 Papier nodig":self?"◷ Concept":"✕ Niet ingediend"}</td></tr>;})}
+                  <td>{received?.blanco_geblesseerd?"✓ Geblesseerd":p.geblesseerd?"Niet van toepassing":received?.status==="ingediend"?`✓ ${findName(received.observator_id)}`:received?"◷ Gekozen, nog niet ingediend":"✕ Nog niet gekozen"}</td>
+                  <td>{self?.blanco_geblesseerd?"✓ Geblesseerd":p.geblesseerd?"Niet van toepassing":self?.status==="ingediend"?"✓ Ingediend":!p.toestel_beschikbaar?"📝 Papier nodig":self?"◷ Concept":"✕ Niet ingediend"}</td></tr>;})}
             </tbody></table></div>
             {visiblePresent.length===0&&<p className="mt-4 text-sm text-white/60">Geen leerlingen voor dit filter.</p>}
           </section>
@@ -470,7 +486,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
         {tab==="resultaten"&&<section className={shell}><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">Resultatenmatrix</h2><button className={primary} onClick={downloadCsv}>⬇ CSV exporteren</button></div>
           <p className="mt-2 text-sm text-white/65">De wedstrijdscore is het afgeronde gemiddelde van de vier criteria (Nooit / Soms / Vaak / Altijd). Zelfevaluaties blijven twee afzonderlijke scores.</p>
           <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="border-b border-white/15"><th className="p-2">Leerling</th><th>Wedstrijd</th><th>Spelregels</th><th>Deelnameniveau</th><th>Status</th></tr></thead><tbody>
-          {participants.map(p=>{const peer=peers.find(x=>x.beoordeelde_id===p.id),s=selfs.find(x=>x.deelnemer_id===p.id);return <tr key={p.id} className="border-b border-white/10"><td className="p-2">{p.volledige_naam}</td><td>{peer?.status==="ingediend"?scorePeer(peer.criteria):"—"}</td><td>{s?.status==="ingediend"&&s.spelregels?SYMBOLS[s.spelregels-1]:"—"}</td><td>{s?.status==="ingediend"&&s.spelniveau?SYMBOLS[s.spelniveau-1]:"—"}</td><td className="text-white/60">{p.aanwezigheid}</td></tr>;})}
+          {participants.map(p=>{const peer=peers.find(x=>x.beoordeelde_id===p.id),s=selfs.find(x=>x.deelnemer_id===p.id);return <tr key={p.id} className="border-b border-white/10"><td className="p-2">{p.volledige_naam}</td><td>{peer?.blanco_geblesseerd?"Geblesseerd":peer?.status==="ingediend"?scorePeer(peer.criteria):"—"}</td><td>{s?.blanco_geblesseerd?"Geblesseerd":s?.status==="ingediend"&&s.spelregels?SYMBOLS[s.spelregels-1]:"—"}</td><td>{s?.blanco_geblesseerd?"Geblesseerd":s?.status==="ingediend"&&s.spelniveau?SYMBOLS[s.spelniveau-1]:"—"}</td><td className="text-white/60">{p.geblesseerd?"Geblesseerd":p.aanwezigheid}</td></tr>;})}
           </tbody></table></div>
         </section>}
         </>}
@@ -490,6 +506,14 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
                 {eligibleForAssessment.filter(p=>p.id!==me.id&&!reserved.has(p.id)).map(p=><option value={p.id} key={p.id}>{p.volledige_naam} · {p.klas_naam}</option>)}</select>
               <button className={primary} disabled={previewMode||busy||!selectedTarget} onClick={()=>void claim(selectedTarget)}>Leerling vastleggen</button></>}
             {mine&&<><p className="text-sm">Ik beoordeel: <strong>{findName(mine.beoordeelde_id)}</strong></p>
+               {state.les.fase==="peer"&&mine.status==="concept"&&Object.keys(mine.criteria??{}).length===0&&<div className="rounded-xl border border-white/15 bg-white/5 p-3">
+                 <p className="mb-2 text-xs text-white/70">Verkeerde leerling gekozen? Zolang je nog geen beoordeling hebt opgeslagen, mag je wisselen.</p>
+                 <select className={field} disabled={previewMode||busy} value={selectedTarget} onChange={e=>setSelectedTarget(e.target.value)}>
+                   <option value="">Kies een andere leerling…</option>
+                   {eligibleForAssessment.filter(p=>p.id!==me.id&&(p.id===mine.beoordeelde_id||!reserved.has(p.id))).map(p=><option value={p.id} key={p.id}>{p.volledige_naam} · {p.klas_naam}</option>)}
+                 </select>
+                 <button type="button" className={`${button} mt-2`} disabled={previewMode||busy||!selectedTarget||selectedTarget===mine.beoordeelde_id} onClick={()=>void claim(selectedTarget)}>↻ Wissel van leerling</button>
+               </div>}
               <PeerQuestions value={peerDraft} onChange={setPeerDraft} locked={previewMode||busy}/>
               <div className="flex flex-wrap gap-2"><button className={button} disabled={previewMode||busy} onClick={()=>void savePeer(false)}>Concept opslaan</button>
                 <button className={primary} disabled={previewMode||busy||!peerComplete(peerDraft)} onClick={()=>void savePeer(true)}>Definitief indienen</button></div></>}
