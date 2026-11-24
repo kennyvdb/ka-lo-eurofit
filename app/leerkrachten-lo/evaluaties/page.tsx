@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import BaseHero from "@/components/heroes/BaseHero";
@@ -50,18 +50,16 @@ function displayName(m: Member) {
   const given = String(m.given_name ?? "").trim();
   return family && given ? `${family} ${given}` : m.volledige_naam || m.leerling_email;
 }
+// Kleuren volgens de aangeleverde evaluatieschaal: rood, oranje, lichtgroen, donkergroen.
 function symbol(v: number | null) {
-  if (v === null) return { label: "—", color: "text-white/35", bg: "bg-white/5" };
-  // Hockey: oorspronkelijke drempels; Volleybal: afgerond gemiddelde op schaal 1–4.
-  if (v < 1.75) return { label: "−", color: "text-red-200", bg: "bg-red-500/30" };
-  if (v < 2.5) return { label: "+/−", color: "text-orange-200", bg: "bg-orange-500/30" };
-  if (v < 3.25) return { label: "+", color: "text-sky-200", bg: "bg-sky-500/30" };
-  return { label: "++", color: "text-green-200", bg: "bg-green-500/30" };
+  if (v === null) return { label: "—", color: "text-white/45", bg: "bg-white/5", edge: "border-white/10" };
+  if (v < 1.75) return { label: "−", color: "text-[#3B0B0B]", bg: "bg-[#FFA2A2]", edge: "border-[#FF2424]" };
+  if (v < 2.5) return { label: "+/−", color: "text-[#49270B]", bg: "bg-[#FFC599]", edge: "border-[#FF9400]" };
+  if (v < 3.25) return { label: "+", color: "text-[#103C13]", bg: "bg-[#B3F5B4]", edge: "border-[#29DB2C]" };
+  return { label: "++", color: "text-[#102F0A]", bg: "bg-[#B0D4A7]", edge: "border-[#31880C]" };
 }
 function volleySymbol(v: number | null) {
-  if (v === null) return symbol(null);
-  const rounded = Math.max(1, Math.min(4, Math.round(v)));
-  return [symbol(null), { label: "−", color: "text-red-200", bg: "bg-red-500/30" }, { label: "+/−", color: "text-orange-200", bg: "bg-orange-500/30" }, { label: "+", color: "text-sky-200", bg: "bg-sky-500/30" }, { label: "++", color: "text-green-200", bg: "bg-green-500/30" }][rounded];
+  return v === null ? symbol(null) : symbol(Math.max(1, Math.min(4, Math.round(v))));
 }
 function numeric(v: unknown): number | null {
   const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
@@ -94,6 +92,7 @@ export default function EvaluatiesLeerkrachtenPage() {
   const [volleyLessons, setVolleyLessons] = useState<Lesson[]>([]);
   const [volleyStates, setVolleyStates] = useState<VolleyState[]>([]);
   const [selectedLesson, setSelectedLesson] = useState("all");
+  const matrixScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -242,7 +241,7 @@ export default function EvaluatiesLeerkrachtenPage() {
         quoteTitle="Evalueren om te groeien" quote="Observeer. Leer. Verbeter."
         actions={<Link href="/leerkrachten-lo" className="inline-flex h-11 items-center rounded-2xl border border-white/20 bg-black/40 px-5 font-bold text-white">← Terug naar Leerkrachten LO</Link>}
       />
-      <main className="mx-auto w-full max-w-[1500px] px-4 py-6 text-white">
+      <main className="mx-auto w-full min-w-0 max-w-[1500px] px-3 py-6 text-white sm:px-4">
         {error && <div role="alert" className="mb-4 rounded-xl border border-red-400/40 bg-red-500/10 p-4 text-red-100">{error}</div>}
         {loading ? <p>Evaluaties laden...</p> : !allowed ? <p>Je hebt geen toegang tot dit overzicht.</p> : <>
           <section className="mb-5 rounded-3xl border border-white/15 bg-white/5 p-5">
@@ -258,40 +257,50 @@ export default function EvaluatiesLeerkrachtenPage() {
             </div>
             {!availableGroups.length && <p className="text-sm text-white/65">Geen klasgroepen voor dit schooljaar.</p>}
           </section>
-          {group && <section className="rounded-3xl border border-white/15 bg-white/5 p-4 sm:p-6">
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-              <div><h2 className="text-2xl font-black">{group.naam}</h2><p className="text-sm text-white/60">{sortedMembers.length} leerlingen · {group.schooljaar}</p></div>
-              <label className="flex items-center gap-2 text-sm">Evaluatieles
-                <select value={selectedLesson} onChange={e => setSelectedLesson(e.target.value)} className="max-w-[260px] rounded-xl border border-white/20 bg-[#152632] p-2 text-white">
+          {group && <section className="min-w-0 max-w-full overflow-hidden rounded-3xl border border-white/15 bg-white/5 p-3 sm:p-6">
+            <div className="mb-5 flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+              <div className="min-w-0"><h2 className="break-words text-2xl font-black">{group.naam}</h2><p className="text-sm text-white/60">{sortedMembers.length} leerlingen · {group.schooljaar}</p></div>
+              <label className="flex w-full min-w-0 flex-col gap-1.5 text-sm sm:w-auto sm:max-w-[330px]">Evaluatieles
+                <select aria-label="Kies evaluatieles" value={selectedLesson} onChange={e => setSelectedLesson(e.target.value)} className="block h-11 w-full min-w-0 max-w-full rounded-xl border border-white/20 bg-[#152632] px-3 text-base text-white sm:max-w-[300px]">
                   <option value="all">Alle lessen samen</option>
                   {lessons.map(l => <option key={`${l.sport}:${l.id}`} value={`${l.sport}:${l.id}`}>{l.sport === "hockey" ? "🏑" : "🏐"} {l.naam} ({l.lesdatum})</option>)}
                 </select>
               </label>
             </div>
             {busy ? <p>Resultaten laden...</p> : !sortedMembers.length ? <p>Geen leerlingen gevonden in deze klasgroep.</p> : <>
-              <p className="mb-3 text-xs text-white/65">— = nog geen ingediende evaluatie. Beweeg over een score om het gemiddelde te bekijken. Horizontaal scrollen voor alle leerlingen.</p>
+              <p className="mb-3 text-xs text-white/65">— = nog geen ingediende evaluatie. Tik op een score voor het gemiddelde. Veeg de tabel naar links om de leerlingen te zien.</p>
               {sortedMembers.some(m => !sportVoor(m, group)) && <p className="mb-3 rounded-xl border border-amber-400/30 bg-amber-400/10 p-3 text-sm text-amber-100">Bij sommige leerlingen kon het leerjaar niet worden bepaald uit de klasnaam. Controleer hun klasgegevens.</p>}
-              <div className="overflow-x-auto rounded-2xl border border-white/15">
+              <div className="mb-2 flex items-center justify-end gap-2 sm:hidden">
+                <span className="mr-auto text-xs text-white/65">← Veeg voor meer leerlingen →</span>
+                <button type="button" aria-label="Scroll naar links" className="rounded-lg border border-white/25 bg-white/10 px-3 py-2 text-lg" onClick={() => matrixScrollRef.current?.scrollBy({ left: -240, behavior: "smooth" })}>←</button>
+                <button type="button" aria-label="Scroll naar rechts" className="rounded-lg border border-white/25 bg-white/10 px-3 py-2 text-lg" onClick={() => matrixScrollRef.current?.scrollBy({ left: 240, behavior: "smooth" })}>→</button>
+              </div>
+              <div ref={matrixScrollRef} role="region" aria-label="Evaluatiematrix: horizontaal scrollbaar" tabIndex={0} className="w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain rounded-2xl border border-white/15" style={{ WebkitOverflowScrolling: "touch", touchAction: "pan-x pan-y" }}>
                 <table className="w-max min-w-full border-collapse text-sm">
                   <thead><tr className="bg-[#203846]">
-                    <th className="sticky left-0 z-20 min-w-[210px] border-r border-white/20 bg-[#203846] p-3 text-left">Evaluatie</th>
-                    {sortedMembers.map((m, i) => <th key={`${m.leerling_email}-${i}`} className="min-w-[95px] border-r border-white/10 p-2 text-center align-bottom"><span className="inline-block max-w-[110px] break-words">{displayName(m)}</span><span className="mt-1 block text-xs font-normal text-white/60">{m.klas_naam}</span></th>)}
+                    <th className="sticky left-0 z-20 w-[132px] min-w-[132px] max-w-[132px] border-r border-white/20 bg-[#203846] p-2 text-left sm:w-[210px] sm:min-w-[210px] sm:max-w-none sm:p-3">Evaluatie</th>
+                    {sortedMembers.map((m, i) => <th key={`${m.leerling_email}-${i}`} className="min-w-[108px] border-r border-white/10 p-2 text-center align-bottom"><span className="inline-block max-w-[110px] break-words">{displayName(m)}</span><span className="mt-1 block text-xs font-normal text-white/60">{m.klas_naam}</span></th>)}
                   </tr></thead>
                   <tbody>{metrics.map((metric, i) => <tr key={metric.id} className={i % 2 ? "bg-white/[0.04]" : "bg-black/10"}>
-                    <th scope="row" className="sticky left-0 z-10 border-r border-white/15 bg-[#182b37] p-3 text-left font-bold">{metric.label}</th>
+                    <th scope="row" className="sticky left-0 z-10 w-[132px] min-w-[132px] max-w-[132px] break-words border-r border-white/15 bg-[#182b37] p-2 text-left text-xs font-bold sm:w-[210px] sm:min-w-[210px] sm:max-w-none sm:p-3 sm:text-sm">{metric.label}</th>
                     {sortedMembers.map((m, j) => {
                       const relevant = sportVoor(m, group) === metric.sport;
                       const cell = relevant ? matrix.get(`${emailKey(m.leerling_email)}|${metric.id}`) : undefined;
                       const v = cell?.score ?? null;
                       const s = metric.sport === "volleybal" ? volleySymbol(v) : symbol(v);
                       const title = !relevant ? "Andere graad" : v === null ? "Nog geen ingediende beoordeling" : `${metric.mode === "mean" ? "Gemiddelde" : "Score"} ${v.toFixed(2)}/4 · ${cell?.count ?? 0} beoordeling(en)`;
-                      return <td key={`${m.leerling_email}-${j}`} className="border-r border-white/10 p-3 text-center"><span title={title} className={`inline-flex min-w-12 items-center justify-center rounded-xl px-2 py-2 text-base font-black ${relevant ? s.bg : "bg-transparent"} ${relevant ? s.color : "text-white/20"}`}>{relevant ? s.label : "·"}</span></td>;
+                      return <td key={`${m.leerling_email}-${j}`} className="border-r border-white/10 p-3 text-center"><span title={title} className={`inline-flex min-w-12 items-center justify-center rounded-md border-b-[5px] px-3 py-2 text-base font-black ${relevant ? s.bg : "bg-transparent"} ${relevant ? s.color : "text-white/20"} ${relevant ? s.edge : "border-transparent"}`}>{relevant ? s.label : "·"}</span></td>;
                     })}
                   </tr>)}</tbody>
                 </table>
               </div>
               {!metrics.length && <p className="mt-4 text-white/70">Geen evaluatiesport gekoppeld aan deze leerjaren.</p>}
-              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-white/70"><span>🔴 − onvoldoende</span><span>🟠 +/− bijna voldoende</span><span>🔵 + goed</span><span>🟢 ++ zeer goed</span></div>
+              <div className="mt-4 grid grid-cols-2 gap-2 text-xs font-bold sm:grid-cols-4 sm:text-sm">
+                <span className="rounded-md border-b-4 border-[#FF2424] bg-[#FFA2A2] p-2 text-[#3B0B0B]">− Voldoet helemaal niet</span>
+                <span className="rounded-md border-b-4 border-[#FF9400] bg-[#FFC599] p-2 text-[#49270B]">+/− Heeft extra ondersteuning nodig</span>
+                <span className="rounded-md border-b-4 border-[#29DB2C] bg-[#B3F5B4] p-2 text-[#103C13]">+ Voert goed uit</span>
+                <span className="rounded-md border-b-4 border-[#31880C] bg-[#B0D4A7] p-2 text-[#102F0A]">++ Onderscheidt zich</span>
+              </div>
               <p className="mt-3 text-xs text-white/50">Hockey (3e–4e) en Volleybal (5e–6e). De gemiddelden worden berekend uit ingediende beoordelingen. Nieuwe sporten kunnen later als extra rijen worden gekoppeld.</p>
             </>}
           </section>}
