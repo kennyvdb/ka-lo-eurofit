@@ -67,7 +67,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   const [editingLessonName, setEditingLessonName] = useState(false);
   const [lessonNameDraft, setLessonNameDraft] = useState("");
   const [date, setDate] = useState(today());
-  const [year, setYear] = useState(5);
+  const [years, setYears] = useState<number[]>([5]);
   const [finalities, setFinalities] = useState<string[]>(["AM", "DF", "DS"]);
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
@@ -75,6 +75,8 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [resultSearch, setResultSearch] = useState("");
+  const [closeCheckOpen, setCloseCheckOpen] = useState(false);
   const [selectedTarget, setSelectedTarget] = useState("");
   const [peerDraft, setPeerDraft] = useState<PeerDraft>({});
   const [rules, setRules] = useState<number|null>(null);
@@ -83,7 +85,13 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   const [paperPeer, setPaperPeer] = useState<PeerDraft>({});
   const [paperRules, setPaperRules] = useState<number|null>(null);
   const [paperLevel, setPaperLevel] = useState<number|null>(null);
-  const [tab, setTab] = useState<"overzicht"|"papier"|"resultaten"|"leerling">("overzicht");
+  const [tab, setTab] = useState<"voorbereiding"|"overzicht"|"papier"|"resultaten"|"leerling">("voorbereiding");
+   const [selectedResult, setSelectedResult] = useState<string|null>(null);
+   const [correction, setCorrection] = useState<
+     | {kind:"peer"; id:string; previous:PeerDraft; draft:PeerDraft}
+     | {kind:"self"; id:string; previous:{spelregels:number|null;spelniveau:number|null}; draft:{spelregels:number|null;spelniveau:number|null}}
+     | null
+   >(null);
   const [statusesOpen, setStatusesOpen] = useState(true);
   const [controlFilter, setControlFilter] = useState<"iedereen"|"niet_ingediend"|"niet_beoordeeld"|"zelf_open">("iedereen");
   const [previewId, setPreviewId] = useState("");
@@ -174,11 +182,20 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
   const observerDone = new Set(submitted.map(x=>x.observator_id).filter(Boolean));
   const selfDone = new Set(selfs.filter(x=>x.status==="ingediend" && !x.blanco_geblesseerd).map(x=>x.deelnemer_id));
   const reserved=new Set(state?.reserved_ids??[]);
+  // Dezelfde leerling- en beoordelingsregels als de bestaande voortgangscontrole.
+  // Geblesseerde beoordeelden en afwezige leerlingen worden niet als ontbrekend geteld.
+  const missingObservers = expectedObservers.filter(p => !observerDone.has(p.id));
+  const missingPeerTargets = eligibleForAssessment.filter(p => !rated.has(p.id));
+  const missingSelfReviews = eligibleForAssessment.filter(p => !selfDone.has(p.id));
+  const filteredResultParticipants = participants.filter(p =>
+    `${p.volledige_naam} ${p.klas_naam ?? ""}`.toLocaleLowerCase("nl-BE")
+      .includes(resultSearch.trim().toLocaleLowerCase("nl-BE"))
+  );
   // Het leerjaar en de gekozen finaliteiten beperken zowel de klaskeuze als de leerlingenlijst.
   const matchingStudents = useMemo(() => smart.filter(s => {
     const klas = s.klas_naam.trim().toUpperCase();
-    return klas.startsWith(String(year)) && finalities.some(f => klas.includes(f));
-  }), [smart, year, finalities]);
+    return years.some(y => klas.startsWith(String(y))) && finalities.some(f => klas.includes(f));
+  }), [smart, years, finalities]);
   const studentCandidates = useMemo(() => matchingStudents.filter(s =>
     (selectedClasses.length === 0 || selectedClasses.includes(s.klas_naam)) &&
     (`${s.volledige_naam} ${s.klas_naam}`).toLowerCase().includes(filter.toLowerCase())
@@ -207,17 +224,51 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
       setEditingLessonName(false);
     }, "Naam van de volleyballes aangepast.");
   }
+   async function deleteLesson(){
+     if (!teacher || !state || state.les.id!==lessonId || busy) return;
+     const current = state.les;
+     const confirmation = window.prompt(`Les "${current.naam}" van ${current.lesdatum} en alle evaluaties definitief verwijderen?\nTyp VERWIJDEREN om te bevestigen.`);
+     if (confirmation !== "VERWIJDEREN") return;
+     setBusy(true);setError("");setNotice("");
+     try {
+       const {error:e} = await supabase.rpc("volleybal_verwijder_les",{p_les_id:current.id});
+       if (e) throw e;
+       setState(null);setLessonId("");setCreating(false);
+       setSelectedResult(null);setCorrection(null);setPaperStudent("");setEditingLessonName(false);
+       setLessons(prev=>prev.filter(l=>l.id!==current.id));
+       setNotice("Volleyballes en alle bijbehorende evaluaties definitief verwijderd.");
+       await refreshList();
+     } catch(e){setError(errText(e));} finally {setBusy(false);}
+   }
+   async function saveCorrection(){
+     if(!teacher || !correction || !state || busy)return;
+     if(!window.confirm("Deze ingediende evaluatie corrigeren? De nieuwe beoordeling vervangt de oorspronkelijke."))return;
+     const c=correction;
+     await action(async()=>{
+       if(c.kind==="peer"){
+         if(!peerComplete(c.draft))throw new Error("Vul eerst de vier criteria volledig in.");
+         const {error:e}=await supabase.rpc("volleybal_corrigeer_peer",{p_les_id:lessonId,p_peer_id:c.id,p_oude_criteria:c.previous,p_nieuwe_criteria:c.draft});
+         if(e)throw e;
+       }else{
+         if(c.draft.spelregels===null||c.draft.spelniveau===null)throw new Error("Selecteer beide zelfevaluatiescores.");
+         const {error:e}=await supabase.rpc("volleybal_corrigeer_zelf",{p_les_id:lessonId,p_deelnemer_id:c.id,p_oude_spelregels:c.previous.spelregels,p_oude_spelniveau:c.previous.spelniveau,p_spelregels:c.draft.spelregels,p_spelniveau:c.draft.spelniveau});
+         if(e)throw e;
+       }
+       setCorrection(null);
+     },"Beoordeling gecorrigeerd.");
+   }
   async function createLesson(){await action(async()=>{
     const pupils=smart.filter(s=>selected.includes(normalEmail(s.email))).map(s=>({email:normalEmail(s.email),volledige_naam:s.volledige_naam,klas_naam:s.klas_naam,profiel_id:s.profiel_id}));
     if(pupils.length===0)throw new Error("Selecteer eerst leerlingen.");
+     if(pupils.some(p=>![5,6].includes(Number(p.klas_naam?.charAt(0))))) throw new Error("Enkel leerlingen uit het 5e en 6e jaar zijn toegestaan.");
     const {data,error:e}=await supabase.rpc("volleybal_maak_les",{p_naam:name,p_datum:date,p_schooljaar:schoolYear(),p_leerlingen:pupils});
-    if(e)throw e;setLessonId(data as string);setCreating(false);setSelected([]);
+    if(e)throw e;setLessonId(data as string);setCreating(false);setSelected([]);setTab("voorbereiding");
   },"Volleybalsles aangemaakt. Controleer eerst de aanwezigheid.");}
   async function move(phase:"start"|"volgende"|"afsluiten"){
     if(phase==="volgende" && (expectedObservers.some(p=>!observerDone.has(p.id)) || eligibleForAssessment.some(p=>!rated.has(p.id)))){
       if(!window.confirm(`Er ontbreken nog ${expectedObservers.filter(p=>!observerDone.has(p.id)).length} ingediende peerevaluaties en ${eligibleForAssessment.filter(p=>!rated.has(p.id)).length} beoordelingen. Toch doorgaan naar zelfevaluatie?`))return;
     }
-    if(phase==="afsluiten" && !window.confirm("Les definitief afsluiten? Leerlingen kunnen daarna geen evaluaties meer invoeren of aanpassen."))return;
+    if(phase==="afsluiten") setCloseCheckOpen(false);
     await action(async()=>{const {error:e}=await supabase.rpc("volleybal_fase",{p_les_id:lessonId,p_actie:phase});if(e)throw e;},"Lesfase aangepast.");
   }
   async function claim(target:string){
@@ -297,7 +348,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
       {!uid&&<section className={shell}>Log in om de module te gebruiken.</section>}
       {uid&&<section className={shell}>
         <label className="block text-sm font-bold">{showTeacher?"Kies een volleyballes":"Mijn volleyballes"}</label>
-        <select className={`${field} mt-2`} value={lessonId} onChange={e=>{setLessonId(e.target.value);setTab("overzicht");setPreviewId("");setEditingLessonName(false);}}>
+        <select className={`${field} mt-2`} value={lessonId} onChange={e=>{setLessonId(e.target.value);setTab("voorbereiding");setSelectedResult(null);setCorrection(null);setPreviewId("");setEditingLessonName(false);}}>
           <option value="">Selecteer een les</option>
           {lessons.map(l=><option key={l.id} value={l.id}>{l.naam} · {l.lesdatum} · {l.fase}</option>)}
         </select>
@@ -316,13 +367,14 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
             </div>
           </div>}
           {state.les.fase==="afgerond" && <p className="mt-2 text-xs text-white/55">Deze les is afgesloten. De naam kan niet meer worden gewijzigd.</p>}
+          <button type="button" className={`${button} mt-4 border-red-400/50 text-red-200`} disabled={busy} onClick={()=>void deleteLesson()}>Les verwijderen</button>
         </div>}
       </section>}
       {showTeacher&&creating&&<section className={shell}>
         <h2 className="mb-4 text-xl font-black">Nieuwe volleyballes · les 3</h2>
         <div className="grid gap-3 sm:grid-cols-3"><label>Lesnaam<input className={field} value={name} onChange={e=>setName(e.target.value)}/></label>
           <label>Datum<input type="date" className={field} value={date} onChange={e=>setDate(e.target.value)}/></label>
-          <label>Leerjaar<select className={field} value={year} onChange={e=>{setYear(Number(e.target.value));setSelectedClasses([]);setSelected([]);}}><option value={5}>5e jaar</option><option value={6}>6e jaar</option></select></label></div>
+          <fieldset><legend className="mb-2 text-sm font-bold">Leerjaren</legend><div className="flex flex-wrap gap-3">{[5,6].map(y=><label key={y} className="flex items-center gap-2"><input type="checkbox" checked={years.includes(y)} onChange={()=>{setYears(prev=>prev.includes(y)?prev.filter(x=>x!==y):[...prev,y]);setSelectedClasses([]);}}/>{y}e jaar</label>)}</div></fieldset></div>
         <fieldset className="mt-4">
           <legend className="mb-2 text-sm font-bold">Finaliteit</legend>
           <div className="flex flex-wrap gap-4">
@@ -330,7 +382,7 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
               <label key={f} className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={finalities.includes(f)} onChange={() => {
                   setFinalities(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f]);
-                  setSelectedClasses([]); setSelected([]);
+                  setSelectedClasses([]);
                 }} />
                 {f}
               </label>
@@ -368,14 +420,37 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
           <span>{s.volledige_naam}<span className="block text-xs text-white/60">{s.klas_naam}</span></span></label>)}</div>
         <button type="button" className={`${primary} mt-4`} disabled={busy||!selected.length} onClick={()=>void createLesson()}>Les met {selected.length} leerlingen aanmaken</button>
       </section>}
-      {state&&showTeacher&&<>
+      {state&&showTeacher&&!creating&&<>
         <nav aria-label="Volleybal lestabbladen" className="flex flex-wrap gap-2">
-          {(["overzicht","papier","resultaten","leerling"] as const).map(t=><button
+          {(["voorbereiding","overzicht","resultaten","papier","leerling"] as const).map(t=><button
             type="button" key={t} aria-current={tab===t?"page":undefined}
             className={tab===t?primary:button}
             onClick={()=>{setTab(t);setPreviewId("");resetPreview();}}
-          >{({overzicht:"Live les",papier:"Papieren evaluaties",resultaten:"Resultaten",leerling:"👁 Leerlingweergave"})[t]}</button>)}
+          >{({voorbereiding:"Lesvoorbereiding",overzicht:"Live les",papier:"Papieren evaluaties",resultaten:"Resultaten",leerling:"👁 Leerlingweergave"})[t]}</button>)}
         </nav>
+         {tab==="voorbereiding"&&<>
+           <section className={shell}>
+             <h2 className="text-xl font-black">Lesvoorbereiding</h2>
+             <p className="mt-2 text-white/65">{state.les.naam} · {state.les.lesdatum} · {participants.length} leerlingen · {state.les.fase}</p>
+             <p className="mt-2 text-sm text-white/60">Je kunt de aanwezigheden, blessures en gsm-beschikbaarheid nakijken. De lesbediening staat onder Live les.</p>
+           </section>
+          {state.les.fase!=="afgerond"&&<section className={shell}>
+            <div className="flex items-center justify-between gap-3"><h2 className="mb-2 font-black">Aanwezigheid, blessures en gsm</h2><button type="button" className={button} onClick={()=>setStatusesOpen(x=>!x)}>{statusesOpen?"Verbergen":"Opnieuw openen"}</button></div>
+             <p className="mb-3 text-sm text-white/65">Ook na de start kun je een vergeten afwezigheid of blessure corrigeren. Een geblesseerde leerling mag wel nog observeren. Indienen als geblesseerd vereist jouw afzonderlijke bevestiging. Definitief ingediende scores worden nooit automatisch overschreven.</p>
+             {statusesOpen&&<div className="grid gap-2 sm:grid-cols-2">{participants.map(p=><div key={p.id} className="rounded-xl bg-white/5 p-3">
+              <p className="mb-2 font-semibold">{p.volledige_naam} <small className="font-normal text-white/60">{p.klas_naam}</small></p>
+              <div className="flex flex-wrap gap-4 text-sm">
+                <label className="flex items-center gap-2"><input type="checkbox" checked={p.aanwezigheid==="afwezig"} disabled={busy} onChange={e=>{if(e.target.checked&&!window.confirm(`Markeer ${p.volledige_naam} als afwezig? Reeds ingediende evaluaties worden niet gewist.`))return;void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_aanwezigheid",{p_deelnemer_id:p.id,p_aanwezig:!e.target.checked});if(ae)throw ae;},"Aanwezigheid aangepast.");}}/>Afwezig</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={p.geblesseerd??false} disabled={busy||p.aanwezigheid==="afwezig"} onChange={e=>void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_wijzig_hulpmiddelen",{p_deelnemer_id:p.id,p_geblesseerd:e.target.checked,p_toestel_beschikbaar:p.toestel_beschikbaar??true});if(ae)throw ae;},"Leerlingstatus bijgewerkt.")}/>Geblesseerd</label>
+                <label className="flex items-center gap-2"><input type="checkbox" checked={!(p.toestel_beschikbaar??true)} disabled={busy||p.aanwezigheid==="afwezig"} onChange={e=>void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_wijzig_hulpmiddelen",{p_deelnemer_id:p.id,p_geblesseerd:p.geblesseerd??false,p_toestel_beschikbaar:!e.target.checked});if(ae)throw ae;},"Leerlingstatus bijgewerkt.")}/>Geen gsm</label>
+              </div>
+               {p.aanwezigheid==="aanwezig"&&p.geblesseerd&&<div className="mt-3 flex flex-wrap items-center gap-2">
+                 <button type="button" className={button} disabled={busy||(Boolean(peers.find(x=>x.beoordeelde_id===p.id)?.status==="ingediend"&&!peers.find(x=>x.beoordeelde_id===p.id)?.blanco_geblesseerd)&&Boolean(selfs.find(x=>x.deelnemer_id===p.id)?.status==="ingediend"&&!selfs.find(x=>x.deelnemer_id===p.id)?.blanco_geblesseerd))} onClick={()=>void markBlank(p)}>🩹 Als geblesseerd indienen</button>
+                 {(peers.find(x=>x.beoordeelde_id===p.id)?.blanco_geblesseerd||selfs.find(x=>x.deelnemer_id===p.id)?.blanco_geblesseerd)&&<span className="text-sm text-emerald-200">✓ Geblesseerd geregistreerd</span>}
+               </div>}
+             </div>)}</div>}
+           </section>}
+         </>}
         {tab==="leerling"&&<section className={shell}>
           <h2 className="text-xl font-black">👁 Leerlingweergave · interactieve test</h2>
           <p className="mt-2 text-sm text-white/70">Kies een leerling en probeer zelf alle knoppen uit, zoals een leerling dat zou doen. De test gebruikt uitsluitend tijdelijke antwoorden in jouw browser: er wordt <strong>niets opgeslagen in Supabase</strong>.</p>
@@ -440,26 +515,32 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
             <div className="mt-4 flex flex-wrap gap-2">
               {state.les.fase==="voorbereiding"&&<button className={primary} disabled={busy||!present.length} onClick={()=>void move("start")}>▶ Start peerevaluatie</button>}
               {state.les.fase==="peer"&&<button className={primary} disabled={busy} onClick={()=>void move("volgende")}>Volgende fase → Zelfevaluatie</button>}
-              {(state.les.fase==="peer"||state.les.fase==="self")&&<button className={button} disabled={busy} onClick={()=>void move("afsluiten")}>■ Les definitief afsluiten</button>}
+              {(state.les.fase==="peer"||state.les.fase==="self")&&<button className={button} disabled={busy} onClick={()=>setCloseCheckOpen(true)}>■ Les definitief afsluiten</button>}
               {isFinished&&<p className="text-emerald-200">De les is afgesloten; leerlingbewerkingen zijn geblokkeerd.</p>}
             </div>
-          </section>
-          {state.les.fase!=="afgerond"&&<section className={shell}>
-            <div className="flex items-center justify-between gap-3"><h2 className="mb-2 font-black">Aanwezigheid, blessures en gsm</h2><button type="button" className={button} onClick={()=>setStatusesOpen(x=>!x)}>{statusesOpen?"Verbergen":"Opnieuw openen"}</button></div>
-             <p className="mb-3 text-sm text-white/65">Ook na de start kun je een vergeten afwezigheid of blessure corrigeren. Een geblesseerde leerling mag wel nog observeren. Indienen als geblesseerd vereist jouw afzonderlijke bevestiging. Definitief ingediende scores worden nooit automatisch overschreven.</p>
-             {statusesOpen&&<div className="grid gap-2 sm:grid-cols-2">{participants.map(p=><div key={p.id} className="rounded-xl bg-white/5 p-3">
-              <p className="mb-2 font-semibold">{p.volledige_naam} <small className="font-normal text-white/60">{p.klas_naam}</small></p>
-              <div className="flex flex-wrap gap-4 text-sm">
-                <label className="flex items-center gap-2"><input type="checkbox" checked={p.aanwezigheid==="afwezig"} disabled={busy} onChange={e=>{if(e.target.checked&&!window.confirm(`Markeer ${p.volledige_naam} als afwezig? Reeds ingediende evaluaties worden niet gewist.`))return;void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_aanwezigheid",{p_deelnemer_id:p.id,p_aanwezig:!e.target.checked});if(ae)throw ae;},"Aanwezigheid aangepast.");}}/>Afwezig</label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={p.geblesseerd??false} disabled={busy||p.aanwezigheid==="afwezig"} onChange={e=>void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_wijzig_hulpmiddelen",{p_deelnemer_id:p.id,p_geblesseerd:e.target.checked,p_toestel_beschikbaar:p.toestel_beschikbaar??true});if(ae)throw ae;},"Leerlingstatus bijgewerkt.")}/>Geblesseerd</label>
-                <label className="flex items-center gap-2"><input type="checkbox" checked={!(p.toestel_beschikbaar??true)} disabled={busy||p.aanwezigheid==="afwezig"} onChange={e=>void action(async()=>{const {error:ae}=await supabase.rpc("volleybal_wijzig_hulpmiddelen",{p_deelnemer_id:p.id,p_geblesseerd:p.geblesseerd??false,p_toestel_beschikbaar:!e.target.checked});if(ae)throw ae;},"Leerlingstatus bijgewerkt.")}/>Geen gsm</label>
+            {closeCheckOpen && (state.les.fase==="peer" || state.les.fase==="self") && (
+              <div role="dialog" aria-modal="true" aria-labelledby="volleybal-afsluiten-titel" className="mt-5 rounded-2xl border border-amber-400/40 bg-[#192733] p-4 sm:p-5">
+                <h3 id="volleybal-afsluiten-titel" className="text-lg font-black">Controle vóór het afsluiten</h3>
+                <p className="mt-2 text-sm text-white/75">Controleer de ontbrekende evaluaties. Afwezige en geblesseerde leerlingen worden waar van toepassing niet meegeteld. Een leerling zonder gsm kan nog een papieren beoordeling nodig hebben.</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                  {([
+                    ["Peerevaluatie niet ingediend",missingObservers],
+                    ["Nog niet beoordeeld",missingPeerTargets],
+                    ["Zelfevaluatie niet ingediend",missingSelfReviews],
+                  ] as const).map(([label,students])=><div key={label} className="min-w-0 rounded-xl border border-white/15 bg-black/20 p-3">
+                    <div className="font-bold">{label} · {students.length}</div>
+                    {students.length===0?<p className="mt-2 text-sm text-emerald-200">Alles ingediend</p>:<ul className="mt-2 max-h-40 list-disc space-y-1 overflow-y-auto pl-5 text-sm text-amber-100">{students.map(p=><li key={p.id}>{p.volledige_naam} <span className="text-white/60">({p.klas_naam??"zonder klas"})</span></li>)}</ul>}
+                  </div>)}
+                </div>
+                {state.les.fase==="peer"&&<p className="mt-3 text-sm text-amber-100">De zelfevaluatiefase is nog niet gestart. De zelfevaluaties staan daarom ook als ontbrekend vermeld.</p>}
+                <p className="mt-4 text-sm font-semibold text-amber-100">Definitief afsluiten blokkeert nieuwe leerlingindieningen en -wijzigingen. Dit kan niet via deze knop ongedaan worden gemaakt.</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" className={button} disabled={busy} onClick={()=>setCloseCheckOpen(false)}>Annuleren · les openhouden</button>
+                  <button type="button" className="rounded-xl border border-red-400/60 bg-red-900/35 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-900/55 disabled:opacity-40" disabled={busy} onClick={()=>void move("afsluiten")}>Ik bevestig: les definitief afsluiten</button>
+                </div>
               </div>
-               {p.aanwezigheid==="aanwezig"&&p.geblesseerd&&<div className="mt-3 flex flex-wrap items-center gap-2">
-                 <button type="button" className={button} disabled={busy||(Boolean(peers.find(x=>x.beoordeelde_id===p.id)?.status==="ingediend"&&!peers.find(x=>x.beoordeelde_id===p.id)?.blanco_geblesseerd)&&Boolean(selfs.find(x=>x.deelnemer_id===p.id)?.status==="ingediend"&&!selfs.find(x=>x.deelnemer_id===p.id)?.blanco_geblesseerd))} onClick={()=>void markBlank(p)}>🩹 Als geblesseerd indienen</button>
-                 {(peers.find(x=>x.beoordeelde_id===p.id)?.blanco_geblesseerd||selfs.find(x=>x.deelnemer_id===p.id)?.blanco_geblesseerd)&&<span className="text-sm text-emerald-200">✓ Geblesseerd geregistreerd</span>}
-               </div>}
-             </div>)}</div>}
-           </section>}
+            )}
+          </section>
           <section className={shell}>
             <h2 className="mb-4 text-xl font-black">Live evaluatiecontrole</h2>
             <div className="grid gap-3 sm:grid-cols-3">
@@ -492,10 +573,45 @@ export default function VolleybalLesModule({ omgeving = "leerkracht" }: { omgevi
         </section>}
         {tab==="resultaten"&&<section className={shell}><div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-black">Resultatenmatrix</h2><button className={primary} onClick={downloadCsv}>⬇ CSV exporteren</button></div>
           <p className="mt-2 text-sm text-white/65">De wedstrijdscore is het afgeronde gemiddelde van de vier criteria (Nooit / Soms / Vaak / Altijd). Zelfevaluaties blijven twee afzonderlijke scores.</p>
+          <label htmlFor="volleybal-zoek-resultaat" className="mt-4 block text-sm font-bold">Zoek leerling op naam of klas</label>
+          <input id="volleybal-zoek-resultaat" type="search" className={`${field} mt-2`} placeholder="Bijvoorbeeld: Emma of 5DS" value={resultSearch} onChange={e=>setResultSearch(e.target.value)}/>
+          <p className="mt-2 text-xs text-white/60">{filteredResultParticipants.length} van {participants.length} leerlingen zichtbaar. De CSV-export blijft volledig.</p>
           <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead><tr className="border-b border-white/15"><th className="p-2">Leerling</th><th>Wedstrijd</th><th>Spelregels</th><th>Deelnameniveau</th><th>Status</th></tr></thead><tbody>
-          {participants.map(p=>{const peer=peers.find(x=>x.beoordeelde_id===p.id),s=selfs.find(x=>x.deelnemer_id===p.id);return <tr key={p.id} className="border-b border-white/10"><td className="p-2">{p.volledige_naam}</td><td>{peer?.blanco_geblesseerd?"Geblesseerd":peer?.status==="ingediend"?scorePeer(peer.criteria):"—"}</td><td>{s?.blanco_geblesseerd?"Geblesseerd":s?.status==="ingediend"&&s.spelregels?SYMBOLS[s.spelregels-1]:"—"}</td><td>{s?.blanco_geblesseerd?"Geblesseerd":s?.status==="ingediend"&&s.spelniveau?SYMBOLS[s.spelniveau-1]:"—"}</td><td className="text-white/60">{p.geblesseerd?"Geblesseerd":p.aanwezigheid}</td></tr>;})}
+          {filteredResultParticipants.map(p=>{const peer=peers.find(x=>x.beoordeelde_id===p.id),s=selfs.find(x=>x.deelnemer_id===p.id);return <tr key={p.id} className="border-b border-white/10"><td className="p-2">{p.volledige_naam}</td><td>{peer?.blanco_geblesseerd?"Geblesseerd":peer?.status==="ingediend"?scorePeer(peer.criteria):"—"}</td><td>{s?.blanco_geblesseerd?"Geblesseerd":s?.status==="ingediend"&&s.spelregels?SYMBOLS[s.spelregels-1]:"—"}</td><td>{s?.blanco_geblesseerd?"Geblesseerd":s?.status==="ingediend"&&s.spelniveau?SYMBOLS[s.spelniveau-1]:"—"}</td><td className="text-white/60">{p.geblesseerd?"Geblesseerd":p.aanwezigheid}</td></tr>;})}
           </tbody></table></div>
-        </section>}
+           <p className="mt-3 text-sm text-white/60">Klik op een leerling voor de oorspronkelijke criteria en om een beoordeling te corrigeren.</p>
+           <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+             {filteredResultParticipants.map(p=><button type="button" key={p.id} className={selectedResult===p.id?primary:button} onClick={()=>{setSelectedResult(selectedResult===p.id?null:p.id);setCorrection(null);}}>{p.volledige_naam} · {p.klas_naam}</button>)}
+           </div>
+           {filteredResultParticipants.length===0&&<p className="mt-3 text-sm text-amber-100">Geen leerlingen gevonden voor deze zoekopdracht.</p>}
+           {selectedResult && filteredResultParticipants.filter(p=>p.id===selectedResult).map(p=>{
+             const peer=peers.find(x=>x.beoordeelde_id===p.id);
+             const self=selfs.find(x=>x.deelnemer_id===p.id);
+             return <section key={p.id} className="mt-5 space-y-4 rounded-2xl border border-[#89C2AA]/30 bg-black/20 p-4">
+               <div className="flex flex-wrap justify-between gap-2"><h3 className="text-lg font-black">{p.volledige_naam} · beoordelingsdetails</h3><button type="button" className={button} onClick={()=>{setSelectedResult(null);setCorrection(null);}}>Sluiten ✕</button></div>
+               <div className="grid gap-4 lg:grid-cols-2">
+                 <div className="rounded-xl border border-white/15 p-4">
+                   <h4 className="mb-2 font-bold text-[#b4e8d1]">Peerevaluatie · 3 tegen 3</h4>
+                   {!peer?<p className="text-white/60">Nog geen beoordeling.</p>:peer.blanco_geblesseerd?<p>Geblesseerd · geen score.</p>:<>
+                     <p className="mb-3 text-xs text-white/60">Beoordeeld door: {findName(peer.observator_id)} · {peer.status}</p>
+                     {PEER_CRITERIA.map(c=><div key={c.key} className="flex justify-between gap-3 border-t border-white/10 py-2"><span>{c.title}</span><strong>{peer.criteria?.[c.key] ? SYMBOLS[(peer.criteria[c.key]??1)-1] : "—"}</strong></div>)}
+                     <p className="mt-2 font-bold">Eindscore: {peer.status==="ingediend"?scorePeer(peer.criteria):"—"}</p>
+                     {peer.status==="ingediend"&&<>{correction?.kind==="peer"&&correction.id===peer.id?<div className="mt-3 space-y-3"><PeerQuestions value={correction.draft} onChange={v=>setCorrection({...correction,draft:v})} locked={busy}/><div className="flex flex-wrap gap-2"><button type="button" className={primary} disabled={busy||!peerComplete(correction.draft)} onClick={()=>void saveCorrection()}>Correctie opslaan</button><button type="button" className={button} onClick={()=>setCorrection(null)}>Annuleren</button></div></div>:<button type="button" className={`${button} mt-3`} disabled={busy} onClick={()=>setCorrection({kind:"peer",id:peer.id,previous:{...peer.criteria},draft:{...peer.criteria}})}>Evaluatie aanpassen</button>}</>}
+                   </>}
+                 </div>
+                 <div className="rounded-xl border border-white/15 p-4">
+                   <h4 className="mb-2 font-bold text-[#b4e8d1]">Zelfevaluatie · 4 tegen 4</h4>
+                   {!self?<p className="text-white/60">Nog geen zelfevaluatie.</p>:self.blanco_geblesseerd?<p>Geblesseerd · geen score.</p>:<>
+                     <p className="mb-3 text-xs text-white/60">Status: {self.status}</p>
+                     <p>Spelregels: <strong>{self.spelregels?SYMBOLS[self.spelregels-1]:"—"}</strong></p>
+                     <p>Deelnameniveau: <strong>{self.spelniveau?SYMBOLS[self.spelniveau-1]:"—"}</strong></p>
+                     {self.status==="ingediend"&&<>{correction?.kind==="self"&&correction.id===p.id?<div className="mt-3 space-y-3"><SelfQuestions spelregels={correction.draft.spelregels} spelniveau={correction.draft.spelniveau} onRules={v=>setCorrection({...correction,draft:{...correction.draft,spelregels:v}})} onLevel={v=>setCorrection({...correction,draft:{...correction.draft,spelniveau:v}})} locked={busy}/><div className="flex flex-wrap gap-2"><button type="button" className={primary} disabled={busy||correction.draft.spelregels===null||correction.draft.spelniveau===null} onClick={()=>void saveCorrection()}>Correctie opslaan</button><button type="button" className={button} onClick={()=>setCorrection(null)}>Annuleren</button></div></div>:<button type="button" className={`${button} mt-3`} disabled={busy} onClick={()=>setCorrection({kind:"self",id:p.id,previous:{spelregels:self.spelregels,spelniveau:self.spelniveau},draft:{spelregels:self.spelregels,spelniveau:self.spelniveau}})}>Evaluatie aanpassen</button>}</>}
+                   </>}
+                 </div>
+               </div>
+             </section>;
+           })}
+         </section>}
         </>}
       </>}
       {state&&studentView&&me&&<>
