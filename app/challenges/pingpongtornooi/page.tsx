@@ -125,7 +125,7 @@ export default function PingpongtornooiPage() {
       setSlots((sr.data ?? []) as Slot[]); setLeden((lr.data ?? []) as Lid[]); setStand((kr.data ?? []) as Stand[]);
       const ids = [...new Set([...ii.map(x => x.leerling_id), ...ww.flatMap(x => [x.speler1_id, x.speler2_id])])];
       if (ids.length) {
-        const { data: pp, error: npe } = await supabase.from("profielen").select("id,volledige_naam,klas_naam").in("id", ids);
+        const { data: pp, error: npe } = await supabase.rpc("pingpong_tornooi_namen", { p_tornooi_id: t.id });
         if (npe) throw npe;
         setNamen(Object.fromEntries(((pp ?? []) as Profiel[]).map(p => [p.id, p])));
       } else setNamen({});
@@ -195,7 +195,7 @@ export default function PingpongtornooiPage() {
     const s = scores[w.id] ?? { a: "", b: "" };
     const isEigen = uid === w.speler1_id || uid === w.speler2_id;
     return <div key={w.id} style={{ ...paneel, padding: 15, display: "grid", gap: 10 }}>
-      <div className="ping-flex ping-between"><span style={muted}>{w.ronde === "poule" ? `Poule ${pouleMap.get(w.poule_id ?? "") ?? "?"}` : w.ronde}</span><Status status={w.status} scoreIngediend={!!w.score_ingediend_door} /></div>
+      <div className="ping-flex ping-between"><span style={muted}>{w.ronde === "poule" ? `Poule ${pouleMap.get(w.poule_id ?? "") ?? "?"}` : w.ronde === "kleine_finale" ? "Kleine finale · derde plaats" : w.ronde}</span><Status status={w.status} scoreIngediend={!!w.score_ingediend_door} /></div>
       {(() => {
         const heeftScore = w.score1 !== null && w.score2 !== null;
         const definitief = w.status === "gespeeld";
@@ -252,6 +252,14 @@ export default function PingpongtornooiPage() {
     </div>;
   };
 
+  const finale = wedstrijden.find(w => w.ko_nummer === 7 && w.status === "gespeeld" && w.uitslag_vergrendeld && w.winnaar_id);
+  const kleineFinale = wedstrijden.find(w => w.ko_nummer === 8 && w.status === "gespeeld" && w.uitslag_vergrendeld && w.winnaar_id);
+  const podium = finale && kleineFinale ? [
+    { plaats: 2, id: finale.winnaar_id === finale.speler1_id ? finale.speler2_id : finale.speler1_id, kleur: "#cbd5e1", hoogte: 90, icoon: "🥈" },
+    { plaats: 1, id: finale.winnaar_id!, kleur: "#facc15", hoogte: 130, icoon: "🏆" },
+    { plaats: 3, id: kleineFinale.winnaar_id!, kleur: "#d6a074", hoogte: 65, icoon: "🥉" },
+  ] : null;
+
   return <AppShell title="KA LO App" subtitle="PingpongCHAMP" userName={profiel?.volledige_naam ?? null}>
     <div className="ping-root" style={{ display: "grid", gap: 16, color: "#eaf0ff" }}>
       <BaseHero label="CHALLENGES · PINGPONGTORNOOI" title={<>Word jij de <span className="bg-gradient-to-r from-[#255971] via-[#4B8E8D] to-[#89C2AA] bg-clip-text text-transparent">PingpongCHAMP</span> van den Athenee?</>} description="Volg de wedstrijden, het klassement en de weg naar de finale." imageSrc="/challenges/pingpongchamp-poster.png" imageAlt="PingpongCHAMP van den Athenee" quoteTitle="PingpongCHAMP" quote="Word jij de PingpongCHAMP van den Athenee?" quoteAuthor="Atheneum Avelgem" actions={<Link href="/challenges" style={{ ...knop, textDecoration: "none" }}>← Terug naar challenges</Link>} />
@@ -261,6 +269,7 @@ export default function PingpongtornooiPage() {
       {!loading && !uid && <Sectie titel="🔐 Aanmelden"><p style={muted}>Meld je aan met je schoolaccount om de tornooigegevens te bekijken.</p><Link href="/login?next=%2Fchallenges%2Fpingpongtornooi" style={{ ...knop, display: "inline-block", textDecoration: "none" }}>Inloggen met schoolaccount</Link></Sectie>}
       {!loading && uid && !tornooi && <Sectie titel="🏓 PingpongCHAMP"><p style={muted}>Er is momenteel geen zichtbaar tornooi. Controleer eventueel de Supabase-toegangsregels.</p></Sectie>}
       {!loading && uid && tornooi && <>
+        {podium && <Sectie titel="🏆 PingpongCHAMP · Eindpodium"><div style={{display:"grid",gridTemplateColumns:"repeat(3,minmax(0,1fr))",gap:8,alignItems:"end",textAlign:"center"}}>{podium.map(p => <div key={p.plaats} style={{minWidth:0}}><div style={{fontSize:32}}>{p.icoon}</div><strong style={{display:"block",overflowWrap:"anywhere",marginBottom:8}}>{naam(p.id)}</strong><div style={{height:p.hoogte,display:"grid",placeItems:"center",borderRadius:12,background:`${p.kleur}22`,border:`1px solid ${p.kleur}`,color:p.kleur,fontSize:32,fontWeight:900}}>{p.plaats}</div></div>)}</div><p style={{...muted,textAlign:"center"}}>Proficiat aan onze kampioenen! Alle uitslagen blijven hieronder beschikbaar.</p></Sectie>}
         <div className="ping-stats">
           <div style={paneel}><div style={muted}>Tornooi</div><strong style={{ fontSize: 18 }}>{tornooi.status === "lopend" ? "🟢 Lopend" : tornooi.status}</strong><div style={muted}>{tornooi.schooljaar}</div></div>
           <div style={paneel}><div style={muted}>Deelnemers</div><strong style={{ fontSize: 25 }}>{inschrijvingen.length}</strong></div>
@@ -287,8 +296,8 @@ export default function PingpongtornooiPage() {
           })}
         </Sectie>}
         {tab === "knockout" && <Sectie titel="🥇 Weg naar de finale">
-          <p style={muted}>Kwartfinales 25/11 ochtend en middag. Halve finales 26/11 middag. Finale 27/11 middag. De leerkracht maakt de uitslag definitief voordat de winnaar doorgaat.</p>
-          <div className="ping-bracket">{[{label:"Kwartfinales",ids:[1,2,3,4]},{label:"Halve finales",ids:[5,6]},{label:"Finale",ids:[7]}].map(r=><div key={r.label}><h3>{r.label}</h3>{r.ids.map(n=>{const w=wedstrijden.find(x=>x.ko_nummer===n);return w?<div key={n}>{wedstrijdKaart(w)}</div>:<div key={n} style={paneel}>{n===5?"Winnaars KF 1 en 2":n===6?"Winnaars KF 3 en 4":n===7?"Winnaars HF 1 en 2":`Kwartfinale ${n} – nog niet geactiveerd`}</div>})}</div>)}</div>
+          <p style={muted}>Kwartfinales 25/11 ochtend en middag. Halve finales 26/11 middag. Finale 27/11 middag. De winnaars gaan automatisch door na publicatie van de knock-outuitslag. De kleine finale is voor de derde plaats.</p>
+          <div className="ping-bracket">{[{label:"Kwartfinales",ids:[1,2,3,4]},{label:"Halve finales",ids:[5,6]},{label:"Finales",ids:[7,8]}].map(r=><div key={r.label}><h3>{r.label}</h3>{r.ids.map(n=>{const w=wedstrijden.find(x=>x.ko_nummer===n);return w?<div key={n}>{wedstrijdKaart(w)}</div>:<div key={n} style={paneel}>{n===5?"Winnaars KF 1 en 2":n===6?"Winnaars KF 3 en 4":n===7?"Winnaars HF 1 en 2":n===8?"Verliezers HF 1 en 2":`Kwartfinale ${n} – nog niet geactiveerd`}</div>})}</div>)}</div>
           {wedstrijden.filter(w=>w.ko_nummer===7&&w.uitslag_vergrendeld&&w.winnaar_id).map(w=><h2 key={w.id}>🏆 PingpongCHAMP: {naam(w.winnaar_id!)}</h2>)}
         </Sectie>}
         {tab === "regels" && <Sectie titel="📖 Spelregels en afspraken">
